@@ -31,6 +31,29 @@ def validate_repo_name(name: str) -> bool:
     return True
 
 
+def validate_skill_name(name: str) -> bool:
+    """
+    Validate a skill name to prevent path traversal and shell injection.
+
+    Rules:
+    - Only alphanumeric characters, hyphens, underscores, and periods.
+    - Must start with an alphanumeric character.
+    - No slashes allowed.
+    - Max length 64 characters.
+    """
+    if not name:
+        return False
+
+    pattern = r'^[a-zA-Z0-9][a-zA-Z0-9._-]*\Z'
+    if not re.match(pattern, name):
+        return False
+
+    if len(name) > 64:
+        return False
+
+    return True
+
+
 def validate_github_url(url: str) -> bool:
     """
     Validate a GitHub HTTPS URL to prevent argument injection and ensure correct format.
@@ -73,8 +96,13 @@ def validate_github_url(url: str) -> bool:
         if repo.endswith('.git'):
             repo = repo[:-4]
 
-        # Note: repo name shouldn't have a slash here because we split on '/'
-        if not validate_repo_name(repo) or '/' in repo:
+        # Explicitly validate repo name without slash
+        repo_pattern = r'^[a-zA-Z0-9][a-zA-Z0-9._-]*\Z'
+        if not re.match(repo_pattern, repo):
+            return False
+
+        # Also validate against general repo name rules
+        if not validate_repo_name(repo):
             return False
 
         # No params, query, or fragment allowed

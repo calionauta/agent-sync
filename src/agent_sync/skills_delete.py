@@ -1,6 +1,7 @@
 """Skills deletion management."""
 
 import shutil
+import os
 from pathlib import Path
 from typing import List, Optional
 from rich.console import Console
@@ -16,7 +17,7 @@ class SkillsDeleter:
         from .agents import get_agents
         
         self.config = Config()
-        self.global_skills_dir = Path.home() / ".agents" / "skills"
+        self.global_skills_dir = (Path.home() / ".agents" / "skills").resolve()
         self.agents = get_agents()
 
     def list_skills(self) -> List[str]:
@@ -38,6 +39,17 @@ class SkillsDeleter:
             return 0
         return sum(1 for f in skill_path.rglob('*') if f.is_file())
 
+    def _is_safe_path(self, path: Path, base_dir: Path) -> bool:
+        """Check if a path is safely contained within a base directory."""
+        try:
+            # resolve() handles '..' and symlinks.
+            # We want to ensure the final path is still under base_dir.
+            resolved_path = path.resolve()
+            resolved_base = base_dir.resolve()
+            return resolved_base in resolved_path.parents or resolved_path == resolved_base
+        except Exception:
+            return False
+
     def delete_skills(self, skill_names: List[str], dry_run: bool = False) -> dict:
         """
         Delete skills from hub and all agent directories.
@@ -49,6 +61,8 @@ class SkillsDeleter:
         Returns:
             Dictionary with deletion statistics
         """
+        from .validators import validate_skill_name
+
         stats = {
             "deleted_from_hub": 0,
             "hub_files": 0,
@@ -59,9 +73,21 @@ class SkillsDeleter:
         }
         
         for skill_name in skill_names:
+            # Defense-in-depth: validate skill name again
+            if not validate_skill_name(skill_name):
+                stats["errors"] += 1
+                console.print(f"[red]✗ Security Alert: Invalid skill name blocked: {skill_name}[/red]")
+                continue
+
             # Delete from hub
-            hub_skill_path = self.global_skills_dir / skill_name
+            hub_skill_path = (self.global_skills_dir / skill_name).resolve()
             
+            # Path containment check
+            if not self._is_safe_path(hub_skill_path, self.global_skills_dir):
+                stats["errors"] += 1
+                console.print(f"[red]✗ Security Alert: Path traversal attempt blocked for {skill_name}[/red]")
+                continue
+
             if not hub_skill_path.exists():
                 stats["not_found"] += 1
                 console.print(f"[yellow]⚠ Skill '{skill_name}' not found in hub[/yellow]")
@@ -94,8 +120,14 @@ class SkillsDeleter:
                 if not agent_skills_path.exists():
                     continue
                 
-                agent_skill_path = agent_skills_path / skill_name
+                agent_skill_path = (agent_skills_path / skill_name).resolve()
                 
+                # Path containment check for agent directory
+                if not self._is_safe_path(agent_skill_path, agent_skills_path):
+                    stats["errors"] += 1
+                    console.print(f"[red]✗ Security Alert: Path traversal attempt blocked for {skill_name} in {agent.name}[/red]")
+                    continue
+
                 if agent_skill_path.exists():
                     agent_files = self.count_skill_files(agent_skill_path)
                     agent_files_total += agent_files
