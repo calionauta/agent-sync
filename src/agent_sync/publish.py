@@ -20,7 +20,7 @@ from rich.prompt import Prompt, Confirm
 from rich.table import Table
 from rich import box
 from .config import Config
-from .validators import validate_github_url
+from .validators import validate_github_url, validate_repo_name
 
 console = Console()
 
@@ -251,6 +251,10 @@ def publish_skills(repo_url: Optional[str] = None, dry_run: bool = False, intera
 
     # Visibility check
     repo_name = repo_url.replace("https://github.com/", "").replace(".git", "")
+    if not validate_github_url(repo_url) or not repo_name or "/" not in repo_name:
+        console.print(f"\n[red]✗ Invalid repository URL or name: {repo_url}[/red]\n")
+        return False
+
     try:
         res = subprocess.run(["gh", "api", f"repos/{repo_name}"], capture_output=True, text=True, timeout=5)
         if res.returncode == 0:
@@ -286,6 +290,10 @@ def publish_skills(repo_url: Optional[str] = None, dry_run: bool = False, intera
         console.print(f"\n[bold]📤 Publishing {len(selected_skills)} skills...[/]")
         
         try:
+            # Final safety check on repo_name before subprocess
+            if not validate_repo_name(repo_name):
+                raise ValueError(f"Invalid repository name: {repo_name}")
+
             subprocess.run(["gh", "api", f"repos/{repo_name}"], capture_output=True, check=False)
             subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
             subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, check=True)
@@ -320,6 +328,10 @@ def strip_frontmatter(content: str) -> str:
 def generate_readme(selected_skills: list, repo_url: str) -> str:
     """Generate README.md for the skills repository."""
     repo_name = repo_url.replace("https://github.com/", "").replace(".git", "")
+    # Basic validation for README generation
+    if "/" not in repo_name:
+        repo_name = "your-repo"
+
     readme_content = f"""# Agent Skills
 
 A collection of custom skills for AI agents.

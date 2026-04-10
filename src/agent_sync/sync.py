@@ -134,7 +134,7 @@ class SyncManager:
             repo_url = f"https://github.com/{repo_name}.git"
 
         result = subprocess.run(
-            ["gh", "repo", "view", repo_name, "--json", "name,isPrivate"],
+            ["gh", "repo", "view", "--json", "name,isPrivate", "--", repo_name],
             capture_output=True,
             text=True,
             timeout=10,
@@ -191,7 +191,7 @@ class SyncManager:
 
         # Create repository on GitHub
         result = subprocess.run(
-            ["gh", "repo", "create", name, f"--{visibility}", "--source", ".", "--remote", "origin"],
+            ["gh", "repo", "create", f"--{visibility}", "--source", ".", "--remote", "origin", "--", name],
             cwd=self.repo_dir,
             capture_output=True,
             text=True,
@@ -200,7 +200,7 @@ class SyncManager:
         if result.returncode != 0:
             # Try alternative approach
             subprocess.run(
-                ["gh", "repo", "create", name, f"--{visibility}"],
+                ["gh", "repo", "create", f"--{visibility}", "--", name],
                 capture_output=True,
                 text=True,
                 check=True,
