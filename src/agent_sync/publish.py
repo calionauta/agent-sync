@@ -310,29 +310,15 @@ def publish_skills(repo_url: Optional[str] = None, dry_run: bool = False, intera
             return False
 
 
-def strip_frontmatter(content: str) -> str:
-    """Remove YAML frontmatter, tags, and excessive titles from markdown content."""
-    import re
-    content = re.sub(r'^---\s*\n.*?\n---\s*\n', '', content, flags=re.DOTALL)
-    content = re.sub(r'^(name|description|tags|version|author):.*?\n', '', content, flags=re.MULTILINE | re.IGNORECASE)
-    lines = content.split('\n')
-    cleaned_lines = []
-    for line in lines:
-        if line.startswith('#'):
-            clean_line = line.lstrip('#').strip()
-            if clean_line: cleaned_lines.append(f"**{clean_line}**")
-        else: cleaned_lines.append(line)
-    return '\n'.join(cleaned_lines).strip()
-
-
 def generate_readme(selected_skills: list, repo_url: str) -> str:
     """Generate README.md for the skills repository."""
     repo_name = repo_url.replace("https://github.com/", "").replace(".git", "")
-    # Basic validation for README generation
     if "/" not in repo_name:
         repo_name = "your-repo"
 
-    readme_content = f"""# Agent Skills
+    skills_list = "\n".join(f"- {s['name']}" for s in selected_skills)
+
+    return f"""# Agent Skills
 
 A collection of custom skills for AI agents.
 
@@ -344,23 +330,11 @@ Install these skills with:
 npx skills add {repo_name}
 ```
 
+## Skills
+
+{skills_list}
+
 ## About
 
 This repository contains skills published using [agent-sync](https://github.com/renatocaliari/agent-sync).
-
-## Skills
-
 """
-    for skill in selected_skills:
-        readme_content += f"### {skill['name']}\n\n"
-        skill_md = skill["path"] / "SKILL.md"
-        if skill_md.exists():
-            try:
-                raw_content = skill_md.read_text()
-                clean_content = strip_frontmatter(raw_content)
-                summary = clean_content[:500]
-                if len(clean_content) > 500: summary += "..."
-                readme_content += f"{summary}\n\n---\n\n"
-            except Exception: readme_content += f"Custom skill for AI agents.\n\n---\n\n"
-        else: readme_content += f"Custom skill for AI agents.\n\n---\n\n"
-    return readme_content
