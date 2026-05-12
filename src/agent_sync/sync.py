@@ -60,11 +60,15 @@ class SyncManager:
         if not self.repo_dir.exists():
             raise RuntimeError(f"Failed to create directory {self.repo_dir}")
     
-    def _run_git(self, *args, cwd: Optional[Path] = None) -> str:
+    def _run_git(self, *args, cwd: Optional[Path] = None, timeout: Optional[int] = 60) -> str:
         """Run a git command and return output.
         
         Creates a copy of environment without GITHUB_TOKEN to avoid conflicts
         with gh CLI keyring auth.
+        
+        Args:
+            timeout: Maximum seconds to wait for the command (default 60).
+                     Prevents infinite hangs on auth prompts or network issues.
         """
         import os
         import subprocess
@@ -75,14 +79,26 @@ class SyncManager:
         env.pop("GITHUB_TOKEN", None)
         
         cmd = ["git"] + list(args)
-        result = subprocess.run(
-            cmd,
-            cwd=cwd or self.repo_dir,
-            capture_output=True,
-            text=True,
-            check=False,
-            env=env,  # Use modified environment
-        )
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=cwd or self.repo_dir,
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired as e:
+            raise RuntimeError(
+                f"Git command timed out after {timeout}s: {' '.join(cmd)}\n"
+                "This usually means git is stuck waiting for authentication.\n"
+                "Try one of these solutions:\n"
+                "  1. Run 'gh auth status' to check GitHub authentication\n"
+                "  2. Run 'gh auth refresh' to refresh credentials\n"
+                "  3. Check your git remote configuration: git remote -v\n"
+                "  4. Unset GITHUB_TOKEN if set: unset GITHUB_TOKEN"
+            ) from e
         
         if result.returncode != 0:
             raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
@@ -473,6 +489,9 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# Pi.dev git clones (cache, not configuration)
+configs/pi.dev/git/
 """
         (self.repo_dir / ".gitignore").write_text(gitignore)
 
