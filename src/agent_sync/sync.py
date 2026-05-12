@@ -194,6 +194,7 @@ class SyncManager:
                     ["git", "clone", repo_url_to_clone, str(self.repo_dir)],
                     check=True,
                     capture_output=True,
+                    timeout=120,
                 )
 
             # Update config
@@ -213,6 +214,7 @@ class SyncManager:
             cwd=self.repo_dir,
             capture_output=True,
             text=True,
+            timeout=120,
         )
 
         if result.returncode != 0:
@@ -222,6 +224,7 @@ class SyncManager:
                 capture_output=True,
                 text=True,
                 check=True,
+                timeout=120,
             )
 
             # Initialize local git
@@ -266,6 +269,7 @@ class SyncManager:
         subprocess.run(
             ["git", "clone", repo_url, str(self.repo_dir)],
             check=True,
+            timeout=120,
         )
         
         # Update config
@@ -1671,6 +1675,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             capture_output=True,
             text=True,
             check=True,
+            timeout=30,
         )
         return result.stdout.strip()
     
