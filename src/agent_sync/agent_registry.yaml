@@ -67,9 +67,22 @@ pi.dev:
   check:
     path: "~/.pi/agent/settings.json"
   extra_paths:
+    # Configurações principais em ~/.pi/agent/
     extensions: ["~/.pi/agent/extensions", "~/.pi/extensions"]
     prompts: ["~/.pi/agent/prompts", "~/.pi/prompts"]
     themes: ["~/.pi/agent/themes", "~/.pi/themes"]
+    # Outros diretivos e arquivos importantes
+    bin: ["~/.pi/agent/bin"]
+    git: ["~/.pi/agent/git"]
+    lsp: ["~/.pi/agent/lsp-settings.json"]
+    models: ["~/.pi/agent/models.json"]
+    # Diretórios globais em ~/.pi/ (fora de ~/.pi/agent/)
+    global_extensions: ["~/.pi/extensions"]
+    global_prompts: ["~/.pi/prompts"]
+    global_skills_local: ["~/.pi/skills"]
+    global_themes: ["~/.pi/themes"]
+    # Arquivos na raiz de ~/.pi/
+    pyrightconfig: ["~/.pi/pyrightconfig.json"]
 
 qwen-code:
   method: copy

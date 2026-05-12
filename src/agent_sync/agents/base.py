@@ -156,5 +156,87 @@ class BaseAgent:
         paths = self.data.get("extra_paths", {}).get("themes", [])
         return [self._expand_path(p) for p in paths]
 
+    @property
+    def bin_paths(self) -> List[Path]:
+        paths = self.data.get("extra_paths", {}).get("bin", [])
+        return [self._expand_path(p) for p in paths]
+
+    @property
+    def git_paths(self) -> List[Path]:
+        paths = self.data.get("extra_paths", {}).get("git", [])
+        return [self._expand_path(p) for p in paths]
+
+    @property
+    def lsp_paths(self) -> List[Path]:
+        paths = self.data.get("extra_paths", {}).get("lsp", [])
+        return [self._expand_path(p) for p in paths]
+
+    @property
+    def models_paths(self) -> List[Path]:
+        paths = self.data.get("extra_paths", {}).get("models", [])
+        return [self._expand_path(p) for p in paths]
+
+    @property
+    def global_extensions_paths(self) -> List[Path]:
+        paths = self.data.get("extra_paths", {}).get("global_extensions", [])
+        return [self._expand_path(p) for p in paths]
+
+    @property
+    def global_prompts_paths(self) -> List[Path]:
+        paths = self.data.get("extra_paths", {}).get("global_prompts", [])
+        return [self._expand_path(p) for p in paths]
+
+    @property
+    def global_skills_local_paths(self) -> List[Path]:
+        paths = self.data.get("extra_paths", {}).get("global_skills_local", [])
+        return [self._expand_path(p) for p in paths]
+
+    @property
+    def global_themes_paths(self) -> List[Path]:
+        paths = self.data.get("extra_paths", {}).get("global_themes", [])
+        return [self._expand_path(p) for p in paths]
+
+    @property
+    def pyrightconfig_paths(self) -> List[Path]:
+        paths = self.data.get("extra_paths", {}).get("pyrightconfig", [])
+        return [self._expand_path(p) for p in paths]
+
+    @property
+    def packages_paths(self) -> List[Path]:
+        """Detect local packages from agent configuration.
+        
+        For pi.dev, reads settings.json and resolves relative paths
+        like '../product-workflow' to absolute paths.
+        """
+        packages = []
+        config = self.get_config()
+        
+        if not config or "packages" not in config:
+            return packages
+        
+        for package in config["packages"]:
+            # Handle string format: "../product-workflow" or "git:github.com/..."
+            if isinstance(package, str):
+                # Skip git/npm packages - only sync local paths
+                if package.startswith("git:") or package.startswith("npm:"):
+                    continue
+                
+                # Resolve relative paths
+                if package.startswith("./") or package.startswith("../"):
+                    # Resolve relative to config directory
+                    resolved = (self.config_path.parent / package).resolve()
+                    if resolved.exists():
+                        packages.append(resolved)
+            
+            # Handle object format: {"source": "../product-workflow"}
+            elif isinstance(package, dict):
+                source = package.get("source", "")
+                if isinstance(source, str) and (source.startswith("./") or source.startswith("../")):
+                    resolved = (self.config_path.parent / source).resolve()
+                    if resolved.exists():
+                        packages.append(resolved)
+        
+        return packages
+
     def __repr__(self) -> str:
         return f"BaseAgent(name={self.name}, method={self.method}, enabled={self.enabled})"
