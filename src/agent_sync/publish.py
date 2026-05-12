@@ -294,13 +294,13 @@ def publish_skills(repo_url: Optional[str] = None, dry_run: bool = False, intera
             if not validate_repo_name(repo_name):
                 raise ValueError(f"Invalid repository name: {repo_name}")
 
-            subprocess.run(["gh", "api", f"repos/{repo_name}"], capture_output=True, check=False)
-            subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
-            subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, check=True)
-            subprocess.run(["git", "commit", "-m", f"feat: publish {len(selected_skills)} skills"], cwd=tmp_path, capture_output=True, check=True)
-            subprocess.run(["git", "branch", "-M", "main"], cwd=tmp_path, capture_output=True, check=True)
-            subprocess.run(["git", "remote", "add", "origin", repo_url], cwd=tmp_path, capture_output=True, check=True)
-            subprocess.run(["git", "push", "-u", "origin", "main", "--force"], cwd=tmp_path, capture_output=True, check=True)
+            subprocess.run(["gh", "api", f"repos/{repo_name}"], capture_output=True, check=False, timeout=30)
+            subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True, timeout=15)
+            subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, check=True, timeout=30)
+            subprocess.run(["git", "commit", "-m", f"feat: publish {len(selected_skills)} skills"], cwd=tmp_path, capture_output=True, check=True, timeout=30)
+            subprocess.run(["git", "branch", "-M", "main"], cwd=tmp_path, capture_output=True, check=True, timeout=15)
+            subprocess.run(["git", "remote", "add", "origin", repo_url], cwd=tmp_path, capture_output=True, check=True, timeout=15)
+            subprocess.run(["git", "push", "-u", "origin", "main", "--force"], cwd=tmp_path, capture_output=True, check=True, timeout=120)
             
             console.print(f"\n[green]✓ Successfully published to {repo_url}![/green]")
             console.print(f"💡 Others can install with: [bold]npx skills add {repo_name}[/]\n")

@@ -1286,7 +1286,7 @@ def update():
             
             # Execution logic with captured output for better UX
             def run_upgrade(cmd_list):
-                return subprocess.run(cmd_list, capture_output=True, text=True)
+                return subprocess.run(cmd_list, capture_output=True, text=True, timeout=120)
 
             # 1. Try PIPX
             res = run_upgrade(["pipx", "upgrade", "agent-sync"])
