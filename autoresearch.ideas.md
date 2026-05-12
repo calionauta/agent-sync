@@ -6,10 +6,20 @@
 - **Skip pi.dev git clone backup**: `~/.pi/agent/git/` contains 21k files (222MB+) of cloned repo worktrees. These are cache, not configuration. Skipped entirely. Reduced from ~8s to ~0.3s. [experiment #1]
 - **Git subprocess timeout**: `_run_git()` now has a 60s timeout on all subprocess calls. If git hangs on auth prompts or network issues, it raises a helpful `RuntimeError` instead of blocking forever. [experiment #2]
 - **`.gitignore` in repo for cache dirs**: Added `configs/pi.dev/git/` to the repo's `.gitignore` (both in `_create_repo_structure()` and existing repo) to prevent re-adding stale git clone files. [experiment #2]
+- **Verify all flags fast**: Tested `--skills-only` (2.0s), `--configs-only` (0.6s), `--agents-only` (0.0s), default (2.3s). All fast. [experiment #4]
 
-## Deferred Ideas
+## Current Performance
 
-- **Review other pi.dev extra_paths for size**: `bin/`, `packages/`, `extensions/` were checked — all are tiny (<3MB total). No action needed.
-- **Add `--dry-run` mode to push**: Show what would be staged/copied without committing, helpful for debugging slow pushes.
-- **Pipx venv sync issue**: Source edits weren't reflected in pipx-installed CLI because pipx keeps separate physical copies. Add note to `setup.py` or `Makefile` about needing to `pipx reinstall` after edits.
-- **Configurable exclude patterns per extra_path**: Let users choose which pi.dev directories to sync (e.g., skip `bin/` too).
+| Métrica | Antes | Depois | Ganho |
+|---------|-------|--------|-------|
+| `agent-sync push` | **58s** | **2.3s** | **25× mais rápido** |
+| `--skills-only` | — | 2.0s | ✅ |
+| `--configs-only` | — | 0.6s | ✅ |
+| `--agents-only` | — | 0.0s | ✅ |
+
+## Deferred Ideas (no longer needed)
+
+- ✅ Review other pi.dev extra_paths for size: all tiny (<3MB total), no action.
+- ✅ Pipx venv sync issue: documented — manually copy sync.py to pipx venv after edits.
+- `--dry-run` mode: nice-to-have UX, not needed for performance.
+- Configurable exclude patterns: nice-to-have, not needed with current sizes.

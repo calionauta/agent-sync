@@ -843,9 +843,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                     else:
                         repo_skill.unlink()
         
-        # 2. Copy global skills to repo (under _global/ subdirectory for clarity)
-        # Or keep flat structure and use manifest to differentiate
-        # Using flat structure with manifest tracking
+        # 2. Copy global skills to repo
         if global_skills_dir.exists():
             for skill_item in global_skills_dir.iterdir():
                 if skill_item.name.startswith("."):
@@ -890,6 +888,14 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         # 5. Create and save manifest
         manifest = self._create_manifest()
         self._save_manifest(manifest)
+
+    @staticmethod
+    def _same_content(path1: Path, path2: Path) -> bool:
+        """Compare two files by byte content. Safe for both text and binary files."""
+        try:
+            return path1.read_bytes() == path2.read_bytes()
+        except Exception:
+            return False
 
     def _should_exclude(self, filename: str, exclude_patterns: Optional[list[str]] = None) -> bool:
         """Check if a file should be excluded from sync.
@@ -1174,7 +1180,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                 for config_file in synced_config_dir.glob("*"):
                     if config_file.is_file():
                         dest = agent.config_path.parent / config_file.name
-                        if not dest.exists() or dest.read_text() != config_file.read_text():
+                        if not dest.exists() or self._same_content(dest, config_file):
                             shutil.copy2(config_file, dest)
                             changes.append(f"{agent.name}: {config_file.name}")
             
@@ -1188,7 +1194,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                         
                         for ext_item in synced_ext_dir.iterdir():
                             dest = ext_path / ext_item.name
-                            if not dest.exists() or (ext_item.is_file() and dest.read_text() != ext_item.read_text()):
+                            if not dest.exists() or (ext_item.is_file() and self._same_content(dest, ext_item)):
                                 if ext_item.is_dir():
                                     shutil.copytree(ext_item, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns('.git'))
                                 else:
@@ -1205,7 +1211,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                         
                         for prompt_item in synced_prompts_dir.iterdir():
                             dest = prompts_path / prompt_item.name
-                            if not dest.exists() or (prompt_item.is_file() and dest.read_text() != prompt_item.read_text()):
+                            if not dest.exists() or (prompt_item.is_file() and self._same_content(dest, prompt_item)):
                                 if prompt_item.is_dir():
                                     shutil.copytree(prompt_item, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns('.git'))
                                 else:
@@ -1222,7 +1228,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
                         for theme_item in synced_themes_dir.iterdir():
                             dest = themes_path / theme_item.name
-                            if not dest.exists() or (theme_item.is_file() and dest.read_text() != theme_item.read_text()):
+                            if not dest.exists() or (theme_item.is_file() and self._same_content(dest, theme_item)):
                                 if theme_item.is_dir():
                                     shutil.copytree(theme_item, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns('.git'))
                                 else:
@@ -1237,7 +1243,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                         bin_path.mkdir(parents=True, exist_ok=True)
                         for bin_item in synced_bin_dir.iterdir():
                             dest = bin_path / bin_item.name
-                            if not dest.exists() or (bin_item.is_file() and dest.read_text() != bin_item.read_text()):
+                            if not dest.exists() or (bin_item.is_file() and self._same_content(dest, bin_item)):
                                 if bin_item.is_dir():
                                     shutil.copytree(bin_item, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns('.git'))
                                 else:
@@ -1252,7 +1258,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                         git_path.mkdir(parents=True, exist_ok=True)
                         for git_item in synced_git_dir.iterdir():
                             dest = git_path / git_item.name
-                            if not dest.exists() or (git_item.is_file() and dest.read_text() != git_item.read_text()):
+                            if not dest.exists() or (git_item.is_file() and self._same_content(dest, git_item)):
                                 if git_item.is_dir():
                                     shutil.copytree(git_item, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns('.git'))
                                 else:
@@ -1266,7 +1272,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                     for lsp_path in agent.lsp_paths:
                         lsp_path.parent.mkdir(parents=True, exist_ok=True)
                         dest = lsp_path
-                        if not dest.exists() or dest.read_text() != synced_lsp_file.read_text():
+                        if not dest.exists() or self._same_content(dest, synced_lsp_file):
                             shutil.copy2(synced_lsp_file, dest)
                             changes.append(f"{agent.name}: lsp-settings.json")
 
@@ -1277,7 +1283,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                     for models_path in agent.models_paths:
                         models_path.parent.mkdir(parents=True, exist_ok=True)
                         dest = models_path
-                        if not dest.exists() or dest.read_text() != synced_models_file.read_text():
+                        if not dest.exists() or self._same_content(dest, synced_models_file):
                             shutil.copy2(synced_models_file, dest)
                             changes.append(f"{agent.name}: models.json")
 
@@ -1290,7 +1296,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                         global_ext_path.mkdir(parents=True, exist_ok=True)
                         for item in synced_global_ext_dir.iterdir():
                             dest = global_ext_path / item.name
-                            if not dest.exists() or (item.is_file() and dest.read_text() != item.read_text()):
+                            if not dest.exists() or (item.is_file() and self._same_content(dest, item)):
                                 if item.is_dir():
                                     shutil.copytree(item, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns('.git'))
                                 else:
@@ -1304,7 +1310,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                         global_prompts_path.mkdir(parents=True, exist_ok=True)
                         for item in synced_global_prompts_dir.iterdir():
                             dest = global_prompts_path / item.name
-                            if not dest.exists() or (item.is_file() and dest.read_text() != item.read_text()):
+                            if not dest.exists() or (item.is_file() and self._same_content(dest, item)):
                                 if item.is_dir():
                                     shutil.copytree(item, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns('.git'))
                                 else:
@@ -1318,7 +1324,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                         global_skills_path.mkdir(parents=True, exist_ok=True)
                         for item in synced_global_skills_dir.iterdir():
                             dest = global_skills_path / item.name
-                            if not dest.exists() or (item.is_file() and dest.read_text() != item.read_text()):
+                            if not dest.exists() or (item.is_file() and self._same_content(dest, item)):
                                 if item.is_dir():
                                     shutil.copytree(item, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns('.git'))
                                 else:
@@ -1332,7 +1338,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                         global_themes_path.mkdir(parents=True, exist_ok=True)
                         for item in synced_global_themes_dir.iterdir():
                             dest = global_themes_path / item.name
-                            if not dest.exists() or (item.is_file() and dest.read_text() != item.read_text()):
+                            if not dest.exists() or (item.is_file() and self._same_content(dest, item)):
                                 if item.is_dir():
                                     shutil.copytree(item, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns('.git'))
                                 else:
@@ -1345,7 +1351,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                     for pyright_path in agent.pyrightconfig_paths:
                         pyright_path.parent.mkdir(parents=True, exist_ok=True)
                         dest = pyright_path
-                        if not dest.exists() or dest.read_text() != synced_pyright_file.read_text():
+                        if not dest.exists() or self._same_content(dest, synced_pyright_file):
                             shutil.copy2(synced_pyright_file, dest)
                             changes.append(f"{agent.name}: pyrightconfig.json")
 
@@ -1398,7 +1404,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                         dest = agent.agents_path / rel_path
                         dest.parent.mkdir(parents=True, exist_ok=True)
                         
-                        if not dest.exists() or dest.read_text() != agent_file.read_text():
+                        if not dest.exists() or self._same_content(dest, agent_file):
                             shutil.copy2(agent_file, dest)
                             changes.append(f"{agent.name}/project: {rel_path}")
             
@@ -1413,7 +1419,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                         dest = agent.agents_path_global / rel_path
                         dest.parent.mkdir(parents=True, exist_ok=True)
                         
-                        if not dest.exists() or dest.read_text() != agent_file.read_text():
+                        if not dest.exists() or self._same_content(dest, agent_file):
                             shutil.copy2(agent_file, dest)
                             changes.append(f"{agent.name}/global: {rel_path}")
         
@@ -1471,7 +1477,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                     continue
                 
                 dest = global_skills_dir / skill_item.name
-                if not dest.exists() or (skill_item.is_file() and dest.read_text() != skill_item.read_text()):
+                if not dest.exists() or (skill_item.is_file() and self._same_content(dest, skill_item)):
                     if skill_item.is_dir():
                         shutil.copytree(skill_item, dest, dirs_exist_ok=True)
                     else:
