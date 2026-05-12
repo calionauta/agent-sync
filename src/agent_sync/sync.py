@@ -77,6 +77,8 @@ class SyncManager:
         # This prevents git from using the invalid token
         env = os.environ.copy()
         env.pop("GITHUB_TOKEN", None)
+        # Never prompt for credentials — fail fast with a clear error instead
+        env["GIT_TERMINAL_PROMPT"] = "0"
         
         cmd = ["git"] + list(args)
         try:
