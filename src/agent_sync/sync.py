@@ -1250,20 +1250,14 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                                     shutil.copy2(bin_item, dest)
                                 changes.append(f"{agent.name}/bin: {bin_item.name}")
 
-            # Apply Pi.dev git directory
+            # Pi.dev git clones were removed from the repo — they are cache, not configuration.
+            # The restore code was removed in favor of the skip in _stage_agent_configs().
+            # If you see this comment and synced_git_dir still exists, manually remove it:
+            #   rm -rf ~/Library/Application\ Support/agent-sync/repo/configs/pi.dev/git/
             if agent.name == "pi.dev":
                 synced_git_dir = synced_config_dir / "git"
                 if synced_git_dir.exists():
-                    for git_path in agent.git_paths:
-                        git_path.mkdir(parents=True, exist_ok=True)
-                        for git_item in synced_git_dir.iterdir():
-                            dest = git_path / git_item.name
-                            if not dest.exists() or (git_item.is_file() and self._same_content(dest, git_item)):
-                                if git_item.is_dir():
-                                    shutil.copytree(git_item, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns('.git'))
-                                else:
-                                    shutil.copy2(git_item, dest)
-                                changes.append(f"{agent.name}/git: {git_item.name}")
+                    console.print(f"  [dim]Skipping git clones restore ({sum(f.stat().st_size for f in synced_git_dir.rglob('*') if f.is_file()) // 1024 // 1024}MB) — these are cache, not config[/dim]")
 
             # Apply Pi.dev lsp-settings.json
             if agent.name == "pi.dev":
