@@ -62,7 +62,10 @@ def render_selection_table(skills: list, selected_names: set) -> Table:
 
 def interactive_selection(skills: list, initial_selected: set) -> set:
     """TUI for selecting skills to publish."""
+    from ._selection import parse_multiselect_input
+    
     selected = set(initial_selected)
+    item_names = [s["name"] for s in skills]
     
     while True:
         console.clear()
@@ -77,25 +80,10 @@ def interactive_selection(skills: list, initial_selected: set) -> set:
         console.print("  • Press [bold white]Enter[/] when done")
         
         choice = Prompt.ask("\nSelection", default="done")
-        
-        if choice.lower() in ["done", ""]:
+        result = parse_multiselect_input(choice, item_names, selected)
+        if result is None:
             break
-        elif choice.lower() == "all":
-            selected = {s["name"] for s in skills}
-        elif choice.lower() == "none":
-            selected = set()
-        else:
-            try:
-                indices = [int(x.strip()) - 1 for x in choice.split(",")]
-                for idx in indices:
-                    if 0 <= idx < len(skills):
-                        name = skills[idx]["name"]
-                        if name in selected:
-                            selected.remove(name)
-                        else:
-                            selected.add(name)
-            except ValueError:
-                pass
+        selected = result
                 
     return selected
 

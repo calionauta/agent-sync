@@ -741,6 +741,7 @@ def delete(skill_names: tuple[str, ...], dry_run: bool, push: bool, interactive:
     from rich.prompt import Confirm, Prompt
     from rich.table import Table
     from rich import box
+    from ._selection import parse_multiselect_input
     
     deleter = SkillsDeleter()
     
@@ -770,7 +771,6 @@ def delete(skill_names: tuple[str, ...], dry_run: bool, push: bool, interactive:
         selected = set()
         
         while True:
-            # Render table
             table = Table(box=box.SIMPLE)
             table.add_column("#", style="dim", width=4)
             table.add_column("Status", style="green", width=8)
@@ -781,34 +781,17 @@ def delete(skill_names: tuple[str, ...], dry_run: bool, push: bool, interactive:
                 table.add_row(f"{idx}.", status, name)
             
             console.print(table)
-            
             console.print(f"\n[dim]Selected: {len(selected)} / {len(all_skills)} skills[/dim]\n")
-            
             console.print("[bold]Controls:[/bold]")
             console.print("  • Enter numbers to toggle (e.g. [green]'1,3,5'[/green])")
             console.print("  • Type [cyan]'all'[/cyan] or [cyan]'none'[/cyan]")
             console.print("  • Press [bold white]Enter[/] when done")
             
             choice = Prompt.ask("\nSelection", default="done")
-            
-            if choice.lower() in ["done", ""]:
+            result = parse_multiselect_input(choice, all_skills, selected)
+            if result is None:
                 break
-            elif choice.lower() == "all":
-                selected = set(all_skills)
-            elif choice.lower() == "none":
-                selected = set()
-            else:
-                try:
-                    indices = [int(x.strip()) - 1 for x in choice.split(",")]
-                    for idx in indices:
-                        if 0 <= idx < len(all_skills):
-                            name = all_skills[idx]
-                            if name in selected:
-                                selected.remove(name)
-                            else:
-                                selected.add(name)
-                except ValueError:
-                    pass
+            selected = result
         
         skills_to_delete = selected
     else:
