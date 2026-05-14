@@ -7,7 +7,6 @@ Supports extension subdirectories (e.g., ~/.config/opencode/superpowers/skills/)
 """
 
 import shutil
-import json
 from pathlib import Path
 from typing import Optional
 from rich.console import Console

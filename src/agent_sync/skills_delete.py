@@ -1,9 +1,8 @@
 """Skills deletion management."""
 
 import shutil
-import os
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 from rich.console import Console
 
 console = Console()

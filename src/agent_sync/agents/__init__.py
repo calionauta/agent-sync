@@ -1,7 +1,7 @@
 """Agent-specific configurations and handlers (YAML-driven)."""
 
 from typing import Optional, List, Dict, Any
-from .base import BaseAgent, GLOBAL_SKILLS_DIR
+from .base import BaseAgent
 from .registry_loader import load_registry
 
 # Import specialized agent handlers

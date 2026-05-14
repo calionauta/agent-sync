@@ -9,12 +9,10 @@ import subprocess
 import tempfile
 import json
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Set
+from typing import Optional
 
 import yaml
 from rich.console import Console
-from rich.live import Live
-from rich.layout import Layout
 from rich.panel import Panel
 from rich.prompt import Prompt, Confirm
 from rich.table import Table
