@@ -125,81 +125,59 @@ class BaseAgent:
         """Check if this agent supports custom agents (.claude/agents/, .opencode/agents/, etc.)."""
         return self.agents_dir_name is not None
 
-    def get_all_skills_paths(self) -> List[Path]:
-        """Get all skills paths for this agent."""
-        paths = [self.skills_path]
-        
-        # Some agents use global skills natively
-        if self.supports_native():
-            paths.append(self.global_skills_path)
-            
-        # Add extra paths if defined in registry
-        extra = self.data.get("extra_paths", {})
-        # skills is implied by skills_dir_name, but we could have more
-        
-        # Filter to only existing paths
-        return [p for p in paths if p.exists()]
+    # Extra paths from registry — all use the same helper
+    def _get_extra_paths(self, key: str) -> List[Path]:
+        """Resolve extra path entries from the agent registry data."""
+        paths = self.data.get("extra_paths", {}).get(key, [])
+        return [self._expand_path(p) for p in paths]
 
-    # Pi-specific properties (handled dynamically)
     @property
     def extensions_paths(self) -> List[Path]:
-        paths = self.data.get("extra_paths", {}).get("extensions", [])
-        return [self._expand_path(p) for p in paths]
+        return self._get_extra_paths("extensions")
 
     @property
     def prompts_paths(self) -> List[Path]:
-        paths = self.data.get("extra_paths", {}).get("prompts", [])
-        return [self._expand_path(p) for p in paths]
+        return self._get_extra_paths("prompts")
 
     @property
     def themes_paths(self) -> List[Path]:
-        paths = self.data.get("extra_paths", {}).get("themes", [])
-        return [self._expand_path(p) for p in paths]
+        return self._get_extra_paths("themes")
 
     @property
     def bin_paths(self) -> List[Path]:
-        paths = self.data.get("extra_paths", {}).get("bin", [])
-        return [self._expand_path(p) for p in paths]
+        return self._get_extra_paths("bin")
 
     @property
     def git_paths(self) -> List[Path]:
-        paths = self.data.get("extra_paths", {}).get("git", [])
-        return [self._expand_path(p) for p in paths]
+        return self._get_extra_paths("git")
 
     @property
     def lsp_paths(self) -> List[Path]:
-        paths = self.data.get("extra_paths", {}).get("lsp", [])
-        return [self._expand_path(p) for p in paths]
+        return self._get_extra_paths("lsp")
 
     @property
     def models_paths(self) -> List[Path]:
-        paths = self.data.get("extra_paths", {}).get("models", [])
-        return [self._expand_path(p) for p in paths]
+        return self._get_extra_paths("models")
 
     @property
     def global_extensions_paths(self) -> List[Path]:
-        paths = self.data.get("extra_paths", {}).get("global_extensions", [])
-        return [self._expand_path(p) for p in paths]
+        return self._get_extra_paths("global_extensions")
 
     @property
     def global_prompts_paths(self) -> List[Path]:
-        paths = self.data.get("extra_paths", {}).get("global_prompts", [])
-        return [self._expand_path(p) for p in paths]
+        return self._get_extra_paths("global_prompts")
 
     @property
     def global_skills_local_paths(self) -> List[Path]:
-        paths = self.data.get("extra_paths", {}).get("global_skills_local", [])
-        return [self._expand_path(p) for p in paths]
+        return self._get_extra_paths("global_skills_local")
 
     @property
     def global_themes_paths(self) -> List[Path]:
-        paths = self.data.get("extra_paths", {}).get("global_themes", [])
-        return [self._expand_path(p) for p in paths]
+        return self._get_extra_paths("global_themes")
 
     @property
     def pyrightconfig_paths(self) -> List[Path]:
-        paths = self.data.get("extra_paths", {}).get("pyrightconfig", [])
-        return [self._expand_path(p) for p in paths]
+        return self._get_extra_paths("pyrightconfig")
 
     @property
     def packages_paths(self) -> List[Path]:
@@ -215,20 +193,13 @@ class BaseAgent:
             return packages
         
         for package in config["packages"]:
-            # Handle string format: "../product-workflow" or "git:github.com/..."
             if isinstance(package, str):
-                # Skip git/npm packages - only sync local paths
                 if package.startswith("git:") or package.startswith("npm:"):
                     continue
-                
-                # Resolve relative paths
                 if package.startswith("./") or package.startswith("../"):
-                    # Resolve relative to config directory
                     resolved = (self.config_path.parent / package).resolve()
                     if resolved.exists():
                         packages.append(resolved)
-            
-            # Handle object format: {"source": "../product-workflow"}
             elif isinstance(package, dict):
                 source = package.get("source", "")
                 if isinstance(source, str) and (source.startswith("./") or source.startswith("../")):
