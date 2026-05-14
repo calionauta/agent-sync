@@ -1513,7 +1513,9 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
     def _load_state(self) -> dict | None:
         """Load sync state."""
         if self.state_file.exists():
-            with open(self.state_file) as f:
-                return json.load(f)
-
+            try:
+                with open(self.state_file) as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, OSError):
+                pass
         return None
