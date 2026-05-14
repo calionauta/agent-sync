@@ -165,14 +165,6 @@ class Config:
             "paths": sync_config.get("paths"),
             "exclude": sync_config.get("exclude", []),
         }
-    
-    def set_sync_option(self, agent_name: str, key: str, value) -> None:
-        """Set a sync option for a specific agent."""
-        agent_config = self.get_agent_config(agent_name)
-        if "sync" not in agent_config:
-            agent_config["sync"] = {}
-        agent_config["sync"][key] = value
-        self.set_agent_config(agent_name, agent_config)
 
     def get_skills_method(self, agent_name: str) -> Optional[str]:
         """Get skills sync method for a specific agent."""
@@ -255,6 +247,4 @@ class Config:
         self.save()
         return self.config_path
     
-    def to_dict(self) -> dict:
-        """Get configuration as dictionary."""
-        return {**self._config, "overrides": self._overrides}
+

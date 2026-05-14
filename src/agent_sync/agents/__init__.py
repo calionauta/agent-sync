@@ -66,16 +66,3 @@ def get_agent(name: str) -> Optional[BaseAgent]:
     return None
 
 
-def get_enabled_agents() -> List[BaseAgent]:
-    """Get only enabled agent integrations (excludes internal)."""
-    return [agent for agent in get_agents() if agent.is_enabled()]
-
-
-def get_agent_by_method(method: str) -> List[BaseAgent]:
-    """Get all agents that use a specific sync method (excludes internal)."""
-    return [agent for agent in get_agents() if agent.method == method]
-
-
-def is_internal_entry(name: str) -> bool:
-    """Check if an entry is internal (not a real agent)."""
-    return name in INTERNAL_ENTRIES

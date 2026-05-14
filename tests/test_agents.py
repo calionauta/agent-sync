@@ -9,7 +9,6 @@ from agent_sync.agents import (
     get_all_agents,
     get_agent,
     BaseAgent,
-    is_internal_entry,
 )
 
 
@@ -50,11 +49,6 @@ class TestAgentIntegrations:
         # Internal should NOT be in the list
         assert "global-skills" not in agent_names
 
-    def test_is_internal_entry(self):
-        """Test internal entry detection."""
-        assert is_internal_entry("global-skills") is True
-        assert is_internal_entry("opencode") is False
-        assert is_internal_entry("cline") is False
 
     def test_get_agent_by_name(self):
         """Test getting specific agent by name."""

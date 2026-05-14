@@ -2,7 +2,7 @@
 
 import yaml
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 
 def get_registry_path() -> Path:
@@ -46,8 +46,3 @@ def validate_registry(data: Dict[str, Any]) -> None:
             pass
 
 
-def expand_path(path_str: str) -> Path:
-    """Expand ~ and environment variables in path."""
-    if not path_str:
-        return Path("")
-    return Path(path_str).expanduser()

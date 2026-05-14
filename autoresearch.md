@@ -1,25 +1,38 @@
-# Autoresearch Rules
+# Autoresearch: Code Quality — DRY/KISS + Dead Code Removal
 
-This file governs the autoresearch loop.
+## Objective
+Remove dead code, fix code smells, DRY up repeated patterns, fix failing tests, and simplify the agent-sync codebase. All existing functionality must continue working.
 
-## Loop Pattern
-1. Read the project code and understand the benchmark
-2. Form a hypothesis about what to change
-3. Make the change
-4. Run the benchmark via run_experiment
-5. Log the result via log_experiment
-6. Repeat
+## Metrics
+- **Primary**: exit_code (failures, lower is better) — 0 = all tests pass
+- **Secondary**: tests_passed (higher is better), loc (lower = less code, better)
 
-## Benchmark
-The benchmark is whatever captures the user's issue — in this case, running `agent-sync push` and measuring whether it completes and how long it takes.
+## How to Run
+`bash autoresearch.sh` — runs pytest, parses results, outputs METRIC lines.
 
-## Optimization Target
-Primary metric: `exit_code` (0 = success, 1 = failure/hang)
-Secondary metric: `duration_s` (how long it takes to complete)
+## Files in Scope
+- `src/agent_sync/cli.py` — CLICK commands (long file, smelly)
+- `src/agent_sync/sync.py` — SyncManager (very long, has DRY violations and dead code)
+- `src/agent_sync/skills.py` — SkillsManager
+- `src/agent_sync/secrets.py` — SecretsManager
+- `src/agent_sync/publish.py` — Skill publishing
+- `src/agent_sync/agents/__init__.py` — Agent registry access
+- `src/agent_sync/agents/base.py` — BaseAgent (many repeated path properties)
+- `src/agent_sync/agents/transforms.py` — Transform utilities (has dead code)
+- `src/agent_sync/agents/registry_loader.py` — Registry loading
+- `tests/` — All test files
 
-## Rules
-- Do not cheat on benchmarks
-- Do not overfit
-- Each experiment must test a real change
-- If a change doesn't help, discard it
-- Keep changes that improve the metric
+## Off Limits
+- `agent_registry.yaml` — Data, not code
+- `pyproject.toml` — Build config
+- `scripts/` — External tooling
+- `skills/` — Skill definitions
+
+## Constraints
+- All tests must pass: exit_code=0, tests_passed=109+
+- No new dependencies
+- No breaking changes to CLI interface
+- Hatch-VCS versioning must continue working
+
+## What's Been Tried
+- (none yet for this session)
