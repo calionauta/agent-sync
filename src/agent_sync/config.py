@@ -116,7 +116,9 @@ class Config:
 
     def get_agent_config(self, agent_name: str) -> dict:
         """Get configuration for a specific agent."""
-        agents_config = self._config.get("agents_config", {})
+        agents_config = self._config.get("agents_config")
+        if not isinstance(agents_config, dict):
+            agents_config = {}
         return agents_config.get(agent_name, {})
 
     def set_agent_config(self, agent_name: str, config: dict) -> None:
