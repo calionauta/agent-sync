@@ -7,6 +7,17 @@ from rich.console import Console
 console = Console()
 
 
+def scan_skills_dir(skills_dir: Path) -> Set[str]:
+    """Scan a skills directory and return set of valid skill names."""
+    if not skills_dir.exists():
+        return set()
+    return {
+        item.name for item in skills_dir.iterdir()
+        if item.is_dir() and not item.name.startswith(".")
+        and (item / "SKILL.md").exists()
+    }
+
+
 class SkillsDiff:
     """Compare local skills with remote GitHub repository."""
 
@@ -24,34 +35,14 @@ class SkillsDiff:
 
     def get_local_skills(self) -> Set[str]:
         """Get set of local skill names."""
-        if not self.global_skills_dir.exists():
-            return set()
-        
-        skills = set()
-        for item in self.global_skills_dir.iterdir():
-            if item.is_dir() and not item.name.startswith("."):
-                if (item / "SKILL.md").exists():
-                    skills.add(item.name)
-        
-        return skills
+        return scan_skills_dir(self.global_skills_dir)
 
     def get_remote_skills(self) -> Set[str]:
         """Get set of remote skill names from GitHub repo."""
         if not self.repo_dir or not self.repo_dir.exists():
             return set()
         
-        skills = set()
-        remote_skills_dir = self.repo_dir / "skills"
-        
-        if not remote_skills_dir.exists():
-            return set()
-        
-        for item in remote_skills_dir.iterdir():
-            if item.is_dir() and not item.name.startswith("."):
-                if (item / "SKILL.md").exists():
-                    skills.add(item.name)
-        
-        return skills
+        return scan_skills_dir(self.repo_dir / "skills")
 
     def diff(self) -> Dict[str, Dict[str, List[str]]]:
         """

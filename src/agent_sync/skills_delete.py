@@ -21,16 +21,8 @@ class SkillsDeleter:
 
     def list_skills(self) -> List[str]:
         """List all skills in the global hub."""
-        if not self.global_skills_dir.exists():
-            return []
-        
-        skills = []
-        for item in self.global_skills_dir.iterdir():
-            if item.is_dir() and not item.name.startswith("."):
-                if (item / "SKILL.md").exists():
-                    skills.append(item.name)
-        
-        return sorted(skills)
+        from .skills_diff import scan_skills_dir
+        return sorted(scan_skills_dir(self.global_skills_dir))
 
     def count_skill_files(self, skill_path: Path) -> int:
         """Count files in a skill directory."""
