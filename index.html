@@ -37,6 +37,17 @@
       padding: 0;
     }
 
+    /* Light mode support */
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg-primary: #ffffff;
+        --bg-secondary: #f6f8fa;
+        --text-primary: #24292f;
+        --text-muted: #57606a;
+        --border-color: #d0d7de;
+      }
+    }
+
     :root {
       --bg-primary: #0d1117;
       --bg-secondary: #161b22;
