@@ -226,7 +226,7 @@ This project aligns with the [DotAgents Protocol](https://dotagentsprotocol.com/
 
 | Aspect | DotAgents | agent-sync | Why |
 |--------|-----------|------------|-----|
-| Sub-agents | `~/.agents/agents/` (unified) | Per-vendor paths | Agents store profiles in vendor-specific formats; unificar perderia features |
+| Sub-agents | `~/.agents/agents/` (unified) | Per-vendor paths | Agents store profiles in vendor-specific formats; unifying would lose features |
 | MCP config | `~/.agents/mcp.json` (unified) | Per-vendor MCPs | Each vendor has unique MCP capabilities; merging would lose features |
 | Workspace override | `./.agents/` (overlay) | Not supported | Would require complex merge semantics; not a priority |
 | Config format | JSON | YAML | YAML is more readable for humans; JSON is optional in the spec |
