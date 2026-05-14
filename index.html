@@ -1179,10 +1179,35 @@ Options:
 // Copy button functionality
 function copyCommand(btn) {
   const cmd = btn.getAttribute('data-command');
-  navigator.clipboard.writeText(cmd).then(() => {
-    btn.textContent = 'Copied!';
-    setTimeout(() => btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy', 1500);
-  });
+  if (!cmd) return;
+  
+  // Use modern API with fallback
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(cmd).then(() => {
+      showCopied(btn);
+    }).catch(() => {
+      fallbackCopy(cmd, btn);
+    });
+  } else {
+    fallbackCopy(cmd, btn);
+  }
+}
+
+function fallbackCopy(text, btn) {
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.cssText = 'position:fixed;opacity:0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  try { document.execCommand('copy'); showCopied(btn); } catch (e) {}
+  document.body.removeChild(textarea);
+}
+
+function showCopied(btn) {
+  btn.textContent = 'Copied!';
+  setTimeout(() => {
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  }, 1500);
 }
   </script>
 </body>
