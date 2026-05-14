@@ -8,6 +8,26 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ New Features
 
+#### Rich Push Output with Status Indicators
+
+**Problem:**  
+`agent-sync push` showed only file paths without indicating if each file was added, modified, or deleted. Deletions (e.g., removed skills) appeared identical to uploads, causing confusion.
+
+**Solution:**  
+Push output now groups files by directory (`skills/`, `configs/`, `agents/`) and shows per-file status:
+
+```
+✅ Pushed 4 files:
+  • .agent-sync-manifest.json          📝 modified
+  📂 skills/ (2 files)
+    ├── old-skill/*                    🗑️ deleted (3 files)
+    └── new-skill/*                    🆕 added (5 files)
+```
+
+- Homogeneous skill directories are collapsed with `*` notation and file count
+- Mixed-status directories show individual files
+- Backward-compatible: `sync_manager.push()` returns richer `list[dict]` with `path`, `status`, `label`, and `directory_count`
+
 #### Flexible File Sync with Paths Support
 
 **Problem:**  
