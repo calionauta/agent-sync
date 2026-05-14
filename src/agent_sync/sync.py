@@ -585,131 +585,11 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                             dest = agent_config_dir / config_file.name
                             shutil.copy2(config_file, dest)
 
-            # Copy Pi.dev extensions if agent is pi.dev
-            if agent.name == "pi.dev" and hasattr(agent, 'extensions_paths'):
-                for ext_path in agent.extensions_paths:
-                    if ext_path.exists():
-                        # Copy extensions to repo
-                        repo_ext_dir = self.repo_dir / "configs" / agent.name / "extensions"
-                        repo_ext_dir.mkdir(parents=True, exist_ok=True)
-
-                        for ext_item in ext_path.iterdir():
-                            dest = repo_ext_dir / ext_item.name
-                            if ext_item.is_dir():
-                                shutil.copytree(ext_item, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns('.git'))
-                            else:
-                                shutil.copy2(ext_item, dest)
-
-            # Copy Pi.dev bin directory
-            if agent.name == "pi.dev" and hasattr(agent, 'bin_paths'):
-                for bin_path in agent.bin_paths:
-                    if bin_path.exists():
-                        repo_bin_dir = self.repo_dir / "configs" / agent.name / "bin"
-                        repo_bin_dir.mkdir(parents=True, exist_ok=True)
-                        for bin_item in bin_path.iterdir():
-                            dest = repo_bin_dir / bin_item.name
-                            if bin_item.is_dir():
-                                shutil.copytree(bin_item, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns('.git'))
-                            else:
-                                shutil.copy2(bin_item, dest)
-
-            # Pi.dev git directory contains cloned repos (git worktrees)
-            # These are cache, not configuration — skip to avoid copying 200MB+
-            # of git worktrees on every push.
-            if agent.name == "pi.dev" and hasattr(agent, 'git_paths'):
-                for git_path in agent.git_paths:
-                    if git_path.exists():
-                        console.print(f"  [dim]Skipping git clones backup ({sum(f.stat().st_size for f in git_path.rglob('*') if f.is_file()) // 1024 // 1024}MB) — these are cache, not config[/dim]")
-
-            # Copy Pi.dev lsp-settings.json
-            if agent.name == "pi.dev" and hasattr(agent, 'lsp_paths'):
-                for lsp_path in agent.lsp_paths:
-                    if lsp_path.exists() and lsp_path.is_file():
-                        repo_lsp_file = self.repo_dir / "configs" / agent.name / "lsp-settings.json"
-                        repo_lsp_file.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copy2(lsp_path, repo_lsp_file)
-
-            # Copy Pi.dev models.json
-            if agent.name == "pi.dev" and hasattr(agent, 'models_paths'):
-                for models_path in agent.models_paths:
-                    if models_path.exists() and models_path.is_file():
-                        repo_models_file = self.repo_dir / "configs" / agent.name / "models.json"
-                        repo_models_file.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copy2(models_path, repo_models_file)
-
-            # Copy Pi.dev global directories (in ~/.pi/ root)
+            # Pi.dev extra paths — copy each path category to its repo subdirectory
             if agent.name == "pi.dev":
-                # Global extensions
-                if hasattr(agent, 'global_extensions_paths'):
-                    for global_ext_path in agent.global_extensions_paths:
-                        if global_ext_path.exists():
-                            repo_global_ext_dir = self.repo_dir / "configs" / agent.name / "global_extensions"
-                            repo_global_ext_dir.mkdir(parents=True, exist_ok=True)
-                            for item in global_ext_path.iterdir():
-                                dest = repo_global_ext_dir / item.name
-                                if item.is_dir():
-                                    shutil.copytree(item, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns('.git'))
-                                else:
-                                    shutil.copy2(item, dest)
+                self._stage_pi_extra_paths(agent)
 
-                # Global prompts
-                if hasattr(agent, 'global_prompts_paths'):
-                    for global_prompts_path in agent.global_prompts_paths:
-                        if global_prompts_path.exists():
-                            repo_global_prompts_dir = self.repo_dir / "configs" / agent.name / "global_prompts"
-                            repo_global_prompts_dir.mkdir(parents=True, exist_ok=True)
-                            for item in global_prompts_path.iterdir():
-                                dest = repo_global_prompts_dir / item.name
-                                if item.is_dir():
-                                    shutil.copytree(item, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns('.git'))
-                                else:
-                                    shutil.copy2(item, dest)
-
-                # Global skills (local to ~/.pi/)
-                if hasattr(agent, 'global_skills_local_paths'):
-                    for global_skills_path in agent.global_skills_local_paths:
-                        if global_skills_path.exists():
-                            repo_global_skills_dir = self.repo_dir / "configs" / agent.name / "global_skills"
-                            repo_global_skills_dir.mkdir(parents=True, exist_ok=True)
-                            for item in global_skills_path.iterdir():
-                                dest = repo_global_skills_dir / item.name
-                                if item.is_dir():
-                                    shutil.copytree(item, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns('.git'))
-                                else:
-                                    shutil.copy2(item, dest)
-
-                # Global themes
-                if hasattr(agent, 'global_themes_paths'):
-                    for global_themes_path in agent.global_themes_paths:
-                        if global_themes_path.exists():
-                            repo_global_themes_dir = self.repo_dir / "configs" / agent.name / "global_themes"
-                            repo_global_themes_dir.mkdir(parents=True, exist_ok=True)
-                            for item in global_themes_path.iterdir():
-                                dest = repo_global_themes_dir / item.name
-                                if item.is_dir():
-                                    shutil.copytree(item, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns('.git'))
-                                else:
-                                    shutil.copy2(item, dest)
-
-                # pyrightconfig.json
-                if hasattr(agent, 'pyrightconfig_paths'):
-                    for pyright_path in agent.pyrightconfig_paths:
-                        if pyright_path.exists() and pyright_path.is_file():
-                            repo_pyright_file = self.repo_dir / "configs" / agent.name / "pyrightconfig.json"
-                            repo_pyright_file.parent.mkdir(parents=True, exist_ok=True)
-                            shutil.copy2(pyright_path, repo_pyright_file)
-
-                # Packages locais (ex: product-workflow)
-                if hasattr(agent, 'packages_paths'):
-                    for package_path in agent.packages_paths:
-                        if package_path.exists():
-                            repo_packages_dir = self.repo_dir / "configs" / agent.name / "packages" / package_path.name
-                            repo_packages_dir.mkdir(parents=True, exist_ok=True)
-                            if repo_packages_dir.exists():
-                                shutil.rmtree(repo_packages_dir)
-                            shutil.copytree(package_path, repo_packages_dir, ignore=shutil.ignore_patterns('.git'))
-
-            # Generic extra_paths handling for ALL agents (except pi.dev which has specific handlers above)
+            # Generic extra_paths handling for ALL agents (except pi.dev — handled above)
             # This enables backing up directories like ~/.roo/rules/ declared in agent_registry.yaml
             extra_paths = agent.data.get("extra_paths", {})
             if extra_paths and agent.name != "pi.dev":
@@ -727,6 +607,72 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                                     shutil.copytree(item, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns('.git'))
                                 else:
                                     shutil.copy2(item, dest)
+
+    def _stage_pi_extra_paths(self, agent) -> None:
+        """Backup pi.dev extra paths to the repo directory.
+        
+        Handles directory copies (extensions, bin, global_*) and single-file
+        copies (lsp-settings.json, models.json, pyrightconfig.json).
+        Git worktrees are skipped (200MB+ of cache data).
+        """
+        pi_dir = self.repo_dir / "configs" / agent.name
+        category_map = {
+            "extensions": "extensions",
+            "bin": "bin",
+            "global_extensions": "global_extensions",
+            "global_prompts": "global_prompts",
+            "global_skills_local": "global_skills",
+            "global_themes": "global_themes",
+        }
+        single_file_map = {
+            "lsp_paths": ("lsp-settings.json", "lsp"),
+            "models_paths": ("models.json", "models"),
+            "pyrightconfig_paths": ("pyrightconfig.json", "pyrightconfig"),
+        }
+        
+        # Copy directory-based paths
+        for attr_name, subdir in category_map.items():
+            paths = getattr(agent, f"{attr_name}_paths", None)
+            if not paths:
+                continue
+            for src_path in paths:
+                if src_path.exists():
+                    dest = pi_dir / subdir
+                    dest.mkdir(parents=True, exist_ok=True)
+                    for item in src_path.iterdir():
+                        item_dest = dest / item.name
+                        if item.is_dir():
+                            shutil.copytree(item, item_dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns('.git'))
+                        else:
+                            shutil.copy2(item, item_dest)
+        
+        # Copy single-file paths
+        for attr_name, (filename, subdir) in single_file_map.items():
+            paths = getattr(agent, attr_name, None)
+            if not paths:
+                continue
+            for src_path in paths:
+                if src_path.exists() and src_path.is_file():
+                    dest_file = pi_dir / subdir / filename
+                    dest_file.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src_path, dest_file)
+        
+        # Git worktrees — skip (cache, not config)
+        if hasattr(agent, 'git_paths'):
+            for git_path in agent.git_paths:
+                if git_path.exists():
+                    total_mb = sum(f.stat().st_size for f in git_path.rglob('*') if f.is_file()) // 1024 // 1024
+                    console.print(f"  [dim]Skipping git clones backup ({total_mb}MB) — these are cache, not config[/dim]")
+        
+        # Packages (special: copies each package by name)
+        if hasattr(agent, 'packages_paths'):
+            for package_path in agent.packages_paths:
+                if package_path.exists():
+                    pkg_dest = pi_dir / "packages" / package_path.name
+                    pkg_dest.mkdir(parents=True, exist_ok=True)
+                    if pkg_dest.exists():
+                        shutil.rmtree(pkg_dest)
+                    shutil.copytree(package_path, pkg_dest, ignore=shutil.ignore_patterns('.git'))
 
     def _stage_agents(self) -> None:
         """
