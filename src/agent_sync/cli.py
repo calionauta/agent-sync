@@ -1100,7 +1100,9 @@ def centralize(copy: bool, push: bool, distribute: bool,
 @click.option("--dry-run", is_flag=True, help="Show what would be published without actually publishing")
 @click.option("--interactive/--no-interactive", default=True, help="Toggle interactive TUI selection")
 def publish(repo_url: str | None, dry_run: bool, interactive: bool):
-    """Publish selected skills to a public GitHub repository."""
+    """[DEPRECATED] Use 'agent-sync publish --skills' instead."""
+    console.print("[yellow]⚠️  Warning: 'agent-sync skills publish' is deprecated.[/yellow]")
+    console.print("[yellow]Use 'agent-sync publish --skills' instead.[/yellow]\n")
     from .publish import publish_skills
     success = publish_skills(repo_url=repo_url, dry_run=dry_run, interactive=interactive)
     if not success:
@@ -1476,6 +1478,79 @@ def update():
     except Exception as e:
         console.print(f"[dim]Current version: v{current}[/dim]")
         console.print(f"[yellow]⚠ Could not check for updates: {e}\n[/yellow]")
+
+
+@main.command()
+@click.option("--skills", is_flag=True, help="Publish skills")
+@click.option("--agents", is_flag=True, help="Publish agent instructions (AGENTS.md, GEMINI.md, etc.)")
+@click.option("--all", "publish_all", is_flag=True, default=True, help="Publish both skills and agent instructions (default)")
+@click.option("--dry-run", is_flag=True, help="Show what would be published without actually publishing")
+@click.option("--repo", "repo_url", help="GitHub repository URL")
+@click.pass_context
+def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, repo_url: str | None):
+    """
+    Publish skills and/or agent instructions to a public GitHub repository.
+
+    Default: publishes BOTH skills and agent instructions (--all).
+    Use --skills or --agents to publish only one type.
+
+    \b
+    Examples:
+      # Publish both skills AND agent instructions (default)
+      agent-sync publish
+
+      # Publish only skills
+      agent-sync publish --skills
+
+      # Publish only agent instructions
+      agent-sync publish --agents
+
+      # Preview what would be published
+      agent-sync publish --dry-run
+
+      # Publish to a specific repository
+      agent-sync publish --repo https://github.com/user/my-repo
+    """
+    from .publish import publish_skills, publish_agents
+
+    # Default: publish all if no specific flags
+    do_all = publish_all and not skills and not agents
+    do_skills = skills or do_all
+    do_agents = agents or do_all
+
+    success = True
+
+    # Cross-reference notice
+    cross_ref_skills = "💡 Want to publish also agent instructions? Use agent-sync publish --agents"
+    cross_ref_agents = "💡 Want to publish also skills? Use agent-sync publish --skills"
+
+
+    if do_skills:
+        console.print("\n[bold cyan]📚 Publishing Skills...[/bold cyan]\n")
+        success_skills = publish_skills(
+            repo_url=repo_url,
+            dry_run=dry_run,
+            interactive=False,  # Already handled selection
+        )
+        if not success_skills:
+            success = False
+        else:
+            console.print(f"\n[dim]{cross_ref_agents}[/dim]\n")
+
+    if do_agents:
+        console.print("\n[bold cyan]🤖 Publishing Agent Instructions...[/bold cyan]\n")
+        success_agents = publish_agents(
+            repo_url=repo_url,
+            dry_run=dry_run,
+            interactive=False,
+        )
+        if not success_agents:
+            success = False
+        else:
+            console.print(f"\n[dim]{cross_ref_skills}[/dim]\n")
+
+    if not success:
+        raise click.Abort()
 
 
 @main.command()

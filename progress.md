@@ -1,4 +1,4 @@
-# Progress — agent-sync v0.15+
+# Progress — agent-sync v0.16+
 
 ## Status
 ✅ Complete — All features implemented
@@ -6,6 +6,44 @@
 ---
 
 ## Features Implemented
+
+### publish --agents Command (v0.16)
+
+**Publish agent instructions (AGENTS.md, GEMINI.md, etc.) to public GitHub.**
+
+**New CLI commands:**
+```bash
+agent-sync publish                    # Publish both skills + agents (default)
+agent-sync publish --skills          # Publish only skills
+agent-sync publish --agents            # Publish only agent instructions (NEW!)
+```
+
+**Components:**
+- `agent_discovery.py` — scans config_patterns from registry
+- `security_scanner.py` — detects sensitive content (paths, tokens, commands)
+- `publish.py` — updated with `publish_agents()` function
+- `config.py` — added `published_agents` property
+- `cli.py` — new `publish` command with `--agents` flag
+
+**Security Scanner patterns:**
+- Absolute paths: `/Users/`, `/home/`, `/root/`, `C:\`
+- Tokens: OpenAI `sk-`, GitHub `ghp_`
+- Internal commands: `/skill:`, `ctx_batch_execute()`
+- Server paths: `server.`, `.renatocaliari.com`
+
+**Security flow:**
+1. Discover agent instruction files
+2. Scan for sensitive content
+3. TUI selection with security indicators
+4. Security panel (edit, skip, continue, cancel)
+5. Summary with icons (⚠️ or ✓)
+6. Git push to `agents/<agent>/<file>`
+
+**New files:**
+- `src/agent_sync/agent_discovery.py`
+- `src/agent_sync/security_scanner.py`
+- `tests/test_agent_discovery.py` (17 tests)
+- `tests/test_security_scanner.py` (26 tests)
 
 ### Safe Centralize (v0.15)
 
@@ -63,8 +101,8 @@
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 167 |
-| Test files | 17 |
+| Total tests | 210 |
+| Test files | 19 |
 | LOC | 7,228 |
 | Exit code | 0 failures |
 

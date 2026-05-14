@@ -88,6 +88,21 @@ class Config:
         self._config["published_skills"] = sorted(list(set(skills)))
         self.save()
 
+    @property
+    def published_agents(self) -> list[str]:
+        """Get list of agent instruction files whitelisted for public publishing.
+        
+        Format: ["agent:filename", ...]
+        e.g., ["pi.dev:AGENTS.md", "gemini-cli:GEMINI.md"]
+        """
+        return self._config.get("published_agents", [])
+
+    @published_agents.setter
+    def published_agents(self, items: list[str]) -> None:
+        """Set list of agent instruction files for public publishing."""
+        self._config["published_agents"] = sorted(list(set(items)))
+        self.save()
+
     def save_overrides(self) -> None:
         """Save local overrides (not synced)."""
         self.overrides_path.parent.mkdir(parents=True, exist_ok=True)

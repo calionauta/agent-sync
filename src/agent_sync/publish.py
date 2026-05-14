@@ -1,10 +1,11 @@
-"""Skills publishing to public GitHub repositories.
+"""Skills and Agent Instructions publishing to public GitHub repositories.
 
-Publish selected skills to a PUBLIC repository for sharing with the community.
-Separate from private agent-sync-configs repository.
+Publish selected skills or agent instructions to a PUBLIC repository
+for sharing with the community. Separate from private agent-sync-configs repository.
 """
 
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -17,7 +18,9 @@ from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
+from .agent_discovery import get_available_agents as get_available_agents_from_discovery
 from .config import Config
+from .security_scanner import scan_file, ScanResult, format_issues_for_display
 from .validators import validate_github_url, validate_repo_name
 
 console = Console()
@@ -26,8 +29,334 @@ PUBLISH_CONFIG_PATH = Path.home() / ".config" / "agent-sync" / "publish.yaml"
 SKILLS_DIR = Path.home() / ".agents" / "skills"
 
 
+console = Console()
+
+PUBLISH_CONFIG_PATH = Path.home() / ".config" / "agent-sync" / "publish.yaml"
+SKILLS_DIR = Path.home() / ".agents" / "skills"
+
+
+# =============================================================================
+# SHARED HELPERS
+# =============================================================================
+
+def _resolve_repo_url(repo_url: str | None = None) -> str | None:
+    """Resolve repo URL: param → publish.yaml → prompt."""
+    publish_config = {}
+    if PUBLISH_CONFIG_PATH.exists():
+        try:
+            publish_config = yaml.safe_load(PUBLISH_CONFIG_PATH.read_text()) or {}
+        except Exception: pass
+
+    resolved = repo_url or publish_config.get("repo_url")
+    if not resolved:
+        try:
+            result = subprocess.run(
+                ["gh", "api", "user", "--jq", ".login"],
+                capture_output=True, text=True, timeout=5,
+            )
+            username = result.stdout.strip() if result.returncode == 0 else "YOUR_USERNAME"
+        except Exception:
+            username = "YOUR_USERNAME"
+
+        default_repo = f"{username}/agent-sync-public-skills"
+        resolved = Prompt.ask(
+            "\n[bold]Enter GitHub repository URL[/]",
+            default=f"https://github.com/{default_repo}",
+        )
+        if not validate_github_url(resolved):
+            console.print("\n[red]✗ Invalid repository URL[/red]\n")
+            return None
+
+        PUBLISH_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        publish_config["repo_url"] = resolved
+        PUBLISH_CONFIG_PATH.write_text(yaml.dump(publish_config))
+
+    return resolved
+
+
+def _check_repo_visibility(repo_url: str) -> None:
+    """Check if repo is public or private, warn if private."""
+    repo_name = repo_url.replace("https://github.com/", "").replace(".git", "")
+    try:
+        res = subprocess.run(
+            ["gh", "api", f"repos/{repo_name}"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if res.returncode == 0:
+            is_private = json.loads(res.stdout).get("private", False)
+            if is_private:
+                console.print(f"\n[yellow]⚠️  Warning: Repository {repo_name} is PRIVATE.[/yellow]")
+            else:
+                console.print(f"\n[green]✓ Repository {repo_name} is PUBLIC.[/green]")
+    except Exception: pass
+
+
+def _git_clone_or_init(repo_url: str, tmp_path: Path) -> None:
+    """Clone existing repo or init fresh."""
+    try:
+        subprocess.run(
+            ["git", "clone", "--depth", "1", repo_url, str(tmp_path)],
+            capture_output=True, timeout=60,
+        )
+    except Exception:
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, timeout=15)
+        subprocess.run(["git", "branch", "-M", "main"], cwd=tmp_path, capture_output=True, timeout=15)
+
+
+def _git_push(tmp_path: Path, repo_url: str, message: str) -> None:
+    """Git add, commit, push."""
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, check=True, timeout=30)
+    subprocess.run(
+        ["git", "commit", "-m", message],
+        cwd=tmp_path, capture_output=True, check=True, timeout=30,
+    )
+    try:
+        subprocess.run(["git", "remote", "add", "origin", repo_url], cwd=tmp_path, capture_output=True, timeout=15)
+    except Exception:
+        pass
+    subprocess.run(
+        ["git", "push", "-u", "origin", "main", "--force"],
+        cwd=tmp_path, capture_output=True, check=True, timeout=120,
+    )
+
+
+# =============================================================================
+# AGENT INSTRUCTIONS PUBLISHING
+# =============================================================================
+
+def get_available_agents() -> list[dict]:
+    """Get available agent instruction files from discovery."""
+    return get_available_agents_from_discovery()
+
+
+def render_agents_table(agents: list, selected_names: set) -> Table:
+    """Render TUI table for agent instruction selection."""
+    table = Table(box=box.ROUNDED, show_header=True,
+                  header_style="bold cyan", expand=True)
+    table.add_column("ID", justify="right", style="dim", width=4)
+    table.add_column("Pub", justify="center", width=5)
+    table.add_column("Agent", style="green")
+    table.add_column("File", style="cyan")
+    table.add_column("Security", justify="center", width=10)
+
+    for i, agent in enumerate(agents, 1):
+        key = f"{agent['agent']}:{agent['filename']}"
+        is_selected = key in selected_names
+        status = "[bold green]✓[/]" if is_selected else "[red]○[/]"
+        result = scan_file(agent['path'])
+        security_icon = "[red]⚠️[/]" if not result.safe else "[green]✓[/]"
+        table.add_row(str(i), status, agent["agent"], agent["filename"], security_icon)
+
+    return table
+
+
+def interactive_agents_selection(agents: list, initial_selected: set) -> set:
+    """TUI for selecting agent instructions to publish."""
+    from ._selection import parse_multiselect_input
+
+    selected = set(initial_selected)
+    item_names = [f"{a['agent']}:{a['filename']}" for a in agents]
+
+    while True:
+        console.clear()
+        console.print("\n[bold cyan]📤 Select Agent Instructions to Publish[/bold cyan]\n")
+
+        table = render_agents_table(agents, selected)
+        console.print(table)
+
+        console.print("\n[bold]Controls:[/bold]")
+        console.print("  • Enter numbers to toggle (e.g. [green]'1,3,5'[/green])")
+        console.print("  • Type [cyan]'all'[/cyan] or [cyan]'none'[/cyan]")
+        console.print("  • Press [bold white]Enter[/] when done")
+
+        choice = Prompt.ask("\nSelection", default="done")
+        result = parse_multiselect_input(choice, item_names, selected)
+        if result is None:
+            break
+        selected = result
+
+    return selected
+
+
+def show_security_panel(results: dict[Path, ScanResult]) -> str | list[Path]:
+    """Show security panel for files with issues.
+    
+    Returns: 'cancel', list of Path to skip, or empty list to continue.
+    """
+    unsafe_files = {path: result for path, result in results.items() if not result.safe}
+
+    if not unsafe_files:
+        return []
+
+    panel_content = []
+    for path, result in unsafe_files.items():
+        issues_text = format_issues_for_display(result.issues)
+        panel_content.append(f"[bold]{path.name}[/] ([yellow]{path.parent.name}[/])\n{issues_text}")
+
+    console.print(Panel(
+        "\n\n".join(panel_content),
+        title="[bold yellow]⚠️  Security Warnings Detected[/bold yellow]",
+        border_style="yellow",
+    ))
+
+    console.print("\n[bold]What would you like to do?[/]")
+    console.print("  [[bold green]c[/]] Continue publishing (you've been warned)")
+    console.print("  [[bold cyan]e[/]] Edit files before publishing (opens $EDITOR)")
+    console.print("  [[bold magenta]s[/]] Skip unsafe files from selection")
+    console.print("  [[bold red]q[/]] Cancel publish")
+
+    choice = Prompt.ask("\nChoice", choices=["c", "e", "s", "q"], default="s")
+
+    if choice == "q":
+        return "cancel"
+    elif choice == "s":
+        return list(unsafe_files.keys())
+    elif choice == "e":
+        editor = os.environ.get("EDITOR", "vim")
+        for path in unsafe_files:
+            console.print(f"\n[bold]Editing {path}[/]")
+            subprocess.run([editor, str(path)], check=False)
+        return []
+    else:
+        return []
+
+
+def publish_agents(
+    repo_url: str | None = None,
+    dry_run: bool = False,
+    interactive: bool = False,
+    selected_override: set | None = None,
+) -> bool:
+    """Publish selected agent instructions to a public GitHub repository."""
+    config = Config()
+
+    available_agents = get_available_agents()
+    if not available_agents:
+        console.print("\n[yellow]⚠ No agent instruction files found.[/yellow]\n")
+        return False
+
+    scan_results = {item["path"]: scan_file(item["path"]) for item in available_agents}
+
+    selected = selected_override if selected_override is not None else set()
+
+    if interactive:
+        saved = config.published_agents
+        if not selected:
+            selected = set(saved) if saved else set()
+        selected = interactive_agents_selection(available_agents, selected)
+    else:
+        if not selected:
+            selected = {f"{a['agent']}:{a['filename']}" for a in available_agents}
+
+    selected_items = [
+        item for item in available_agents
+        if f"{item['agent']}:{item['filename']}" in selected
+    ]
+
+    if not selected_items:
+        console.print("\n[yellow]⚠ No agent instructions selected[/yellow]\n")
+        return False
+
+    if interactive:
+        selected_paths = [item["path"] for item in selected_items]
+        selected_results = {p: scan_results[p] for p in selected_paths}
+        skip_result = show_security_panel(selected_results)
+        if skip_result == "cancel":
+            console.print("\n[yellow]Publish cancelled[/yellow]\n")
+            return False
+        if skip_result:
+            selected_items = [i for i in selected_items if i["path"] not in skip_result]
+            selected = {f"{i['agent']}:{i['filename']}" for i in selected_items}
+
+    if not selected_items:
+        console.print("\n[yellow]⚠ All files skipped[/yellow]\n")
+        return False
+
+    console.print("\n[bold green]📋 Summary[/]\n")
+    summary = Table(box=box.SIMPLE)
+    summary.add_column("Agent", style="green")
+    summary.add_column("File", style="cyan")
+    summary.add_column("Security", justify="center")
+    for item in selected_items:
+        result = scan_results[item["path"]]
+        icon = "[red]⚠️[/]" if not result.safe else "[green]✓[/]"
+        summary.add_row(item["agent"], item["filename"], icon)
+    console.print(summary)
+
+    console.print("\n[dim]💡 Want to publish also skills? Use [bold]agent-sync publish --skills[/bold][/dim]")
+
+    repo_url = _resolve_repo_url(repo_url)
+    if not repo_url:
+        return False
+
+    _check_repo_visibility(repo_url)
+
+    if dry_run:
+        console.print(f"\n[blue]🔍 DRY RUN: Would publish {len(selected_items)} agent instructions to {repo_url}[/blue]\n")
+        return True
+
+    if interactive and not Confirm.ask("\n[bold red]Confirm publishing?[/]", default=True):
+        console.print("\n[yellow]Publish cancelled[/yellow]\n")
+        return False
+
+    return _push_agents_to_repo(selected_items, repo_url, config)
+
+
+def _push_agents_to_repo(items: list[dict], repo_url: str, config: Config) -> bool:
+    """Clone repo, copy agents/, commit, push."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        _git_clone_or_init(repo_url, tmp_path)
+
+        agents_dir = tmp_path / "agents"
+        agents_dir.mkdir(exist_ok=True)
+
+        for item in items:
+            agent_subdir = agents_dir / item["agent"]
+            agent_subdir.mkdir(exist_ok=True)
+            shutil.copy2(item["path"], agent_subdir / item["filename"])
+
+        readme_path = tmp_path / "README.md"
+        if readme_path.exists():
+            readme_path.write_text(_generate_readme_for_agents(items, repo_url))
+
+        console.print(f"\n[bold]📤 Publishing {len(items)} agent instructions...[/]")
+
+        try:
+            _git_push(tmp_path, repo_url, f"feat: publish {len(items)} agent instructions")
+            console.print(f"\n[green]✓ Published {len(items)} agent instructions to {repo_url}![/green]\n")
+            config.published_agents = [f"{i['agent']}:{i['filename']}" for i in items]
+            return True
+        except Exception as e:
+            console.print(f"\n[red]✗ Failed to publish: {e}[/red]\n")
+            return False
+
+
+def _generate_readme_for_agents(items: list[dict], repo_url: str) -> str:
+    """Generate agents/README section for the repository README."""
+    repo_name = repo_url.replace("https://github.com/", "").replace(".git", "")
+    sections: dict[str, list[str]] = {}
+    for item in items:
+        agent = item["agent"]
+        if agent not in sections:
+            sections[agent] = []
+        sections[agent].append(item["filename"])
+
+    lines = ["\n## Agent Instructions\n"]
+    for agent, files in sorted(sections.items()):
+        lines.append(f"### {agent}")
+        for f in files:
+            lines.append(f"- `{f}`")
+        lines.append("")
+    return "\n".join(lines)
+
+
+# =============================================================================
+# SKILLS PUBLISHING
+# =============================================================================
+
+
 def get_available_skills() -> list[dict]:
-    """Scan for available skills in ~/.agents/skills/."""
     skills_list = []
     if not SKILLS_DIR.exists():
         return []
