@@ -44,19 +44,29 @@
 
 ### Install CLI
 ```bash
-pipx install git+https://github.com/renatocaliari/agent-sync.git
+# Recommended (isolated install)
+pipx install agent-sync
+
+# Or via pip
+pip install agent-sync
 ```
 
-### Setup & Sync
+### First Machine — Create Repo
 ```bash
-agent-sync setup    # Interactive wizard
-agent-sync push     # Backup to GitHub
+agent-sync init                    # Create repo + wizard
+agent-sync push                    # Backup to GitHub
 ```
 
-### Other Machines
+### Additional Machines — Link
 ```bash
-agent-sync link <your-private-repo-url>
-agent-sync pull
+agent-sync link https://github.com/user/repo.git
+agent-sync pull                    # Restore configs
+```
+
+### Reconfigure
+```bash
+agent-sync setup                   # Change agents/options
+agent-sync config show             # View current config
 ```
 
 ---
@@ -96,23 +106,35 @@ agent-sync skills publish --repo https://github.com/YOUR_USERNAME/agent-sync-pub
 `agent-sync` uses a categorized help structure. Run `agent-sync --help` to see all options.
 
 #### 🔄 Sync & Backup
-- `push` - Backup local changes to GitHub `[-m, --skills-only, --configs-only]`
-- `pull` - Download and apply changes from GitHub `[--force]`
-- `status` - Check sync state
+- `init` - Initialize a new sync repository (first machine)
+- `link <url>` - Connect to an existing repository (other machines)
+- `push` - Backup local changes to GitHub `[-m, --skills-only, --configs-only, --agents-only]`
+- `pull` - Download and apply changes from GitHub `[--force, --skills-only, --configs-only, --agents-only]`
+- `status` - Check sync state per agent
 
-#### 🤖 Agents & Skills
+#### 🤖 Agent Management
 - `agents` - List supported agents and their sync method
-- `enable` / `disable` - Toggle sync for specific agents
-- `skills list` - List all centralized skills
+- `enable <agent>` / `disable <agent>` - Toggle sync for a specific agent
+- `setup` - Interactive wizard to reconfigure agents and options
+
+#### 📚 Skills
+- `skills list` - List all centralized skills in `~/.agents/skills/`
+- `skills centralize` - Move skills from agent directories to global hub
 - `skills diff` - Show differences between local and remote skills
-- `skills reconcile` - Resolve local vs remote divergences
-- `skills centralize` - Move skills from agents to global hub
-- `skills delete` - Delete skills from hub and agents (interactive)
-- `skills publish` - Share selected skills to a public repo
+- `skills reconcile` - Resolve divergences between local and remote
+- `skills delete` - Delete skills from hub and all agent directories (interactive)
+- `skills publish` - Share selected skills to a public repository
+- `custom-agents list` - List custom agents per CLI tool
 
 #### 🛠️ System
-- `update` - Interactive CLI self-update
-- `config edit` - Manual configuration override
+- `config show` - View current configuration
+- `config edit` - Open configuration file in editor
+- `config repo` - View, set, or remove repository URL
+- `config reset` - Reset config to defaults (keeps repo linked)
+- `generate-config` - Generate default config file (useful as starting point)
+- `update` - Check for and install CLI updates
+- `version` - Show version information
+- `secrets` - Manage secrets sync (disabled by default)
 
 ---
 
