@@ -133,6 +133,17 @@ agent-sync skills publish --repo https://github.com/YOUR_USERNAME/agent-sync-pub
 - `skills diff` - Show differences between local and remote skills
 - `skills reconcile` - Resolve divergences between local and remote
 - `skills delete` - Delete skills from hub and all agent directories (interactive)
+
+#### 🔧 Utilities
+- `config export` - Export DotAgents-compatible config to `~/.agents/config.json`
+  - `--dry-run` - Preview without creating file
+  - `--output PATH` - Custom output path
+- `mcp` - Export unified MCP config from vendor configs
+  - `--dry-run` - Preview merge without creating file
+  - `--force` - Overwrite existing `~/.agents/mcp.json`
+  - `--conflicts` - Show conflict report only
+  - `-s, --source PATH` - Additional MCP config sources
+- `skills delete` - Delete skills from hub and all agent directories (interactive)
 - `skills publish` - Share selected skills to a public repository
 - `custom-agents list` - List custom agents per CLI tool
 

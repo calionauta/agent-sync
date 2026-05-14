@@ -446,6 +446,48 @@ def show():
 
 
 @config.command()
+@click.option("--dry-run", is_flag=True, help="Show what would be exported without creating a file")
+@click.option("--output", type=click.Path(), default=None, help="Output path (default: ~/.agents/config.json)")
+def export(dry_run: bool, output: str | None):
+    """Export configuration to DotAgents JSON format.
+
+    Creates a ~/.agents/config.json file compatible with the DotAgents Protocol.
+
+    \b
+    Examples:
+      # Export to default location (~/.agents/config.json)
+      agent-sync config export
+
+      # Preview without creating file
+      agent-sync config export --dry-run
+
+      # Export to custom location
+      agent-sync config export --output /custom/path/config.json
+    """
+    from pathlib import Path
+    from rich.console import Console
+
+    from .config_exporter import ConfigExporter
+    from agent_sync.agents import GLOBAL_SKILLS_DIR
+
+    console = Console()
+    output_path = Path(output) if output else Path.home() / ".agents" / "config.json"
+
+    exporter = ConfigExporter()
+
+    if dry_run:
+        console.print("\n[bold]📋 DotAgents Config Preview[/bold]\n")
+        console.print(f"[dim]Would export to: {output_path}[/dim]\n")
+        data = exporter.export()
+        console.print_json(data=exporter.export())
+        console.print()
+    else:
+        exporter.save(output_path)
+        console.print(f"\n[green]✓[/green] Config exported to {output_path}")
+        console.print(f"[dim]Skills hub: {GLOBAL_SKILLS_DIR}[/dim]\n")
+
+
+@config.command()
 @click.argument("repo_url", required=False)
 @click.option("--remove", is_flag=True, help="Remove repository configuration")
 def repo(repo_url: str | None, remove: bool):
@@ -1182,6 +1224,76 @@ def push(message: str, skills_only: bool, configs_only: bool, agents_only: bool)
 
     # Show update notification if available
     show_pending_update_notification()
+
+
+@main.command()
+@click.option("--dry-run", is_flag=True, help="Show merge preview without creating file")
+@click.option("--force", is_flag=True, help="Overwrite existing ~/.agents/mcp.json")
+@click.option("--conflicts", is_flag=True, help="Show only conflict report")
+@click.option("--source", "-s", multiple=True, type=click.Path(exists=True), help="Additional MCP config sources")
+@click.option("--output", type=click.Path(), default=None, help="Output path")
+def mcp(dry_run: bool, force: bool, conflicts: bool, source: tuple[str, ...], output: str | None):
+    """Export unified MCP configuration.
+
+    Scans vendor MCP configs and merges them into ~/.agents/mcp.json.
+    Does NOT modify vendor configs — creates a unified DotAgents-compatible file.
+
+    \b
+    Examples:
+      # Scan and preview merge
+      agent-sync mcp --dry-run
+
+      # Export unified MCP config
+      agent-sync mcp --force
+
+      # Show only conflicts
+      agent-sync mcp --conflicts
+
+      # Add custom sources
+      agent-sync mcp --force -s ~/.custom/mcp.json
+    """
+    from pathlib import Path
+
+    from .mcp_merger import MCPMerger
+
+    sources = [Path(s) for s in source]
+    merger = MCPMerger(sources=sources if sources else None)
+
+    # Find MCP configs
+    found = merger.find_mcp_configs()
+    if not found and not sources:
+        console.print("[yellow]⚠ No MCP configs found in known locations.[/yellow]")
+        console.print("[dim]Known locations: ~/.claude/mcp.json, ~/.cursor/mcp.json[/dim]")
+        console.print("[dim]Use --source to specify custom locations.[/dim]\n")
+        return
+
+    console.print("\n[bold]📋 MCP Config Sources[/bold]\n")
+    for src in (found + sources):
+        console.print(f"  • {src}")
+    console.print()
+
+    # Merge
+    merger.merge()
+
+    # Show conflicts
+    if merger.conflicts:
+        console.print(merger.get_conflict_report())
+
+    if conflicts:
+        return
+
+    output_path = Path(output) if output else MCPMerger.DEFAULT_OUTPUT
+
+    if dry_run:
+        console.print(f"[dim]Would export to: {output_path}[/dim]\n")
+        console.print_json(data=merger.merge())
+        console.print()
+    elif output_path.exists() and not force:
+        console.print(f"[yellow]⚠ {output_path} exists. Use --force to overwrite.[/yellow]\n")
+    else:
+        merger.save(output_path)
+        console.print(f"[green]✓[/green] Unified MCP config exported to {output_path}")
+        console.print(f"[dim]Servers: {len(merger.servers)}, Conflicts: {len(merger.conflicts)}[/dim]\n")
 
 
 @main.command()
