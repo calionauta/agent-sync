@@ -150,6 +150,10 @@ agent-sync skills publish --repo https://github.com/YOUR_USERNAME/agent-sync-pub
 
   **⚠️ Deprecated:** `skills publish` → Use `publish --skills` instead
 
+  **Unified Flow (v0.20+):**
+  - Discovery → Summary table → Security scan → Confirm → Publish
+  - Security warnings are contextual based on --skills/--agents/--all
+
 #### 🛠️ System
 - `config show` - View current configuration
 - `config edit` - Open configuration file in editor
