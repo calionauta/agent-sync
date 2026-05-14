@@ -50,6 +50,30 @@ agents/
 
 ### ✨ New Features
 
+#### Unified Publish Flow — `--skills`, `--agents`, `--all`
+
+Unified the publish command into a single cohesive flow with contextual security warnings.
+
+**Changes:**
+- Single `publish` command replaces separate `publish --skills` and `publish --agents`
+- Default behavior (`--all`) publishes both skills AND agent instructions
+- Contextual security warnings based on `--skills`/`--agents`/`--all` flags
+- Phase 1: Discovery — shows what will be published
+- Phase 2: Summary table with security status for agents
+- Phase 3: Single confirmation before publishing
+- Phase 4: Execute without re-confirmation
+
+**New tests:**
+- `tests/test_publish_cli.py` — 9 tests for unified publish flow
+
+**Files changed:**
+- `src/agent_sync/cli.py` — Unified publish command
+- `tests/test_publish_cli.py` — New tests
+
+---
+
+## [0.20.0] - 2026-05-14### ✨ New Features
+
 #### Safe Centralize — Protection against unintentional skill import
 
 **Problem:**
