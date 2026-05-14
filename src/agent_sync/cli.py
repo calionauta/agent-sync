@@ -1364,10 +1364,87 @@ def status():
 def secrets():
     """Manage secrets and environment variables.
 
+    Subcommands:
+      list     List all secrets/environment variables
+      edit     Edit secrets in your $EDITOR
+      enable   Enable secrets synchronization
+      disable  Disable secrets synchronization
+
     Note: agent-sync does not scrub secrets. Config files are synced as-is.
     ALWAYS use a private repository.
     """
     pass
+
+
+@secrets.command("list")
+def list_secrets():
+    """List all secrets and environment variables."""
+    from .secrets import SecretsManager
+
+    secrets_mgr = SecretsManager()
+    console.print("\n[bold]🔐 Secrets Manager[/]\n")
+    console.print(f"[dim].env file: {secrets_mgr.env_file}[/dim]\n")
+    
+    # Show .env content
+    if secrets_mgr.env_file.exists():
+        content = secrets_mgr.env_file.read_text()
+        if content.strip():
+            console.print("[bold green]✓ .env file found:[/]")
+            console.print(f"[dim]{content}[/dim]\n")
+        else:
+            console.print("[yellow]⚠ .env file is empty[/yellow]\n")
+    else:
+        console.print("[yellow]⚠ No .env file found yet[/yellow]")
+        console.print("Run [green]agent-sync secrets edit[/green] to create one.\n")
+
+
+@secrets.command()
+def edit():
+    """Edit secrets in your $EDITOR."""
+    from .secrets import SecretsManager
+
+    secrets_mgr = SecretsManager()
+    
+    # Create empty .env if not exists
+    if not secrets_mgr.env_file.exists():
+        secrets_mgr.env_file.parent.mkdir(parents=True, exist_ok=True)
+        secrets_mgr.env_file.write_text("# agent-sync environment variables\n")
+    
+    # Open in editor
+    editor = os.environ.get("EDITOR", "nano")
+    try:
+        subprocess.run([editor, str(secrets_mgr.env_file)], check=True)
+        console.print("\n[green]✓ Secrets saved[/green]\n")
+    except FileNotFoundError:
+        console.print(f"\n[yellow]Editor '{editor}' not found[/yellow]")
+        console.print(f"Edit manually: {secrets_mgr.env_file}\n")
+    except Exception as e:
+        console.print(f"\n[red]Error: {e}[/red]\n")
+
+
+
+@secrets.command()
+def enable():
+    """Enable secrets synchronization."""
+    from .secrets import SecretsManager
+
+    secrets_mgr = SecretsManager()
+    secrets_mgr.enable()
+    console.print("\n[green]✓ Secrets synchronization enabled[/green]")
+    console.print("[dim]Warning: Secrets will be synced to your repository[/dim]\n")
+    console.print("[yellow]⚠️  IMPORTANT: Only use with a PRIVATE repository![/yellow]\n")
+
+
+
+@secrets.command()
+def disable():
+    """Disable secrets synchronization."""
+    from .secrets import SecretsManager
+
+    secrets_mgr = SecretsManager()
+    secrets_mgr.disable()
+    console.print("\n[green]✓ Secrets synchronization disabled[/green]\n")
+    console.print("[dim]Secrets will NOT be synced to your repository[/dim]\n")
 
 
 @main.command()
