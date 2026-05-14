@@ -2,9 +2,19 @@
 # --------------------------------------
 # This file defines how each AI agent integration works.
 #
+# DotAgents Protocol Alignment (https://dotagentsprotocol.com/)
+# --------------------------------------------------------------
+# The protocol defines ~/.agents/ as the canonical global directory for
+# AI agent configs: skills/, agents/, mcp.json, config.json.
+#
+# agent-sync extends this by:
+# - Using ~/.agents/skills/ as the skill hub (DotAgents-compatible)
+# - Supporting per-agent configs (vendor-neutral)
+# - Centralizing skills from agents using ~/.agents/skills/ as source of truth
+#
 # SCHEMA:
 #   method:
-#     - native: Agent reads directly from ~/.agents/skills/
+#     - native: Agent reads directly from ~/.agents/skills/ (DotAgents native)
 #     - config: Agent supports custom skill paths in its own config file
 #     - copy:   Fallback method. agent-sync copies skills to the agent's folder
 #
@@ -102,6 +112,9 @@ global-skills:
 # =============================================================================
 # VS Code Extensions & IDE Agents
 # =============================================================================
+# DotAgents Protocol: These agents increasingly support ~/.agents/skills/ natively.
+# The "native" method means they read directly from the DotAgents hub,
+# no copying needed. This aligns with the protocol's "one directory" vision.
 
 roocode:
   method: native

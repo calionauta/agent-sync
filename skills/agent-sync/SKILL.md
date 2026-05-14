@@ -52,8 +52,11 @@ agent-sync pull
 ### Skills Management
 - `agent-sync skills list` - List all centralized skills
 - `agent-sync skills centralize` - Move skills to `~/.agents/skills/`
+  - `--yes` - Non-interactive: skip all orphan skills
+  - `--import-all` - Import all orphans without TUI (old behavior)
+  - `--dry-run` - Preview changes without modifying anything
   - `--copy` - Copy instead of move
-  - `--push` - Auto-push to GitHub after centralizing
+  - `--distribute` - Copy to all agent directories after centralizing
 
 ### Configuration
 - `agent-sync config show` - View current configuration
@@ -126,7 +129,17 @@ agent-sync pull
 ### Centralize Existing Skills
 ```bash
 # Move all skills from agent directories to central location
+# Shows interactive TUI to select orphan skills (default: none)
 agent-sync skills centralize
+
+# Skip all orphans (non-interactive)
+agent-sync skills centralize --yes
+
+# Import all orphans without TUI (old behavior)
+agent-sync skills centralize --import-all
+
+# Preview changes
+agent-sync skills centralize --dry-run
 
 # Review what will be pushed
 agent-sync skills list
@@ -134,6 +147,14 @@ agent-sync skills list
 # Push to GitHub
 agent-sync push
 ```
+
+### Safety Flow
+
+`centralize` now includes 3 layers of protection:
+
+1. **Orphan Detection**: Skills found in agent directories but NOT in the hub are listed interactively. Default: none selected.
+2. **Content Comparison**: If the same skill exists in multiple agents with different content, a `⚠️ diverge` indicator is shown.
+3. **Post-Selection Prompt**: After importing selected skills, you choose whether to Keep or Remove unselected orphans from agent directories.
 
 ### Add New Agent
 ```bash

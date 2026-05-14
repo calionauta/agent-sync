@@ -933,7 +933,12 @@ def delete(skill_names: tuple[str, ...], dry_run: bool, push: bool, interactive:
 @click.option("--copy", is_flag=True, help="Copy instead of moving skills")
 @click.option("--push", is_flag=True, help="Automatically push to GitHub after centralizing")
 @click.option("--distribute", is_flag=True, help="After centralizing, copy all skills to all agent directories (for backup or testing)")
-def centralize(copy: bool, push: bool, distribute: bool):
+@click.option("--yes", is_flag=True, help="Non-interactive: skip all orphans, auto-keep")
+@click.option("--import-all", is_flag=True, help="Import all orphans without TUI (old behavior)")
+@click.option("--dry-run", is_flag=True, help="Show what would be done without changing anything")
+@click.option("--dot-agents", is_flag=True, help="Ensure ~/.agents/ DotAgents protocol structure")
+def centralize(copy: bool, push: bool, distribute: bool,
+               yes: bool, import_all: bool, dry_run: bool, dot_agents: bool):
     """Centralize skills from all agents to ~/.agents/skills/.
 
     This command scans all agent directories for existing skills and centralizes
@@ -976,13 +981,21 @@ def centralize(copy: bool, push: bool, distribute: bool):
 
     from .skills import SkillsManager
 
+    # Optional DotAgents structure
+    if dot_agents:
+        from .centralize.handlers.dot_agents_handler import DotAgentsHandler
+        handler = DotAgentsHandler()
+        handler.ensure_structure(dry_run=dry_run)
+        console.print()
+
     move = not copy
     action = "Copying" if copy else "Moving"
 
     console.print(f"\n[bold]📁 {action} Skills[/]\n")
 
     skills_mgr = SkillsManager()
-    stats = skills_mgr.centralize(move=move)
+    stats = skills_mgr.centralize(move=move, skip_orphans=yes,
+                                 import_all=import_all, dry_run=dry_run)
 
     # Show final reassurance
     console.print("[bold green]🎉 Centralization Complete![/bold green]\n")

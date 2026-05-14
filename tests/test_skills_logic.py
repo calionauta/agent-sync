@@ -121,9 +121,9 @@ def test_centralize_with_conflicts(tmp_path):
     with patch("agent_sync.skills.get_all_agents", return_value=[agent_a, agent_b]):
         # Mocking console input might be tricky, but centralize should detect conflicts
         # and resolve them using the first one found if not interactive
-        stats = manager.centralize(move=True)
+        stats = manager.centralize(move=True, import_all=True)
 
-    assert stats["conflicts_resolved"] >= 1
+    assert stats["orphans_found"] >= 1
     assert (global_dir / "shared-skill" / "SKILL.md").exists()
 
 
@@ -171,7 +171,7 @@ def test_centralize_does_not_move_extension_skills(tmp_path):
     with patch("agent_sync.skills.get_all_agents", return_value=[agent]), \
          patch.object(manager, '_sync_from_repo', return_value=0):
         # Use dry_run=False to actually move files, move=True to move (not copy)
-        manager.centralize(dry_run=False, move=True)
+        manager.centralize(dry_run=False, move=True, import_all=True)
 
     # Extension skill should NOT be moved to global directory
     assert not (global_dir / "extension-skill").exists(), \
@@ -189,3 +189,183 @@ def test_centralize_does_not_move_extension_skills(tmp_path):
     # Note: With method=native, skills are NOT copied back to agent directory
     assert not (skills_dir / "regular-skill").exists(), \
         "Regular skills should be moved (not copied)"
+
+
+def test_centralize_yes_skips_orphans(tmp_path):
+    """Test that --yes skip_orphans=True does NOT import orphans."""
+    home = tmp_path / "home"
+    global_dir = home / ".agents" / "skills"
+    global_dir.mkdir(parents=True)
+    (global_dir / "existing-skill").mkdir()
+    (global_dir / "existing-skill" / "SKILL.md").write_text("hub content")
+
+    agent_home = home / ".agent-x"
+    (agent_home / "skills" / "orphan-skill").mkdir(parents=True)
+    (agent_home / "skills" / "orphan-skill" / "SKILL.md").write_text("orphan")
+
+    agent = BaseAgent("agent-x", {"method": "copy", "config_dir": str(agent_home),
+                       "skills_dir_name": "skills", "check": {"always": True}})
+    manager = SkillsManager(global_skills_dir=global_dir)
+
+    with patch("agent_sync.skills.get_all_agents", return_value=[agent]), \
+         patch.object(manager, '_sync_from_repo', return_value=0):
+        stats = manager.centralize(move=True, skip_orphans=True)
+
+    # Orphan should NOT have been imported
+    assert not (global_dir / "orphan-skill").exists(), \
+        "orphan-skill should NOT be imported with --yes"
+    assert stats["orphans_imported"] == 0
+    # Orphan should still be in agent
+    assert (agent_home / "skills" / "orphan-skill" / "SKILL.md").exists(), \
+        "--yes should keep orphans in agents"
+
+
+def test_centralize_import_all_imports_orphans(tmp_path):
+    """Test that --import-all imports all orphans (old behavior)."""
+    home = tmp_path / "home"
+    global_dir = home / ".agents" / "skills"
+    global_dir.mkdir(parents=True)
+    (global_dir / "existing-skill").mkdir()
+    (global_dir / "existing-skill" / "SKILL.md").write_text("hub content")
+
+    agent_home = home / ".agent-y"
+    (agent_home / "skills" / "orphan-skill").mkdir(parents=True)
+    (agent_home / "skills" / "orphan-skill" / "SKILL.md").write_text("orphan")
+
+    agent = BaseAgent("agent-y", {"method": "copy", "config_dir": str(agent_home),
+                       "skills_dir_name": "skills", "check": {"always": True}})
+    manager = SkillsManager(global_skills_dir=global_dir)
+
+    with patch("agent_sync.skills.get_all_agents", return_value=[agent]), \
+         patch.object(manager, '_sync_from_repo', return_value=0):
+        stats = manager.centralize(move=False, import_all=True)
+
+    # Orphan SHOULD have been imported
+    assert (global_dir / "orphan-skill" / "SKILL.md").exists(), \
+        "--import-all should import orphan-skill"
+    assert stats["orphans_imported"] == 1
+    # With move=False, orphan should remain in agent
+    assert (agent_home / "skills" / "orphan-skill" / "SKILL.md").exists(), \
+        "--copy mode should keep originals"
+
+
+def test_centralize_fresh_setup_auto_import(tmp_path):
+    """Test that empty hub (fresh setup) auto-imports all orphans."""
+    home = tmp_path / "home"
+    global_dir = home / ".agents" / "skills"
+    global_dir.mkdir(parents=True)  # Empty hub - fresh setup!
+
+    agent_home = home / ".agent-z"
+    (agent_home / "skills" / "fresh-skill").mkdir(parents=True)
+    (agent_home / "skills" / "fresh-skill" / "SKILL.md").write_text("fresh")
+
+    agent = BaseAgent("agent-z", {"method": "copy", "config_dir": str(agent_home),
+                       "skills_dir_name": "skills", "check": {"always": True}})
+    manager = SkillsManager(global_skills_dir=global_dir)
+
+    with patch("agent_sync.skills.get_all_agents", return_value=[agent]), \
+         patch.object(manager, '_sync_from_repo', return_value=0):
+        stats = manager.centralize(move=True)
+
+    # Should auto-import fresh-skill
+    assert (global_dir / "fresh-skill" / "SKILL.md").exists(), \
+        "Fresh setup should auto-import"
+    assert stats["orphans_imported"] == 1
+
+
+def test_centralize_dry_run_does_not_move(tmp_path):
+    """Test that dry_run=True does not modify anything."""
+    home = tmp_path / "home"
+    global_dir = home / ".agents" / "skills"
+    global_dir.mkdir(parents=True)
+
+    agent_home = home / ".agent-dry"
+    (agent_home / "skills" / "dry-skill").mkdir(parents=True)
+    (agent_home / "skills" / "dry-skill" / "SKILL.md").write_text("dry")
+
+    agent = BaseAgent("agent-dry", {"method": "copy", "config_dir": str(agent_home),
+                       "skills_dir_name": "skills", "check": {"always": True}})
+    manager = SkillsManager(global_skills_dir=global_dir)
+
+    with patch("agent_sync.skills.get_all_agents", return_value=[agent]), \
+         patch.object(manager, '_sync_from_repo', return_value=0):
+        # dry_run=True with fresh setup - should report but not move
+        stats = manager.centralize(dry_run=True, move=True)
+
+    # Hub should be empty (nothing was moved)
+    items = [i for i in global_dir.iterdir() if not i.name.startswith(".")]
+    assert len(items) == 0, f"Dry run should not move files, found {len(items)}"
+    # Orphan should still be in agent
+    assert (agent_home / "skills" / "dry-skill" / "SKILL.md").exists(), \
+        "Dry run should not delete from agent"
+
+
+def test_compute_dir_hash(tmp_path):
+    """Test _compute_dir_hash produces consistent hashes."""
+    from agent_sync.skills import SkillsManager
+
+    # Create two identical skill directories
+    d1 = tmp_path / "skill-a"
+    d1.mkdir()
+    (d1 / "SKILL.md").write_text("same content")
+    (d1 / "script.py").write_text("print('hello')")
+
+    d2 = tmp_path / "skill-b"
+    d2.mkdir()
+    (d2 / "SKILL.md").write_text("same content")
+    (d2 / "script.py").write_text("print('hello')")
+
+    # Create a different skill directory
+    d3 = tmp_path / "skill-c"
+    d3.mkdir()
+    (d3 / "SKILL.md").write_text("different content")
+
+    h1 = SkillsManager._compute_dir_hash(d1)
+    h2 = SkillsManager._compute_dir_hash(d2)
+    h3 = SkillsManager._compute_dir_hash(d3)
+
+    assert h1 == h2, "Identical directories should have same hash"
+    assert h1 != h3, "Different directories should have different hashes"
+    assert len(h1) == 32, "MD5 hash should be 32 hex chars"
+
+
+def test_find_orphans_empty_hub(tmp_path):
+    """Test _find_orphans with no hub skills (fresh setup)."""
+    from agent_sync.skills import SkillsManager
+
+    # Build skills_found dict (mimicking scan_all_agents output)
+    agent_dir = tmp_path / "agent"
+    (agent_dir / "skills" / "my-skill").mkdir(parents=True)
+    (agent_dir / "skills" / "my-skill" / "SKILL.md").write_text("test")
+
+    skills_found = {
+        "test-agent": [agent_dir / "skills" / "my-skill"]
+    }
+
+    orphans = SkillsManager._find_orphans(set(), skills_found)
+    assert "my-skill" in orphans
+    assert len(orphans["my-skill"]["agents"]) == 1
+    assert orphans["my-skill"]["agents"][0][0] == "test-agent"
+
+
+def test_find_orphans_skill_in_hub(tmp_path):
+    """Test _find_orphans skips skills that already exist in hub."""
+    from agent_sync.skills import SkillsManager
+
+    agent_dir = tmp_path / "agent"
+    (agent_dir / "skills" / "my-skill").mkdir(parents=True)
+    (agent_dir / "skills" / "my-skill" / "SKILL.md").write_text("test")
+    (agent_dir / "skills" / "another-skill").mkdir(parents=True)
+    (agent_dir / "skills" / "another-skill" / "SKILL.md").write_text("test2")
+
+    skills_found = {
+        "test-agent": [
+            agent_dir / "skills" / "my-skill",
+            agent_dir / "skills" / "another-skill",
+        ]
+    }
+
+    # my-skill is in hub, another-skill is not
+    orphans = SkillsManager._find_orphans({"my-skill"}, skills_found)
+    assert "my-skill" not in orphans, "Skills in hub should not be orphans"
+    assert "another-skill" in orphans, "Skills not in hub should be orphans"

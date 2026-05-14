@@ -6,6 +6,8 @@
 
 `agent-sync` solves the fragmentation of the AI agent ecosystem by providing a unified workflow for your CLI tools.
 
+> 🔗 **DotAgents Protocol compatible** — agent-sync's `~/.agents/skills/` hub follows the [DotAgents Protocol](https://dotagentsprotocol.com/) convention for portable, version-controlled agent configuration. See [docs/dotagents.md](docs/dotagents.md).
+
 ---
 
 ## 🎯 Why agent-sync?
@@ -119,7 +121,14 @@ agent-sync skills publish --repo https://github.com/YOUR_USERNAME/agent-sync-pub
 
 #### 📚 Skills
 - `skills list` - List all centralized skills in `~/.agents/skills/`
-- `skills centralize` - Move skills from agent directories to global hub
+- `skills centralize` - Move skills from agent directories to global hub (with safety TUI)
+  - `--yes` - Non-interactive: skip all orphan skills
+  - `--import-all` - Import all orphans without TUI (old behavior)
+  - `--dry-run` - Preview changes without modifying anything
+  - `--copy` - Copy instead of move
+  - `--distribute` - After centralizing, copy all skills to all agent directories
+
+  > 🛡️ **Safety features** (v0.15+): Interactive TUI selects which orphans to import (default: none). Content comparison via hash detects divergent copies. Post-selection prompt: Keep or Remove unselected.
 - `skills diff` - Show differences between local and remote skills
 - `skills reconcile` - Resolve divergences between local and remote
 - `skills delete` - Delete skills from hub and all agent directories (interactive)

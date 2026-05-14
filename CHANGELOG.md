@@ -8,6 +8,41 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ New Features
 
+#### Safe Centralize — Proteção contra importação não-intencional de skills
+
+**Problem:**
+`agent-sync skills centralize` escaneava agentes e importava skills de volta pro hub sem diferenciação, causando ressurreição de skills deletadas, importação de cópias velhas, e destruição silenciosa de skills não-selecionadas.
+
+**Solution:**
+Pipeline reordenado com 3 camadas de proteção:
+
+1. **TUI de seleção de órfãos** (Hybrid A+E): Interactive TUI with checkboxes, default none selected. Atalhos `a`=all, `n`=none, Enter=done.
+2. **Content comparison via hash**: Recursive MD5 hash detects divergent copies. Shows `⚠️ diverge` when agent copies differ.
+3. **Pós-seleção Keep/Remove**: Após importar selecionadas, pergunta o que fazer com as não-selecionadas — Keep (default) ou Remove.
+
+New CLI flags:
+- `--yes` — Non-interactive: skip all orphans, auto-keep
+- `--import-all` — Import all orphans without TUI (old behavior)
+- `--dry-run` — Preview without modifying anything
+
+**Architectural changes:**
+- `_cleanup_agent_local_skills()` removed from `configure_agents()` — cleanup is pipeline-managed
+- `_sync_from_repo()` moved to after fresh setup detection
+- Fresh setup (empty hub) → auto-import all orphans
+- Fallback for non-interactive terminals
+
+#### DotAgents Protocol Alignment
+
+**Problem:** Agent configuration lacked a standard directory convention, making it hard to share and version-control complete agent setups.
+
+**Solution:** Aligned with the [DotAgents Protocol](https://dotagentsprotocol.com/):
+- `~/.agents/skills/` hub follows the `.agents/` directory convention
+- Added protocol alignment documentation to `agent_registry.yaml`
+- Created `docs/dotagents.md` reference guide
+- Vendor-neutral, git-friendly approach maintained
+
+**Files:** `docs/dotagents.md`, `src/agent_sync/agent_registry.yaml`
+
 #### Rich Push Output with Status Indicators
 
 **Problem:**  

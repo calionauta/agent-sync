@@ -120,7 +120,12 @@ def publish_skills(repo_url: str | None = None, dry_run: bool = False, interacti
     # 2. Determine initial selection and handle missing skills
     saved_selection = config.published_skills
     valid_saved = [name for name in saved_selection if name in available_names]
-    if len(valid_saved) != len(saved_selection):
+    missing = set(saved_selection) - set(valid_saved)
+    if missing:
+        console.print(f"\n[yellow]⚠ The following previously published skills no longer exist locally [/yellow][red](removed from selection)[/red]:")
+        for name in sorted(missing):
+            console.print(f"  [red]• {name}[/red]")
+        console.print()
         config.published_skills = valid_saved
         saved_selection = valid_saved
 
