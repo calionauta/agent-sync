@@ -263,9 +263,11 @@ class SetupWizard:
         skills_found = skills_mgr.scan_all_agents()
 
         if skills_found:
-            # Count unique skills by name (deduplicate across agents)
+            # Count unique skills by name (deduplicate across agents, skip extensions)
             unique_skill_names = set()
             for agent_skills in skills_found.values():
+                if isinstance(agent_skills, dict):
+                    continue  # extension skills — not centralized, skip
                 for skill_path in agent_skills:
                     unique_skill_names.add(skill_path.name)
 
