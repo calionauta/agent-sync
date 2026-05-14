@@ -1,40 +1,40 @@
 """Tests for agent-sync CLI."""
 
-import pytest
+from unittest.mock import MagicMock, patch
+
 from click.testing import CliRunner
-from unittest.mock import patch, MagicMock
 
 from agent_sync.cli import main
 
 
 class TestCLI:
     """Test CLI commands."""
-    
+
     def test_cli_version(self):
         """Test version command."""
         runner = CliRunner()
         result = runner.invoke(main, ["--version"])
-        
+
         assert result.exit_code == 0
         assert "agent-sync" in result.output
-    
+
     def test_cli_help(self):
         """Test help command."""
         runner = CliRunner()
         result = runner.invoke(main, ["--help"])
-        
+
         assert result.exit_code == 0
         assert "agent-sync" in result.output
         assert "Sync configs and skills" in result.output
-    
+
     def test_agents_command(self):
         """Test agents list command."""
         runner = CliRunner()
         result = runner.invoke(main, ["agents"])
-        
+
         assert result.exit_code == 0
         assert "opencode" in result.output or "Supported Agents" in result.output
-    
+
     @patch('agent_sync.cli.Config')
     @patch('agent_sync.cli.SyncManager')
     def test_status_command(self, mock_sync_mgr, mock_config):
@@ -43,7 +43,7 @@ class TestCLI:
         mock_config_instance = MagicMock()
         mock_config_instance.repo_url = "https://github.com/test/repo.git"
         mock_config.return_value = mock_config_instance
-        
+
         mock_sync_instance = MagicMock()
         mock_sync_instance.get_status.return_value = {
             "opencode": {
@@ -53,10 +53,10 @@ class TestCLI:
             }
         }
         mock_sync_mgr.return_value = mock_sync_instance
-        
+
         runner = CliRunner()
         result = runner.invoke(main, ["status"])
-        
+
         assert result.exit_code == 0
         assert "Sync Status" in result.output
 
@@ -66,43 +66,43 @@ class TestCLI:
         mock_config_instance = MagicMock()
         mock_config_instance.generate_default.return_value = "/tmp/config.yaml"
         mock_config.return_value = mock_config_instance
-        
+
         runner = CliRunner()
         result = runner.invoke(main, ["generate-config"])
-        
+
         assert result.exit_code == 0
         mock_config_instance.generate_default.assert_called_once()
-    
+
     @patch('agent_sync.cli.Config')
     @patch('agent_sync.cli.SyncManager')
     def test_pull_command(self, mock_sync_mgr, mock_config):
         """Test pull command."""
         mock_config_instance = MagicMock()
         mock_config.return_value = mock_config_instance
-        
+
         mock_sync_instance = MagicMock()
         mock_sync_instance.pull.return_value = ["config1.json", "skill1.py"]
         mock_sync_mgr.return_value = mock_sync_instance
-        
+
         runner = CliRunner()
         result = runner.invoke(main, ["pull"])
-        
+
         assert result.exit_code == 0
         mock_sync_instance.pull.assert_called_once()
-    
+
     @patch('agent_sync.cli.Config')
     @patch('agent_sync.cli.SyncManager')
     def test_push_command(self, mock_sync_mgr, mock_config):
         """Test push command."""
         mock_config_instance = MagicMock()
         mock_config.return_value = mock_config_instance
-        
+
         mock_sync_instance = MagicMock()
         mock_sync_instance.push.return_value = ["config1.json"]
         mock_sync_mgr.return_value = mock_sync_instance
-        
+
         runner = CliRunner()
         result = runner.invoke(main, ["push", "-m", "test commit"])
-        
+
         assert result.exit_code == 0
         mock_sync_instance.push.assert_called_once()

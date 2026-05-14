@@ -1,7 +1,8 @@
 """Tests for skills diff utilities."""
 
 from pathlib import Path
-from agent_sync.skills_diff import scan_skills_dir, SkillsDiff
+
+from agent_sync.skills_diff import SkillsDiff, scan_skills_dir
 
 
 class TestScanSkillsDir:

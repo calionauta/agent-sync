@@ -1,14 +1,11 @@
 """Tests for agent-sync agent integrations based on YAML registry."""
 
-import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 from agent_sync.agents import (
+    BaseAgent,
+    get_agent,
     get_agents,
     get_all_agents,
-    get_agent,
-    BaseAgent,
 )
 
 
@@ -18,7 +15,7 @@ class TestAgentIntegrations:
     def test_get_all_agents_includes_internal(self):
         """Test get_all_agents includes internal entries like global-skills."""
         agents = get_all_agents()
-        
+
         # 9 real agents + 1 internal (global-skills) = 10
         assert len(agents) == 10
         names = [a.name for a in agents]
@@ -27,7 +24,7 @@ class TestAgentIntegrations:
     def test_get_agents_excludes_internal(self):
         """Test get_agents excludes internal entries."""
         agents = get_agents()
-        
+
         # Only real agents: opencode, claude-code, gemini-cli, pi.dev, qwen-code,
         # roocode, cline, cursor, windsurf = 9
         assert len(agents) == 9
@@ -39,13 +36,13 @@ class TestAgentIntegrations:
         assert "gemini-cli" in agent_names
         assert "pi.dev" in agent_names
         assert "qwen-code" in agent_names
-        
+
         # VS Code Extensions & IDEs
         assert "roocode" in agent_names
         assert "cline" in agent_names
         assert "cursor" in agent_names
         assert "windsurf" in agent_names
-        
+
         # Internal should NOT be in the list
         assert "global-skills" not in agent_names
 
@@ -64,15 +61,15 @@ class TestAgentIntegrations:
         agent = get_agent("roocode")
         assert agent is not None
         assert agent.name == "roocode"
-        
+
         agent = get_agent("cline")
         assert agent is not None
         assert agent.name == "cline"
-        
+
         agent = get_agent("cursor")
         assert agent is not None
         assert agent.name == "cursor"
-        
+
         agent = get_agent("windsurf")
         assert agent is not None
         assert agent.name == "windsurf"
@@ -80,52 +77,52 @@ class TestAgentIntegrations:
         # Non-existent agent
         agent = get_agent("nonexistent")
         assert agent is None
-    
+
     def test_opencode_agent(self, tmp_path):
         """Test Opencode agent integration."""
         agent = get_agent("opencode")
         agent.config_dir = tmp_path
-        
+
         assert agent.name == "opencode"
         assert "opencode" in str(agent.config_path)
         assert "skills" in str(agent.skills_path)
-    
+
     def test_claude_code_agent(self, tmp_path):
         """Test Claude Code agent integration."""
         agent = get_agent("claude-code")
         agent.config_dir = tmp_path
-        
+
         assert agent.name == "claude-code"
         assert "settings.json" in str(agent.config_path)
         assert "commands" in str(agent.skills_path)
-    
+
     def test_gemini_cli_agent(self, tmp_path):
         """Test Gemini CLI agent integration."""
         agent = get_agent("gemini-cli")
         agent.config_dir = tmp_path
-        
+
         assert agent.name == "gemini-cli"
         assert "settings.json" in str(agent.config_path)
         assert "tools" in str(agent.skills_path)
-    
+
     def test_pi_dev_agent(self, tmp_path):
         """Test Pi.dev agent integration."""
         agent = get_agent("pi.dev")
         agent.config_dir = tmp_path
-        
+
         assert agent.name == "pi.dev"
         assert "settings.json" in str(agent.config_path)
         assert "skills" in str(agent.skills_path)
-    
+
     def test_qwen_code_agent(self, tmp_path):
         """Test Qwen Code agent integration."""
         agent = get_agent("qwen-code")
         agent.config_dir = tmp_path
-        
+
         assert agent.name == "qwen-code"
         assert "settings.json" in str(agent.config_path)
         assert "skills" in str(agent.skills_path)
-    
+
     def test_agent_config_path_structure(self, tmp_path):
         """Test agent config path structure."""
         agent = BaseAgent("test-agent", {
@@ -135,7 +132,7 @@ class TestAgentIntegrations:
             "skills_dir_name": "skills",
             "check": {"binary": "test"}
         })
-        
+
         expected_config = tmp_path / "config.json"
         expected_skills = tmp_path / "skills"
 
@@ -163,7 +160,7 @@ class TestVSCodeAgents:
         assert agent.method == "native"
         assert "custom_modes.yaml" in str(agent.config_path)
         assert "skills" in str(agent.skills_path)
-        
+
         # RooCode supports mode-specific skills
         assert agent.mode_specific is True
 
@@ -175,7 +172,7 @@ class TestVSCodeAgents:
         assert agent.name == "cline"
         assert agent.method == "copy"
         assert "state.json" in str(agent.config_path)
-        
+
         # Cline copies FROM project skills TO global hub
         if hasattr(agent, "copy_from"):
             # copy_from is a list of source paths
@@ -193,7 +190,7 @@ class TestVSCodeAgents:
         assert agent.name == "cursor"
         assert agent.method == "native"
         assert "settings.json" in str(agent.config_path)
-        
+
         # Cursor has native support and migrate_from paths
         if hasattr(agent, "migrate_from"):
             assert isinstance(agent.migrate_from, list)
@@ -207,7 +204,7 @@ class TestVSCodeAgents:
         assert agent.name == "windsurf"
         assert agent.method == "copy"
         assert "config.json" in str(agent.config_path)
-        
+
         # Windsurf copies FROM project/global skills TO hub
         if hasattr(agent, "copy_from"):
             # copy_from is a list of source paths

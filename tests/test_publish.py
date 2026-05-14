@@ -1,9 +1,12 @@
-import pytest
-import subprocess
 import json
-from unittest.mock import MagicMock, patch, ANY
+import subprocess
 from pathlib import Path
+from unittest.mock import ANY, MagicMock, patch
+
+import pytest
+
 from agent_sync.publish import publish_skills
+
 
 class TestPublish:
     """Tests for publishing functionality."""

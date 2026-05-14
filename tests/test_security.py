@@ -1,9 +1,7 @@
 """Security regression tests for agent-sync."""
 
-import pytest
-from pathlib import Path
-from agent_sync.validators import validate_skill_name, validate_repo_name, validate_github_url
 from agent_sync.skills_delete import SkillsDeleter
+from agent_sync.validators import validate_github_url, validate_repo_name, validate_skill_name
 
 
 def test_validate_repo_name_argument_injection():

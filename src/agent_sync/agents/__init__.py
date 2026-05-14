@@ -1,20 +1,21 @@
 """Agent-specific configurations and handlers (YAML-driven)."""
 
-from typing import Optional, List, Dict, Any
+from typing import Any, Optional
+
 from .base import BaseAgent
+from .cline import ClineAgent
+from .cursor import CursorAgent
 from .registry_loader import load_registry
 
 # Import specialized agent handlers
 from .roocode import RooCodeAgent
-from .cline import ClineAgent
-from .cursor import CursorAgent
 from .windsurf import WindsurfAgent
 
 # Internal entries that are not real agents
 INTERNAL_ENTRIES = {"global-skills"}
 
 # Map of agent names to their specialized handler classes
-AGENT_HANDLERS: Dict[str, type] = {
+AGENT_HANDLERS: dict[str, type] = {
     "roocode": RooCodeAgent,
     "cline": ClineAgent,
     "cursor": CursorAgent,
@@ -22,7 +23,7 @@ AGENT_HANDLERS: Dict[str, type] = {
 }
 
 
-def _create_agent(name: str, data: Dict[str, Any]) -> BaseAgent:
+def _create_agent(name: str, data: dict[str, Any]) -> BaseAgent:
     """
     Create agent instance, using specialized handler if available.
 
@@ -39,7 +40,7 @@ def _create_agent(name: str, data: Dict[str, Any]) -> BaseAgent:
     return BaseAgent(name, data)
 
 
-def get_all_agents() -> List[BaseAgent]:
+def get_all_agents() -> list[BaseAgent]:
     """Get all available agent integrations from YAML registry (including internal)."""
     registry = load_registry()
     agents = []
@@ -48,7 +49,7 @@ def get_all_agents() -> List[BaseAgent]:
     return agents
 
 
-def get_agents() -> List[BaseAgent]:
+def get_agents() -> list[BaseAgent]:
     """Get all real agent integrations (excludes internal entries like global-skills)."""
     registry = load_registry()
     agents = []
@@ -58,7 +59,7 @@ def get_agents() -> List[BaseAgent]:
     return agents
 
 
-def get_agent(name: str) -> Optional[BaseAgent]:
+def get_agent(name: str) -> BaseAgent | None:
     """Get a specific agent by name."""
     registry = load_registry()
     if name in registry:

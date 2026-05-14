@@ -1,19 +1,17 @@
 """Shared interactive TUI selection utilities."""
 
-from typing import Set, List
 
-
-def parse_multiselect_input(choice: str, items: List[str], selected: Set[str]) -> Set[str]:
+def parse_multiselect_input(choice: str, items: list[str], selected: set[str]) -> set[str] | None:
     """Parse user input for a multi-select TUI and return updated selection.
-    
+
     Handles comma-separated numbers ("1,3,5"), "all", "none", "done", and empty input.
     Numbers toggle the item's selection state.
-    
+
     Args:
         choice: Raw user input string.
         items: Full ordered list of selectable items.
         selected: Currently selected items.
-    
+
     Returns:
         Updated set of selected items. Returns None if choice is "done" or empty.
     """

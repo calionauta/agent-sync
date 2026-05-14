@@ -1,7 +1,6 @@
 """Tests for validator utilities."""
 
-import pytest
-from agent_sync.validators import validate_repo_name, validate_github_url
+from agent_sync.validators import validate_github_url, validate_repo_name
 
 
 class TestValidators:
