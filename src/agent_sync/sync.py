@@ -75,7 +75,7 @@ class SyncManager:
         # This prevents git from using the invalid token
         env = os.environ.copy()
         env.pop("GITHUB_TOKEN", None)
-        # Never prompt for credentials — fail fast with a clear error instead
+        # Never prompt for credentials - fail fast with a clear error instead
         env["GIT_TERMINAL_PROMPT"] = "0"
 
         cmd = ["git"] + list(args)
@@ -585,11 +585,11 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                             dest = agent_config_dir / config_file.name
                             shutil.copy2(config_file, dest)
 
-            # Pi.dev extra paths — copy each path category to its repo subdirectory
+            # Pi.dev extra paths - copy each path category to its repo subdirectory
             if agent.name == "pi.dev":
                 self._stage_pi_extra_paths(agent)
 
-            # Generic extra_paths handling for ALL agents (except pi.dev — handled above)
+            # Generic extra_paths handling for ALL agents (except pi.dev - handled above)
             # This enables backing up directories like ~/.roo/rules/ declared in agent_registry.yaml
             extra_paths = agent.data.get("extra_paths", {})
             if extra_paths and agent.name != "pi.dev":
@@ -657,12 +657,12 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                     dest_file.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(src_path, dest_file)
 
-        # Git worktrees — skip (cache, not config)
+        # Git worktrees - skip (cache, not config)
         if hasattr(agent, 'git_paths'):
             for git_path in agent.git_paths:
                 if git_path.exists():
                     total_mb = sum(f.stat().st_size for f in git_path.rglob('*') if f.is_file()) // 1024 // 1024
-                    console.print(f"  [dim]Skipping git clones backup ({total_mb}MB) — these are cache, not config[/dim]")
+                    console.print(f"  [dim]Skipping git clones backup ({total_mb}MB) - these are cache, not config[/dim]")
 
         # Packages (special: copies each package by name)
         if hasattr(agent, 'packages_paths'):
@@ -731,13 +731,13 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                     shutil.copy2(synced_file, dest)
                     changes.append(f"{agent.name}: {filename}")
 
-        # Git worktrees — skip (cache, not config)
+        # Git worktrees - skip (cache, not config)
         synced_git_dir = synced_config_dir / "git"
         if synced_git_dir.exists():
             total_mb = sum(f.stat().st_size for f in synced_git_dir.rglob('*') if f.is_file()) // 1024 // 1024
-            console.print(f"  [dim]Skipping git clones restore ({total_mb}MB) — these are cache, not config[/dim]")
+            console.print(f"  [dim]Skipping git clones restore ({total_mb}MB) - these are cache, not config[/dim]")
 
-        # Packages — special: copies each package by name with rmtree
+        # Packages - special: copies each package by name with rmtree
         synced_packages_dir = synced_config_dir / "packages"
         if synced_packages_dir.exists():
             for package_path in agent.packages_paths:
@@ -965,17 +965,17 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         dest: Path,
         exclude: list[str] | None = None,
         preserve_symlinks: bool = True,
-        preserve_permissions: bool = True,
     ) -> int:
         """
-        Copy entire directory preserving symlinks and permissions.
+        Copy entire directory preserving symlinks.
+
+        Delegates symlink and file copies to _copy_item.
 
         Args:
             src: Source directory
             dest: Destination directory
             exclude: List of glob patterns to exclude
             preserve_symlinks: If True, copy symlinks as symlinks (default: True)
-            preserve_permissions: If True, preserve file permissions (default: True)
 
         Returns:
             Number of files copied
@@ -987,40 +987,13 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         copied = 0
 
         for item in src.rglob("*"):
-            # Get relative path from source
             rel_path = item.relative_to(src)
-            dest_item = dest / rel_path
-
-            # Check exclusions
             if self._should_exclude(str(rel_path), exclude):
                 continue
-
-            # Skip if excluded by pattern
-            if exclude:
-                skip = False
-                for pattern in exclude:
-                    if fnmatch.fnmatch(str(rel_path), pattern):
-                        skip = True
-                        break
-                if skip:
-                    continue
-
-            if item.is_symlink():
-                if preserve_symlinks:
-                    # Copy symlink
-                    if dest_item.exists() or dest_item.is_symlink():
-                        dest_item.unlink()
-                    dest_item.symlink_to(item.readlink())
-                    copied += 1
-            elif item.is_dir():
-                dest_item.mkdir(parents=True, exist_ok=True)
+            if item.is_dir():
+                (dest / rel_path).mkdir(parents=True, exist_ok=True)
             else:
-                # Copy file
-                if dest_item.exists():
-                    dest_item.unlink()
-                dest_item.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(item, dest_item)  # copy2 preserves metadata
-                copied += 1
+                copied += self._copy_item(item, src, dest, exclude, preserve_symlinks)
 
         return copied
 
@@ -1103,7 +1076,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         """
         from .agents import get_all_agents
 
-        # Stage configs once for ALL agents (avoids O(n²) redundant copies)
+        # Stage configs once for ALL agents (avoids O(n2) redundant copies)
         self._stage_agent_configs()
 
         for agent in get_all_agents():
@@ -1154,7 +1127,6 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                 dest=repo_agent_dir,
                 exclude=exclude,
                 preserve_symlinks=True,
-                preserve_permissions=True,
             )
             return
 
