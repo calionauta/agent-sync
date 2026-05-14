@@ -165,8 +165,7 @@ class TestVSCodeAgents:
         assert "skills" in str(agent.skills_path)
         
         # RooCode supports mode-specific skills
-        if hasattr(agent, "supports_mode_specific"):
-            assert agent.supports_mode_specific()
+        assert agent.mode_specific is True
 
     def test_cline_agent(self, tmp_path):
         """Test Cline agent integration."""
