@@ -45,12 +45,14 @@ class Config:
         # Load main config
         if self.config_path.exists():
             with open(self.config_path) as f:
-                self._config = yaml.safe_load(f) or {}
+                loaded = yaml.safe_load(f)
+                self._config = loaded if isinstance(loaded, dict) else {}
 
         # Load overrides (local-only, not synced)
         if self.overrides_path.exists():
             with open(self.overrides_path) as f:
-                self._overrides = yaml.safe_load(f) or {}
+                loaded = yaml.safe_load(f)
+                self._overrides = loaded if isinstance(loaded, dict) else {}
 
     def save(self) -> None:
         """Save configuration to file with help header."""
