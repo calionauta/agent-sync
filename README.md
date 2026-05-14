@@ -80,13 +80,13 @@ Use these standard names for consistency:
 **Example Setup:**
 ```bash
 # Initialize private configs (first machine)
-agent-sync init --name agent-sync-private-configs --private
+agent-sync init --name agent-sync-private-configs
 
 # Link on additional machines
 agent-sync link https://github.com/YOUR_USERNAME/agent-sync-private-configs.git
 
 # Publish skills to public repo
-agent-sync skills publish --repo YOUR_USERNAME/agent-sync-public-skills
+agent-sync skills publish --repo https://github.com/YOUR_USERNAME/agent-sync-public-skills
 ```
 
 ---
