@@ -862,6 +862,17 @@
         scroll-behavior: auto !important;
       }
     }
+    
+    /* Focus styles for keyboard navigation */
+    :focus-visible {
+      outline: 2px solid #58a6ff;
+      outline-offset: 2px;
+    }
+    
+    /* Remove focus outline for mouse users */
+    :focus:not(:focus-visible) {
+      outline: none;
+    }
   </style>
   
   <!-- Structured data for SEO -->
