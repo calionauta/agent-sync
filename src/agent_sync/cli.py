@@ -1568,8 +1568,10 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
     """
     Publish skills and/or agent instructions to a public GitHub repository.
 
+
     Default: publishes BOTH skills and agent instructions (--all).
     Use --skills or --agents to publish only one type.
+
 
     \b
     Examples:
@@ -1588,46 +1590,177 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
       # Publish to a specific repository
       agent-sync publish --repo https://github.com/user/my-repo
     """
-    from .publish import publish_skills, publish_agents
+    from .publish import (
+        publish_skills, publish_agents,
+        get_available_skills, get_available_agents,
+        scan_file, format_issues_for_display,
+    )
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich import box
 
     # Default: publish all if no specific flags
     do_all = publish_all and not skills and not agents
     do_skills = skills or do_all
     do_agents = agents or do_all
 
-    success = True
-
-    # Cross-reference notice
-    cross_ref_skills = "💡 Want to publish also agent instructions? Use agent-sync publish --agents"
-    cross_ref_agents = "💡 Want to publish also skills? Use agent-sync publish --skills"
-
+    # ============================================================================
+    # PHASE 1: Discovery - Collect what will be published
+    # ============================================================================
+    skills_count = 0
+    agents_count = 0
+    available_skills = []
+    available_agents = []
+    scan_results = {}
 
     if do_skills:
-        console.print("\n[bold cyan]📚 Publishing Skills...[/bold cyan]\n")
-        success_skills = publish_skills(
-            repo_url=repo_url,
-            dry_run=dry_run,
-            interactive=False,  # Already handled selection
-        )
-        if not success_skills:
-            success = False
-        else:
-            console.print(f"\n[dim]{cross_ref_agents}[/dim]\n")
+        available_skills = get_available_skills()
+        skills_count = len(available_skills)
 
     if do_agents:
-        console.print("\n[bold cyan]🤖 Publishing Agent Instructions...[/bold cyan]\n")
-        success_agents = publish_agents(
-            repo_url=repo_url,
-            dry_run=dry_run,
-            interactive=False,
-        )
-        if not success_agents:
-            success = False
-        else:
-            console.print(f"\n[dim]{cross_ref_skills}[/dim]\n")
+        available_agents = get_available_agents()
+        agents_count = len(available_agents)
+        
+        # Scan agents for security
+        for agent in available_agents:
+            scan_results[agent["path"]] = scan_file(agent["path"])
 
-    if not success:
+    # Check if anything to publish
+    if skills_count == 0 and agents_count == 0:
+        console.print("\n[yellow]⚠ Nothing found to publish.[/yellow]\n")
+        if do_skills:
+            console.print("[dim]Run [green]agent-sync skills centralize[/green] first.[/dim]\n")
+        return
+
+    # ============================================================================
+    # PHASE 2: Show Summary
+    # ============================================================================
+    console.print("\n[bold]📋 Publishing Summary[/]\n")
+    
+    if do_skills:
+        if skills_count > 0:
+            console.print(f"[cyan]📚 Skills:[/cyan] {skills_count} found in ~/.agents/skills/")
+        else:
+            console.print("[cyan]📚 Skills:[/cyan] None found")
+    
+    if do_agents:
+        if agents_count > 0:
+            unsafe_count = sum(1 for r in scan_results.values() if not r.safe)
+            safe_count = agents_count - unsafe_count
+            
+            console.print(f"[cyan]🤖 Agents:[/cyan] {agents_count} found")
+            console.print(f"  [dim]├── Security: {safe_count} safe[/dim]")
+            if unsafe_count > 0:
+                console.print(f"  [red]└── Warnings: {unsafe_count} flagged[/red]")
+            else:
+                console.print(f"  [dim]└── All cleared[/dim]")
+        else:
+            console.print("[cyan]🤖 Agents:[/cyan] None found")
+
+    # ============================================================================
+    # PHASE 3: Show detailed table for agents (with security)
+    # ============================================================================
+    if do_agents and agents_count > 0:
+        console.print("\n[bold]🤖 Agent Instructions Details[/]\n")
+        
+        table = Table(box=box.ROUNDED, show_header=True, header_style="bold cyan")
+        table.add_column("Agent", style="green")
+        table.add_column("File", style="cyan")
+        table.add_column("Security", justify="center", width=10)
+        
+        for agent in available_agents:
+            result = scan_results[agent["path"]]
+            icon = "[red]⚠️ Warning[/red]" if not result.safe else "[green]✓ Safe[/green]"
+            table.add_row(agent["agent"], agent["filename"], icon)
+        
+        console.print(table)
+        
+        # Show details for flagged files
+        flagged = [(a, scan_results[a["path"]]) for a in available_agents 
+                   if not scan_results[a["path"]].safe]
+        if flagged:
+            console.print("\n[yellow]⚠️  Files with warnings:[/]")
+            for agent, result in flagged:
+                console.print(f"\n[bold]{agent['filename']}[/bold] ([dim]{agent['agent']}[/dim])")
+                console.print(f"[dim]{format_issues_for_display(result.issues)}[/dim]")
+            console.print("\n[dim]These files will still be published. Review before continuing.[/dim]")
+
+    # ============================================================================
+    # PHASE 4: Security Warning (Contextual)
+    # ============================================================================
+    warning_lines = []
+    
+    if do_skills and do_agents:
+        warning_lines.append("[bold]You are about to publish BOTH skills AND agent instructions.[/bold]")
+    elif do_skills:
+        warning_lines.append("[bold]You are about to publish skills.[/bold]")
+    elif do_agents:
+        warning_lines.append("[bold]You are about to publish agent instructions.[/bold]")
+    
+    warning_lines.append("")
+    warning_lines.append("[bold yellow]⚠️  SECURITY WARNING - PUBLIC REPOSITORY[/bold yellow]")
+    warning_lines.append("")
+    warning_lines.append("This repository will be PUBLIC and visible to everyone.")
+    warning_lines.append("Only publish content you want to share openly.")
+    
+    if do_skills:
+        warning_lines.append("")
+        warning_lines.append("📚 Skills:")
+        warning_lines.append("  • Published as-is (no scanning performed)")
+        warning_lines.append("  • Files matching 'auth', 'token', 'key', 'secret' are skipped")
+    
+    if do_agents:
+        warning_lines.append("")
+        warning_lines.append("🤖 Agent Instructions:")
+        warning_lines.append("  • Scanned for sensitive patterns before publishing")
+        warning_lines.append("  • Patterns detected: API keys, tokens, private URLs, email addresses")
+        warning_lines.append("  • ⚠️ Warning means patterns detected - review and confirm")
+    
+    warning_lines.append("")
+    warning_lines.append("[bold red]What will NEVER be published:[/]")
+    warning_lines.append("  ✗ Config files (settings.json, config.yaml, credentials.json)")
+    warning_lines.append("  ✗ Files containing 'auth', 'token', 'key', 'secret' in name")
+    warning_lines.append("  ✗ .env files")
+    warning_lines.append("  ✗ Your private agent-sync-configs repository")
+    
+    console.print(Panel(
+        "\n".join(warning_lines),
+        border_style="yellow",
+        title="[bold yellow]Public Disclosure[/]",
+    ))
+
+    # ============================================================================
+    # PHASE 5: Confirm
+    # ============================================================================
+    if dry_run:
+        console.print(f"\n[blue]🔍 DRY RUN: Would publish {skills_count} skills and {agents_count} agents[/blue]\n")
+        return
+    
+    if not Confirm.ask("\n[bold]Continue with publishing?[/]", default=True):
+        console.print("\n[yellow]Publish cancelled[/yellow]\n")
+        return
+
+    # ============================================================================
+    # PHASE 6: Execute (non-interactive, no re-confirmation)
+    # ============================================================================
+    success = True
+    
+    if do_skills:
+        console.print("\n[bold cyan]📚 Publishing Skills...[/bold cyan]\n")
+        if not publish_skills(repo_url=repo_url, dry_run=False, interactive=False):
+            success = False
+    
+    if do_agents:
+        console.print("\n[bold cyan]🤖 Publishing Agent Instructions...[/bold cyan]\n")
+        if not publish_agents(repo_url=repo_url, dry_run=False, interactive=False):
+            success = False
+
+    if success:
+        console.print("\n[bold green]✅ Publishing complete![/green]\n")
+    else:
+        console.print("\n[red]✗ Some items failed to publish[/red]\n")
         raise click.Abort()
+
 
 
 @main.command()

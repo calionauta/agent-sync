@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="https://fonts.bunny.net/css?family=inter:400,500,600,700|jetbrains-mono:400,500,700">
   
   <!-- xterm.js -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
+  
   
   <style>
     *, *::before, *::after {
@@ -321,52 +321,15 @@
     }
 
     /* Fix xterm.js sizing - force it to fill container */
-    .xterm {
-      height: 100% !important;
-      width: 100% !important;
-      padding: 0 !important;
-      margin: 0 !important;
-    }
-    
-    .xterm-screen {
-      margin: 0 !important;
-      padding: 4px 8px !important;
-      height: 100% !important;
-      width: 100% !important;
-    }
-    
-    .xterm-rows {
-      margin: 0 !important;
-      padding: 0 !important;
-    }
-    
-    .xterm-decoration {
-      display: none !important;
-    }
-    
-    .xterm-helper-textarea {
-      display: none !important;
-    }
-
-    .xterm-viewport {
-      overflow-y: auto !important;
-    }
-
-    .xterm-screen {
-      height: 100%;
-    }
-
-    .xterm-viewport::-webkit-scrollbar {
-      width: 8px;
-    }
-
-    .xterm-viewport::-webkit-scrollbar-track {
-      background: var(--bg-secondary);
-    }
-
-    .xterm-viewport::-webkit-scrollbar-thumb {
-      background: var(--bg-tertiary);
-      border-radius: 4px;
+    .terminal-output {
+      margin: 0;
+      padding: 16px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text-primary);
+      white-space: pre;
+      overflow-x: auto;
     }
 
     /* ═══════════════════════════════════════════════════════════
@@ -838,16 +801,66 @@
           <div class="terminal-title">Terminal — agent-sync</div>
         </div>
         <div class="terminal-body">
-          <div id="terminal"></div>
-        </div>
-        <div style="text-align: center; padding: 16px;">
-          <button class="terminal-restart-btn" onclick="restartDemo()">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M1 4v6h6M23 20v-6h-6"/>
-              <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
-            </svg>
-            Try Again
-          </button>
+          <pre class="terminal-output">Usage: agent-sync [OPTIONS] COMMAND [ARGS]...
+
+  🔄 agent-sync - Sync configs and skills across multiple AI agents.
+
+  Supported agents: opencode, claude-code, gemini-cli, pi.dev, qwen-code
+
+Options:
+  --version  Show the version and exit.
+  --help     Show this message and exit.
+
+🔄 Sync Commands:
+  push    Commit and push local changes. [-m, --skills-only, --configs-only,
+          --agents-only]
+  pull    Fetch and apply remote configuration. [--force, --skills-only,
+          --configs-only, --agents-only]
+  status  Show sync status and last sync times.
+
+🤖 Agent Management:
+  agents   List supported agents and their status.
+  enable   Enable sync for a specific agent.
+  disable  Disable sync for a specific agent.
+
+⚙️  Configuration:
+  setup            Run the interactive setup wizard to...
+  init             Initialize a new sync repository (first... [--name,
+                   --agents, --no-wizard, --force]
+  link             Link to an existing sync repository...
+  config           Manage configuration (view, edit, reset).
+    ├── edit       Open configuration file in editor.
+    ├── export     Export configuration to DotAgents JSON... [--dry-run,
+                   --output]
+    ├── repo       View or set the GitHub repository URL. [--remove]
+    ├── reset      Reset configuration to defaults (keeps... [--yes]
+    └── show       Show current configuration.
+  generate-config  Generate initial configuration file. [--agent]
+
+📚 Skills &amp; Agents:
+  skills            Manage global skills.
+    ├── centralize  Centralize skills from all agents to... [--copy, --push,
+                    --distribute, --yes, --import-all, --dry-run]
+    ├── delete      Delete skills from hub and all agent... [--dry-run,
+                    --push, --interactive]
+    ├── diff        Show differences between local and remote...
+    ├── list        List all centralized skills.
+    ├── publish     [DEPRECATED] Use 'agent-sync publish... [--repo, --dry-
+                    run, --interactive]
+    └── reconcile   Reconcile differences between local and... [--auto, --dry-
+                    run]
+  custom-agents     Manage custom agents (.claude/agents/,...
+    └── list        List custom agents for all supported agents.
+
+🛠️  System:
+  update         Check for available updates and install them.
+  version        Show version information.
+  secrets        Manage secrets and environment variables.
+    ├── disable  Disable secrets synchronization.
+    ├── edit     Edit secrets in your $EDITOR.
+    ├── enable   Enable secrets synchronization.
+    └── list     List all secrets and environment variables.
+</pre>
         </div>
       </div>
     </div>
@@ -1020,239 +1033,11 @@
   <!-- ═══════════════════════════════════════════════════════════
        SCRIPTS
   ═══════════════════════════════════════════════════════════ -->
-  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
+  
+  
   <script>
-    // ─────────────────────────────────────────────────────────────
-    // COPY BUTTONS
-    // ─────────────────────────────────────────────────────────────
-    function copyCommand(btn) {
-      const command = btn.dataset.command;
-      navigator.clipboard.writeText(command).then(() => {
-        btn.classList.add('copied');
-        const svg = btn.querySelector('svg');
-        const originalHTML = svg.innerHTML;
-        svg.innerHTML = '<polyline points="20 6 9 17 4 12"></polyline>';
-        setTimeout(() => {
-          btn.classList.remove('copied');
-          svg.innerHTML = originalHTML;
-        }, 1500);
-      });
-    }
-
-    // ─────────────────────────────────────────────────────────────
-    // SCROLL ANIMATIONS
-    // ─────────────────────────────────────────────────────────────
-    const observerOptions = {
-      threshold: 0.15,
-      rootMargin: '0px 0px -50px 0px'
-    };
-
-    const animateOnScroll = new IntersectionObserver((entries) => {
-      entries.forEach((entry, index) => {
-        if (entry.isIntersecting) {
-          const el = entry.target;
-          const delay = el.dataset.delay || 0;
-          setTimeout(() => {
-            el.classList.add('visible');
-          }, delay);
-          animateOnScroll.unobserve(el);
-        }
-      });
-    }, observerOptions);
-
-    document.querySelectorAll('[data-animate]').forEach((el, i) => {
-      el.dataset.delay = (i % 4) * 100; // Stagger effect
-      animateOnScroll.observe(el);
-    });
-
-    // ─────────────────────────────────────────────────────────────
-    // TERMINAL SIMULATION
-    // ─────────────────────────────────────────────────────────────
-    let terminalReady = false;
-    let term = null;
-    let isDemoMode = true;
-    let demoQueue = [];
-    let currentCmdIndex = 0;
-
-    const DEMO_SEQUENCE = [
-      { type: 'input', text: 'agent-sync agents' },
-      { type: 'output', text: '\r\n[CLI Agents]                         [IDE Extensions]\r\n  Claude Code    [CLI]  .claude/       Cursor   [IDE]  .cursor/\r\n  Gemini CLI    [CLI]  .gemini/       Cline    [IDE]  .cline/\r\n  Qwen           [CLI]  .qwen/         RooCode  [IDE]  .roocode/\r\n  Pi             [CLI]  .pi/\r\n\r\n  9 agents detected\r\n' },
-      { type: 'input', text: 'agent-sync status' },
-      { type: 'output', text: '\r\n[Sync Status]\r\n  Claude Code    active    (107 files synced)\r\n  Gemini CLI    active\r\n  Pi             active\r\n  Qwen           active\r\n\r\n  Repository: github.com/renatocaliari/agent-sync-configs\r\n' },
-      { type: 'input', text: 'agent-sync version' },
-      { type: 'output', text: '\r\n  agent-sync v0.17.2\r\n' },
-      { type: 'prompt' }
-    ];
-
-    async function sleep(ms) {
-      return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    async function typeText(text, delay = 30) {
-      for (const char of text) {
-        term.write(char);
-        await sleep(delay);
-      }
-    }
-
-    async function runDemo() {
-      if (!terminalReady || !isDemoMode) return;
-      
-      // Reset cursor position
-      term.write('\r\n');
-      
-      for (const item of DEMO_SEQUENCE) {
-        if (item.type === 'input') {
-          term.write('\r\n');
-          await typeText('$ ' + item.text, 25);
-          currentCmdIndex++;
-          await sleep(600);
-        } else if (item.type === 'output') {
-          term.write(item.text);
-          await sleep(800);
-        } else if (item.type === 'prompt') {
-          isDemoMode = false;
-          term.write('\r\n');
-          showHelp();
-        }
-      }
-    }
-
-    function showHelp() {
-      term.write('\r\n\u001B[36m\u2605 Interactive mode\u001B[0m - Type commands or press Enter for help\r\n');
-      term.write('\r\n$ ');
-    }
-
-    function showCommandHelp() {
-      term.write('\r\n\r\n\u001B[33mAvailable commands:\u001B[0m\r\n');
-      term.write('  \u001B[36mlist-agents\u001B[0m     Show all detected agents\r\n');
-      term.write('  \u001B[36msync\u001B[0m           Sync configs (use --dry-run first)\r\n');
-      term.write('  \u001B[36minit\u001B[0m           Initialize agent-sync in current directory\r\n');
-      term.write('  \u001B[36mlink\u001B[0m <url>     Link to a remote config repository\r\n');
-      term.write('  \u001B[36mstatus\u001B[0m         Show sync status\r\n');
-      term.write('  \u001B[36m--help\u001B[0m         Show all commands\r\n');
-      term.write('  \u001B[36mclear\u001B[0m          Clear terminal\r\n');
-      term.write('\r\n');
-      term.write('$ ');
-    }
-
-    function processCommand(cmd) {
-      const trimmed = cmd.trim().toLowerCase();
-      
-      if (trimmed === 'clear' || trimmed === 'cls') {
-        term.clear();
-        term.write('$ ');
-        return;
-      }
-      
-      if (trimmed === '' || trimmed === 'help' || trimmed === '?') {
-        showCommandHelp();
-        return;
-      }
-
-      if (trimmed === 'list-agents') {
-        term.write('\r\n\u2699 CLI Agents                           \u251c IDE Extensions\r\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\r\n  \uD83E\uDD8F Claude Code       [CLI]  \uD83D\uDCC1 ~/.claude/       \uD83E\uDDE9 RooCode  [IDE]  \uD83D\uDCC1 ~/.roocode/\r\n  \u2728 Gemini CLI     [CLI]  \uD83D\uDCC1 ~/.gemini/     \uD83E\uDDEA Cline    [IDE]  \uD83D\uDCC1 ~/.cline/\r\n  \uD83D\uDC26 Qwen            [CLI]  \uD83D\uDCC1 ~/.qwen/       \uD83E\uDDB0 Cursor   [IDE]  \uD83D\uDCC1 ~/.cursor/\r\n  \u03C0 Pi              [CLI]  \uD83D\uDCC1 ~/.pi/\r\n\u001B[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001B[0m\r\n\u001B[32m\u2713 7 agents detected\u001B[0m\r\n\r\n$ ');
-        return;
-      }
-
-      if (trimmed.startsWith('sync')) {
-        const isDryRun = trimmed.includes('--dry-run');
-        term.write('\r\n\uD83D\uDCCB Syncing...\r\n');
-        if (isDryRun) {
-          term.write('\uD83D\uDD0D Dry run - no changes made\r\n');
-        } else {
-          term.write('\u2713 skills/cali-product-planner/SKILL.md\r\n');
-          term.write('\u2713 configs/AGENTS.md\r\n');
-          term.write('\u001B[32m\u2713 Synced 12 files in 1.8s\u001B[0m\r\n\r\n$ ');
-        }
-        return;
-      }
-
-      if (trimmed === '--version' || trimmed === 'version' || trimmed === '-v') {
-        term.write('\r\nagent-sync v1.2.0\r\n\r\n$ ');
-        return;
-      }
-
-      // Unknown command
-      term.write(`\r\n\u001B[31magent-sync: command not found: ${cmd}\u001B[0m\r\n`);
-      term.write('\u001B[90mType "help" for available commands.\u001B[0m\r\n\r\n$ ');
-    }
-
-    // Initialize terminal when script loads
-    document.addEventListener('DOMContentLoaded', () => {
-      term = new Terminal({
-        theme: {
-          background: '#161b22',
-          foreground: '#c9d1d9',
-          cursor: '#58a6ff',
-          cursorAccent: '#161b22',
-          selectionBackground: '#388bfd40',
-          black: '#0d1117',
-          red: '#f85149',
-          green: '#3fb950',
-          yellow: '#d29922',
-          blue: '#58a6ff',
-          magenta: '#bc8cff',
-          cyan: '#39c5cf',
-          white: '#c9d1d9',
-        },
-        fontFamily: '"JetBrains Mono", Consolas, Monaco, monospace',
-        fontSize: 14,
-        lineHeight: 1.4,
-        cursorBlink: true,
-        cursorStyle: 'bar',
-        allowTransparency: false,
-        scrollback: 1000,
-        disableStdin: false,
-      });
-
-      // Load fit addon and open terminal
-      const fitAddon = new FitAddon.FitAddon();
-      term.loadAddon(fitAddon);
-      term.open(document.getElementById('terminal'));
-      fitAddon.fit();
-      terminalReady = true;
-
-      // Restart demo function
-      window.restartDemo = function() {
-        if (!term) return;
-        term.clear();
-        term.write('\u001B[90mWelcome to agent-sync demo!\u001B[0m\r\n');
-        isDemoMode = true;
-        currentCmdIndex = 0;
-        setTimeout(runDemo, 300);
-      };
-      
-      // Handle window resize
-      window.addEventListener('resize', () => {
-        if (term && fitAddon) {
-          fitAddon.fit();
-        }
-      });
-      
-      // Force remove any inline styles that xterm might add
-      setTimeout(() => {
-        const terminal = document.getElementById('terminal');
-        if (terminal) {
-          terminal.style.margin = '0';
-          terminal.style.padding = '0';
-        }
-        const xtermEl = terminal?.querySelector('.xterm');
-        if (xtermEl) {
-          xtermEl.style.margin = '0';
-          xtermEl.style.padding = '0';
-        }
-      }, 100);
-
-      // Initial prompt
-      term.write('\u001B[90mWelcome to agent-sync demo!\u001B[0m\r\n');
-      
-      // Start demo
-      setTimeout(runDemo, 500);
-
-      // No interactive input - demo only
-    });
-  </script>
+// Static terminal - just shows the help output as pre-formatted text
+// No JavaScript needed for the terminal display
+</script></script>
 </body>
 </html>
