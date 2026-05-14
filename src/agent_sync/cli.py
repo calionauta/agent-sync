@@ -91,9 +91,6 @@ def push_to_github(message: str = "chore: sync updates") -> bool:
     Returns:
         True if push succeeded or nothing to push, False on error
     """
-    from .sync import SyncManager
-    from .config import Config
-    
     config = Config()
     
     if not config.repo_url:
