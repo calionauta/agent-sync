@@ -101,17 +101,93 @@ def push_to_github(message: str = "chore: sync updates") -> bool:
     try:
         sync_manager = SyncManager(config)
         pushed = sync_manager.push(message=message)
-
+        _render_push_output(pushed)
         if pushed:
-            console.print(f"\n[green]✓ Pushed {len(pushed)} files to GitHub[/green]\n")
             console.print("💡 On other machines, run [green]agent-sync pull[/green]\n")
-        else:
-            console.print("\n[yellow]✓ Nothing to push (already up to date)[/yellow]\n")
         return True
     except Exception as e:
         console.print(f"\n[red]✗ Push failed: {e}[/red]\n")
         console.print("[dim]You can run [green]agent-sync push[/green] manually later.[/dim]\n")
         return False
+
+
+# ---------------------------------------------------------------------------
+# Push output rendering helpers
+# ---------------------------------------------------------------------------
+
+_STATUS_ICONS = {
+    'added': '🆕',
+    'deleted': '🗑️',
+    'modified': '📝',
+}
+
+
+def _status_icon(label: str) -> str:
+    return _STATUS_ICONS.get(label, '📝')
+
+
+def _render_group(category: str, group_name: str, items: list[dict]) -> None:
+    """Render a sub-group (skill/agent) within a category."""
+    labels = set(item['label'] for item in items)
+
+    if len(labels) == 1:
+        # All files in this group have the same status → collapse with *
+        label = labels.pop()
+        icon = _status_icon(label)
+        total = sum(item.get('directory_count') or 1 for item in items)
+        console.print(
+            f"    └── {group_name + '/*':<46} {icon} {label}"
+            f" ({total} file{'s' if total != 1 else ''})"
+        )
+    else:
+        # Mixed statuses → show individual files
+        for item in items:
+            rel = item['path'].rsplit('/', 1)[-1]
+            icon = _status_icon(item['label'])
+            console.print(f"    └── {rel:<46} {icon} {item['label']}")
+
+
+def _render_push_output(pushed: list[dict]) -> None:
+    """Render pushed files with directory grouping and status indicators."""
+    from collections import defaultdict
+
+    if not pushed:
+        console.print('\n✓ Nothing to push', style="yellow")
+        return
+
+    # Categorize by top-level directory
+    top_level = []
+    categories: dict[str, dict[str, list[dict]]] = defaultdict(lambda: defaultdict(list))
+
+    for item in pushed:
+        p = item['path']
+        parts = p.split('/', 2)
+        if len(parts) >= 2 and parts[0] in ('skills', 'configs', 'agents'):
+            categories[parts[0]][parts[1]].append(item)
+        else:
+            top_level.append(item)
+
+    # Count total
+    cat_total = sum(len(v) for cat in categories.values() for v in cat.values())
+    total = len(top_level) + cat_total
+    console.print(f'\n✅ Pushed {total} file{"s" if total != 1 else ""}:')
+
+    # Top-level files (manifest, etc.)
+    for item in top_level:
+        icon = _status_icon(item['label'])
+        console.print(f'  • {item["path"]:<50} {icon} {item["label"]}')
+
+    # Grouped categories
+    for cat_name in ('skills', 'configs', 'agents'):
+        if cat_name not in categories:
+            continue
+        groups = categories[cat_name]
+        group_count = sum(len(v) for v in groups.values())
+        console.print(f'  📂 {cat_name}/ ({group_count} file{"s" if group_count != 1 else ""})')
+        for group_name, items in sorted(groups.items()):
+            _render_group(cat_name, group_name, items)
+
+    console.print()
 
 
 def show_pending_update_notification():
@@ -1088,12 +1164,7 @@ def push(message: str, skills_only: bool, configs_only: bool, agents_only: bool)
 
     try:
         pushed = sync_manager.push(message=message, skills_only=skills_only, configs_only=configs_only, agents_only=agents_only)
-        if pushed:
-            console.print(f"\n✅ Pushed {len(pushed)} files:")
-            for file in pushed:
-                console.print(f"  • {file}", style="green")
-        else:
-            console.print("\n✓ Nothing to push", style="yellow")
+        _render_push_output(pushed)
     except Exception as e:
         console.print(f"\n❌ Error: {e}", style="red")
         raise click.Abort()

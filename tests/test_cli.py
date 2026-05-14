@@ -98,7 +98,9 @@ class TestCLI:
         mock_config.return_value = mock_config_instance
 
         mock_sync_instance = MagicMock()
-        mock_sync_instance.push.return_value = ["config1.json"]
+        mock_sync_instance.push.return_value = [
+            {'path': 'config1.json', 'status': 'M', 'label': 'modified', 'directory_count': None},
+        ]
         mock_sync_mgr.return_value = mock_sync_instance
 
         runner = CliRunner()

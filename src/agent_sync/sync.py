@@ -343,7 +343,8 @@ class SyncManager:
             agents_only: Push only custom agents (not configs or skills)
 
         Returns:
-            List of pushed files
+            List of dicts with 'path', 'status' (git code), 'label' (human-readable),
+            and 'directory_count' (int or None for whole-directory entries)
         """
         if not self.repo_dir.exists():
             raise RuntimeError("Not linked to a repository. Run 'agent-sync init' or 'link' first")
@@ -369,13 +370,47 @@ class SyncManager:
         if not status:
             return []
 
-        # Get list of changed files
+        # Parse git status with detailed info (path, status code, human label)
         changed_files = []
         for line in status.split("\n"):
-            if line.strip():
-                parts = line.split()
-                if len(parts) >= 2:
-                    changed_files.append(parts[-1])
+            stripped = line.strip()
+            if not stripped:
+                continue
+
+            # Parse porcelain format: XY PATH or R100 OLD\tNEW (tab-separated)
+            if '\t' in stripped:
+                # Rename/copy format
+                status_code = stripped[:1]
+                path = stripped.split('\t')[-1]
+            else:
+                parts = stripped.split()
+                status_code = parts[0]
+                path = parts[-1]
+
+            # Classify the status for a human-readable label
+            if status_code == '??':
+                label = 'added'
+            elif 'D' in status_code:
+                label = 'deleted'
+            elif 'A' in status_code:
+                label = 'added'
+            else:
+                label = 'modified'
+
+            # Count files if git reported a whole directory (trailing slash)
+            directory_count = None
+            if path.endswith('/'):
+                dir_path = self.repo_dir / path.rstrip('/')
+                if dir_path.exists():
+                    directory_count = sum(1 for _ in dir_path.rglob('*') if _.is_file())
+                path = path.rstrip('/')
+
+            changed_files.append({
+                'path': path,
+                'status': status_code,
+                'label': label,
+                'directory_count': directory_count,
+            })
 
         # Commit and push
         self._run_git("add", ".")
