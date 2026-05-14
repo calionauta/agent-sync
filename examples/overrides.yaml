@@ -1,0 +1,37 @@
+# Example overrides file for agent-sync
+# Location: ~/.config/agent-sync/overrides.yaml
+#
+# This file contains machine-specific settings
+# ⚠️ This file is NEVER synced to the repository
+
+# Machine identifier (optional)
+machine_name: "macbook-pro-work"
+
+# Agent-specific overrides
+opencode:
+  # Custom config path for this machine
+  custom_config_path: /opt/opencode/config.json
+  
+  # Machine-specific MCP servers
+  mcp_servers:
+    github:
+      enabled: true
+
+claude-code:
+  # Different model preference for this machine
+  default_model: "claude-sonnet-4-20250514"
+  
+  # Local-only settings
+  local_cache_dir: /tmp/claude-cache
+
+qwen-code:
+  # Custom skills path
+  skills_path: ~/Documents/qwen-skills
+  
+  # Local API endpoint
+  api_endpoint: http://localhost:8080
+
+# Global overrides
+custom_env_vars:
+  CUSTOM_API_KEY: "local-key-123"
+  LOCAL_DEBUG: "true"

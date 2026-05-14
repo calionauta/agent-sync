@@ -16,15 +16,18 @@ parts/
 sdist/
 var/
 wheels/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
 # Virtual environments
+.venv/
 venv/
-env/
 ENV/
-.venv
+env/
+.env
 
 # IDE
 .idea/
@@ -35,26 +38,33 @@ ENV/
 
 # Secrets - NEVER SYNC THESE
 .env
-*.env.local
-*secrets*
-*auth*.json
-*credentials*.json
-overrides.yaml
+*.pem
+*.key
+credentials.json
+secrets/
+private/
 
 # OS
 .DS_Store
 Thumbs.db
-*.log
 
 # Test
 .pytest_cache/
 .coverage
 htmlcov/
 .tox/
-
-# Development
 .mypy_cache/
 .ruff_cache/
 
-# Autoresearch logs (experiment-specific)
+# Development
+*.log
+tmp/
+temp/
+
+# Autoresearch (experiment artifacts)
 autoresearch.jsonl
+autoresearch.sh
+
+# Build artifacts
+*.whl
+*.tar.gz
