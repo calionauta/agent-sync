@@ -35,4 +35,5 @@ Remove dead code, fix code smells, DRY up repeated patterns, fix failing tests, 
 - Hatch-VCS versioning must continue working
 
 ## What's Been Tried
-- (none yet for this session)
+- **Experiment 1**: Removed 18 dead/unused functions across agents/__init__.py, transforms.py, registry_loader.py, config.py, and all 4 agent handlers. Fixed 3 failing publish tests (timeout assertions). Removed 23 obsolete transforms tests. LOC -473.
+- **Experiment 2**: Extracted `push_to_github()` helper to eliminate 3 duplicated push-to-GitHub-after-ops blocks in CLI (centralize, reconcile, delete). LOC -28.

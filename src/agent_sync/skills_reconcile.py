@@ -1,58 +1,16 @@
 """Skills reconcile - resolve divergences between local and remote."""
 
-from pathlib import Path
-from typing import Dict, List, Set
+from typing import Dict
 from rich.console import Console
 from rich.prompt import Prompt
+
+from .skills_diff import SkillsDiff
 
 console = Console()
 
 
-class SkillsReconcile:
+class SkillsReconcile(SkillsDiff):
     """Resolve divergences between local and remote skills."""
-
-    def __init__(self):
-        from .config import Config
-        
-        self.config = Config()
-        self.global_skills_dir = Path.home() / ".agents" / "skills"
-        self.repo_dir = None
-        
-        if self.config.repo_url:
-            from .sync import SyncManager
-            sync_manager = SyncManager(self.config)
-            self.repo_dir = sync_manager.repo_dir
-
-    def get_local_skills(self) -> Set[str]:
-        """Get set of local skill names."""
-        if not self.global_skills_dir.exists():
-            return set()
-        
-        skills = set()
-        for item in self.global_skills_dir.iterdir():
-            if item.is_dir() and not item.name.startswith("."):
-                if (item / "SKILL.md").exists():
-                    skills.add(item.name)
-        
-        return skills
-
-    def get_remote_skills(self) -> Set[str]:
-        """Get set of remote skill names from GitHub repo."""
-        if not self.repo_dir or not self.repo_dir.exists():
-            return set()
-        
-        skills = set()
-        remote_skills_dir = self.repo_dir / "skills"
-        
-        if not remote_skills_dir.exists():
-            return set()
-        
-        for item in remote_skills_dir.iterdir():
-            if item.is_dir() and not item.name.startswith("."):
-                if (item / "SKILL.md").exists():
-                    skills.add(item.name)
-        
-        return skills
 
     def reconcile_interactive(self) -> Dict[str, str]:
         """
@@ -64,10 +22,7 @@ class SkillsReconcile:
             - "remote": Keep remote version (download to local)
             - "skip": Keep both for now
         """
-        from .skills_diff import SkillsDiff
-        
-        diff_mgr = SkillsDiff()
-        diff_result = diff_mgr.diff()
+        diff_result = self.diff()
         
         local_only = diff_result["local_only"]
         remote_only = diff_result["remote_only"]
