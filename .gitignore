@@ -55,3 +55,6 @@ htmlcov/
 # Development
 .mypy_cache/
 .ruff_cache/
+
+# Autoresearch logs (experiment-specific)
+autoresearch.jsonl
