@@ -110,3 +110,48 @@ class TestSkillsDiff:
         """get_remote_skills returns empty when repo doesn't exist."""
         diff = self.setup_diff(tmp_path / "local", tmp_path / "nonexistent")
         assert diff.get_remote_skills() == set()
+
+
+class TestSkillsReconcile:
+    """Test SkillsReconcile.apply_decisions logic."""
+
+    def setup_reconcile(self) -> SkillsDiff:
+        from agent_sync.skills_reconcile import SkillsReconcile
+        rec = SkillsReconcile.__new__(SkillsReconcile)
+        rec.global_skills_dir = Path("/nonexistent/local")
+        rec.repo_dir = Path("/nonexistent/repo")
+        return rec
+
+    def test_apply_decisions_local(self):
+        """'local' action increments added_to_remote."""
+        rec = self.setup_reconcile()
+        stats = rec.apply_decisions({"skill-a": "local"}, dry_run=True)
+        assert stats["added_to_remote"] == 1
+        assert stats["downloaded_to_local"] == 0
+        assert stats["skipped"] == 0
+
+    def test_apply_decisions_remote_skipped_dry_run(self):
+        """'remote' action with dry_run=True and missing repo dir is skipped."""
+        rec = self.setup_reconcile()
+        stats = rec.apply_decisions({"skill-a": "remote"}, dry_run=True)
+        assert stats["added_to_remote"] == 0
+        assert stats["downloaded_to_local"] == 0
+        assert stats["skipped"] == 1  # remote_skill doesn't exist
+
+    def test_apply_decisions_skip(self):
+        """'skip' action increments skipped."""
+        rec = self.setup_reconcile()
+        stats = rec.apply_decisions({"skill-a": "skip"}, dry_run=True)
+        assert stats["skipped"] == 1
+
+    def test_apply_decisions_multiple(self):
+        """Multiple decisions with mixed actions."""
+        rec = self.setup_reconcile()
+        stats = rec.apply_decisions({
+            "a": "local",
+            "b": "skip",
+            "c": "remote",
+        }, dry_run=True)
+        assert stats["added_to_remote"] == 1
+        assert stats["skipped"] == 2  # remote (not found) + skip = 2
+        assert stats["downloaded_to_local"] == 0
