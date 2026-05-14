@@ -24,15 +24,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          sparse-checkout: |
+            index.html
+          sparse-checkout-cone-mode: false
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      - name: Create deployment directory
+        run: mkdir -p _site && cp index.html _site/
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: 'index.html'
+          path: '_site'
 
       - name: Deploy to GitHub Pages
         id: deployment
