@@ -718,6 +718,25 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                                 shutil.rmtree(repo_packages_dir)
                             shutil.copytree(package_path, repo_packages_dir, ignore=shutil.ignore_patterns('.git'))
 
+            # Generic extra_paths handling for ALL agents (except pi.dev which has specific handlers above)
+            # This enables backing up directories like ~/.roo/rules/ declared in agent_registry.yaml
+            extra_paths = agent.data.get("extra_paths", {})
+            if extra_paths and agent.name != "pi.dev":
+                for category, source_paths in extra_paths.items():
+                    for source_path_str in source_paths:
+                        source_path = Path(source_path_str).expanduser()
+                        if source_path.exists():
+                            repo_category_dir = self.repo_dir / "configs" / agent.name / category
+                            repo_category_dir.mkdir(parents=True, exist_ok=True)
+                            for item in source_path.iterdir():
+                                if self._should_exclude(item.name):
+                                    continue
+                                dest = repo_category_dir / item.name
+                                if item.is_dir():
+                                    shutil.copytree(item, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns('.git'))
+                                else:
+                                    shutil.copy2(item, dest)
+
     def _stage_agents(self) -> None:
         """
         Stage custom agents for commit.
@@ -1367,6 +1386,28 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                                     shutil.rmtree(dest)
                                 shutil.copytree(package_item, dest, ignore=shutil.ignore_patterns('.git'))
                                 changes.append(f"{agent.name}/package: {package_item.name}")
+
+            # Generic extra_paths restore for ALL agents (except pi.dev which has specific handlers above)
+            # Restores directories like ~/.roo/rules/ declared in agent_registry.yaml
+            extra_paths = agent.data.get("extra_paths", {})
+            if extra_paths and agent.name != "pi.dev":
+                for category, source_paths in extra_paths.items():
+                    synced_category_dir = synced_config_dir / category
+                    if synced_category_dir.exists():
+                        for source_path_str in source_paths:
+                            source_path = Path(source_path_str).expanduser()
+                            source_path.mkdir(parents=True, exist_ok=True)
+                            for item in synced_category_dir.iterdir():
+                                dest = source_path / item.name
+                                if dest.exists() and item.is_file() and self._same_content(dest, item):
+                                    continue
+                                if item.is_dir():
+                                    if dest.exists():
+                                        shutil.rmtree(dest)
+                                    shutil.copytree(item, dest, ignore=shutil.ignore_patterns('.git'))
+                                else:
+                                    shutil.copy2(item, dest)
+                                changes.append(f"{agent.name}/{category}: {item.name}")
 
         return changes
 
