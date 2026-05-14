@@ -82,6 +82,41 @@ def _check_and_notify():
         pass  # Silently fail (don't annoy user)
 
 
+def push_to_github(message: str = "chore: sync updates") -> bool:
+    """Push tracked files to GitHub repository.
+    
+    Args:
+        message: Commit message for the push
+        
+    Returns:
+        True if push succeeded or nothing to push, False on error
+    """
+    from .sync import SyncManager
+    from .config import Config
+    
+    config = Config()
+    
+    if not config.repo_url:
+        console.print("[yellow]⚠ No repository configured yet.[/yellow]")
+        console.print("Run [green]agent-sync init[/green] to create a repository first.\n")
+        return False
+    
+    try:
+        sync_manager = SyncManager(config)
+        pushed = sync_manager.push(message=message)
+        
+        if pushed:
+            console.print(f"\n[green]✓ Pushed {len(pushed)} files to GitHub[/green]\n")
+            console.print("💡 On other machines, run [green]agent-sync pull[/green]\n")
+        else:
+            console.print("\n[yellow]✓ Nothing to push (already up to date)[/yellow]\n")
+        return True
+    except Exception as e:
+        console.print(f"\n[red]✗ Push failed: {e}[/red]\n")
+        console.print("[dim]You can run [green]agent-sync push[/green] manually later.[/dim]\n")
+        return False
+
+
 def show_pending_update_notification():
     """Show update notification if one is pending."""
     if not UPDATE_PENDING_FILE.exists():
@@ -668,28 +703,7 @@ def reconcile(auto: bool, dry_run: bool):
         
         if should_push:
             console.print("\n[bold]📤 Pushing to GitHub...[/]\n")
-            
-            from .sync import SyncManager
-            from .config import Config
-            
-            config = Config()
-            
-            if not config.repo_url:
-                console.print("[yellow]⚠ No repository configured yet.[/yellow]")
-                console.print("Run [green]agent-sync init[/green] to create a repository first.\n")
-            else:
-                try:
-                    sync_manager = SyncManager(config)
-                    pushed = sync_manager.push(message="chore: reconcile skills")
-                    
-                    if pushed:
-                        console.print(f"\n[green]✓ Pushed {len(pushed)} files to GitHub[/green]\n")
-                        console.print("💡 On other machines, run [green]agent-sync pull[/green]\n")
-                    else:
-                        console.print("\n[yellow]✓ Nothing to push (already up to date)[/yellow]\n")
-                except Exception as e:
-                    console.print(f"\n[red]✗ Push failed: {e}[/red]\n")
-                    console.print("[dim]You can run [green]agent-sync push[/green] manually later.[/dim]\n")
+            push_to_github(message="chore: reconcile skills")
 
 
 @skills.command()
@@ -853,28 +867,7 @@ def delete(skill_names: tuple[str, ...], dry_run: bool, push: bool, interactive:
     
     if should_push and not dry_run:
         console.print("\n[bold]📤 Pushing to GitHub...[/]\n")
-        
-        from .sync import SyncManager
-        from .config import Config
-        
-        config = Config()
-        
-        if not config.repo_url:
-            console.print("[yellow]⚠ No repository configured yet.[/yellow]")
-            console.print("Run [green]agent-sync init[/green] to create a repository first.\n")
-        else:
-            try:
-                sync_manager = SyncManager(config)
-                pushed = sync_manager.push(message="chore: delete skills")
-                
-                if pushed:
-                    console.print(f"\n[green]✓ Pushed {len(pushed)} files to GitHub[/green]\n")
-                    console.print("💡 On other machines, run [green]agent-sync pull[/green]\n")
-                else:
-                    console.print("\n[yellow]✓ Nothing to push (already up to date)[/yellow]\n")
-            except Exception as e:
-                console.print(f"\n[red]✗ Push failed: {e}[/red]\n")
-                console.print("[dim]You can run [green]agent-sync push[/green] manually later.[/dim]\n")
+        push_to_github(message="chore: delete skills")
     elif not dry_run:
         console.print("💡 Run [green]agent-sync push[/green] to sync to GitHub\n")
 
@@ -986,28 +979,7 @@ def centralize(copy: bool, push: bool, distribute: bool):
     
     if should_push:
         console.print("\n[bold]📤 Pushing to GitHub...[/]\n")
-        
-        from .sync import SyncManager
-        from .config import Config
-        
-        config = Config()
-        
-        if not config.repo_url:
-            console.print("[yellow]⚠ No repository configured yet.[/yellow]")
-            console.print("Run [green]agent-sync init[/green] to create a repository first.\n")
-        else:
-            try:
-                sync_manager = SyncManager(config)
-                pushed = sync_manager.push(message="chore: centralize skills")
-                
-                if pushed:
-                    console.print(f"\n[green]✓ Pushed {len(pushed)} files to GitHub[/green]\n")
-                    console.print("💡 On other machines, run [green]agent-sync pull[/green]\n")
-                else:
-                    console.print("\n[yellow]✓ Nothing to push (already up to date)[/yellow]\n")
-            except Exception as e:
-                console.print(f"\n[red]✗ Push failed: {e}[/red]\n")
-                console.print("[dim]You can run [green]agent-sync push[/green] manually later.[/dim]\n")
+        push_to_github(message="chore: centralize skills")
     else:
         console.print("💡 Run [green]agent-sync push[/green] to sync to GitHub\n")
 
