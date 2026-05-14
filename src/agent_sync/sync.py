@@ -1024,6 +1024,31 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         
         return copied
 
+    def _copy_item(self, item: Path, src: Path, dest: Path, exclude: Optional[list[str]] = None, preserve_symlinks: bool = True) -> int:
+        """Copy a single item (symlink, file, or directory) preserving relative path."""
+        rel_path = item.relative_to(src)
+        dest_item = dest / rel_path
+        
+        if self._should_exclude(str(rel_path), exclude):
+            return 0
+        
+        if item.is_symlink() and preserve_symlinks:
+            if dest_item.exists() or dest_item.is_symlink():
+                dest_item.unlink()
+            dest_item.parent.mkdir(parents=True, exist_ok=True)
+            dest_item.symlink_to(item.readlink())
+            return 1
+        
+        if item.is_file():
+            dest_item.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(item, dest_item)
+            return 1
+        
+        if item.is_dir():
+            return self._copy_directory(item, dest_item, exclude, preserve_symlinks)
+        
+        return 0
+
     def _copy_path_pattern(
         self,
         src: Path,
@@ -1050,72 +1075,23 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         
         copied = 0
         
-        # Handle different pattern types
         if pattern.endswith("/"):
             # Directory pattern - copy entire directory
             dir_path = src / pattern.rstrip("/")
             if dir_path.exists():
                 dest_dir = dest / pattern.rstrip("/")
-                copied += self._copy_directory(
-                    dir_path, dest_dir, exclude, preserve_symlinks
-                )
+                copied += self._copy_directory(dir_path, dest_dir, exclude, preserve_symlinks)
         elif "**" in pattern:
             # Recursive glob pattern
-            # Extract the file pattern from "**/*.ext" or "**/dir/*"
-            # For "**/*.js", we want to match all .js files recursively
-            file_pattern = pattern.replace("**/", "*").replace("**", "*")
-            
             for item in src.rglob("*"):
-                # Match against relative path
                 rel_path_str = str(item.relative_to(src))
-                
-                # Check if matches pattern
-                matches = fnmatch.fnmatch(rel_path_str, pattern) or fnmatch.fnmatch(item.name, file_pattern)
-                
-                if not matches:
-                    continue
-                
-                if item.is_symlink() and preserve_symlinks:
-                    rel_path = item.relative_to(src)
-                    dest_item = dest / rel_path
-                    if not self._should_exclude(str(rel_path), exclude):
-                        if dest_item.exists() or dest_item.is_symlink():
-                            dest_item.unlink()
-                        dest_item.parent.mkdir(parents=True, exist_ok=True)
-                        dest_item.symlink_to(item.readlink())
-                        copied += 1
-                elif item.is_file():
-                    rel_path = item.relative_to(src)
-                    if not self._should_exclude(str(rel_path), exclude):
-                        dest_item = dest / rel_path
-                        dest_item.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copy2(item, dest_item)
-                        copied += 1
+                file_pattern = pattern.replace("**/", "*").replace("**", "*")
+                if fnmatch.fnmatch(rel_path_str, pattern) or fnmatch.fnmatch(item.name, file_pattern):
+                    copied += self._copy_item(item, src, dest, exclude, preserve_symlinks)
         else:
             # Simple path or single wildcard
             for item in src.glob(pattern):
-                if item.is_symlink() and preserve_symlinks:
-                    rel_path = item.relative_to(src)
-                    dest_item = dest / rel_path
-                    if not self._should_exclude(str(rel_path), exclude):
-                        if dest_item.exists() or dest_item.is_symlink():
-                            dest_item.unlink()
-                        dest_item.parent.mkdir(parents=True, exist_ok=True)
-                        dest_item.symlink_to(item.readlink())
-                        copied += 1
-                elif item.is_file():
-                    rel_path = item.relative_to(src)
-                    if not self._should_exclude(str(rel_path), exclude):
-                        dest_item = dest / rel_path
-                        dest_item.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copy2(item, dest_item)
-                        copied += 1
-                elif item.is_dir():
-                    # Copy entire directory
-                    dest_dir = dest / item.name
-                    copied += self._copy_directory(
-                        item, dest_dir, exclude, preserve_symlinks
-                    )
+                copied += self._copy_item(item, src, dest, exclude, preserve_symlinks)
         
         return copied
 
