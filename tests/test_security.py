@@ -6,6 +6,18 @@ from agent_sync.validators import validate_skill_name, validate_repo_name, valid
 from agent_sync.skills_delete import SkillsDeleter
 
 
+def test_validate_repo_name_argument_injection():
+    """Verify argument injection prevention in repo names."""
+    assert validate_repo_name("-bad/repo") is False
+    assert validate_repo_name("owner/repo") is True
+
+
+def test_validate_github_url_argument_injection():
+    """Verify argument injection prevention in GitHub URLs."""
+    assert validate_github_url("https://github.com/-bad/repo") is False
+    assert validate_github_url("https://github.com/owner/repo") is True
+
+
 def test_validate_skill_name_security():
     """Verify that validate_skill_name blocks dangerous names."""
     # Safe names
