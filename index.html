@@ -309,10 +309,11 @@
 
     .terminal-body {
       flex: 1;
-      min-height: 0;
-      overflow: hidden;
+      min-height: 300px;
+      overflow: auto;
       padding: 0;
       margin: 0;
+      display: block;
     }
 
     #terminal {
@@ -333,9 +334,8 @@
     }
     .terminal-output-wrapper {
       padding: 16px;
+      min-height: 300px;
       overflow-x: auto;
-      max-height: 450px;
-      overflow-y: auto;
     }
     
     .terminal-prompt {
@@ -347,6 +347,7 @@
     
     .terminal-output {
       margin: 0;
+      display: block;
       font-family: var(--font-mono);
       font-size: 12px;
       line-height: 1.5;
