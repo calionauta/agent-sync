@@ -272,7 +272,10 @@ class SetupWizard:
                     unique_skill_names.add(skill_path.name)
 
             total_unique = len(unique_skill_names)
-            total_copies = sum(len(s) for s in skills_found.values())
+            total_copies = sum(
+                len(s.get("paths", [])) if isinstance(s, dict) else len(s)
+                for s in skills_found.values()
+            )
 
             if total_copies > total_unique:
                 console.print(
