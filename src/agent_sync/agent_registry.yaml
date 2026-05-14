@@ -42,7 +42,7 @@ claude-code:
   method: copy
   config_dir: "~/.claude"
   config_filename: "settings.json"
-  config_patterns: ["*.json", "AGENTS.md", "SYSTEM.md"]
+  config_patterns: ["*.json", "AGENTS.md", "SYSTEM.md", "CLAUDE.md"]
   skills_dir_name: "commands"
   agents_dir_name: "agents"
   agents_dir_global: "~/.claude/agents"
@@ -53,7 +53,7 @@ gemini-cli:
   method: copy
   config_dir: "~/.gemini"
   config_filename: "settings.json"
-  config_patterns: ["*.json", "AGENTS.md", "SYSTEM.md"]
+  config_patterns: ["*.json", "AGENTS.md", "SYSTEM.md", "GEMINI.md"]
   skills_dir_name: "tools"
   check:
     binary: "gemini"
@@ -88,7 +88,7 @@ qwen-code:
   method: copy
   config_dir: "~/.qwen"
   config_filename: "settings.json"
-  config_patterns: ["*.json", "AGENTS.md", "SYSTEM.md"]
+  config_patterns: ["*.json", "AGENTS.md", "SYSTEM.md", "output-language.md"]
   skills_dir_name: "skills"
   check:
     binary: "qwen"
@@ -114,6 +114,9 @@ roocode:
   notes: "Native support for ~/.agents/skills/ (higher priority than ~/.roo/skills/)"
   mode_specific: true  # Supports skills-code/, skills-architect/, etc.
   migrate_from: "~/.roo/skills/"
+  extra_paths:
+    # Global rules directory (~/.roo/rules/) — agent instructions compartilhadas
+    rules: ["~/.roo/rules"]
 
 cline:
   method: copy
