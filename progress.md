@@ -1,65 +1,87 @@
-# Progress — Safe Centralize + DotAgents Protocol
+# Progress — agent-sync v0.15+
 
 ## Status
-✅ Complete — All 3 scopes done
+✅ Complete — All features implemented
 
-## Scopes
+---
 
-### SCOPE 1: centralize-safe-mode ✅
-**Changes to src/agent_sync/skills.py:**
-- `_compute_dir_hash()` — recursive MD5 hash for content comparison
-- `_find_orphans()` — categorizes skills into hub vs orphans
-- `_orphan_selection_tui()` — interactive TUI (Hybrid A+E, default none)
-- `_post_selection_prompt()` — Keep or Remove unselected orphans
-- `centralize()` — pipeline reordered: scan → TUI → import → keep/remove → cleanup → configure
-- `_remove_orphans_from_agents()` — controlled cleanup
-- `configure_agents()` — no longer calls `_cleanup_agent_local_skills()`
+## Features Implemented
 
-**Changes to src/agent_sync/cli.py:**
-- `--yes` flag: non-interactive, skip all orphans
-- `--import-all` flag: import all orphans (old behavior)
-- `--dry-run` flag: preview without executing
-- `--dot-agents` flag: ensure ~/.agents/ DotAgents protocol structure
+### Safe Centralize (v0.15)
 
-### SCOPE 2: centralize-tests-docs ✅
-**New tests in tests/test_skills_logic.py (7 new, 133 total):**
-- `test_centralize_yes_skips_orphans`
-- `test_centralize_import_all_imports_orphans`
-- `test_centralize_fresh_setup_auto_import`
-- `test_centralize_dry_run_does_not_move`
-- `test_compute_dir_hash`
-- `test_find_orphans_empty_hub`
-- `test_find_orphans_skill_in_hub`
+**3 camadas de proteção no pipeline do `centralize()`:**
 
-**README.md updated:**
-- New flags section with --yes, --import-all, --dry-run, --dot-agents
-- DotAgents Protocol compatibility badge
+1. **TUI de seleção de órfãos** (Hybrid A+E)
+   - Interactive TUI com checkboxes
+   - Default: nenhum selecionado (seguro)
+   - Atalhos: `a`=all, `n`=none, Enter=done
 
-**skills/agent-sync/SKILL.md updated:**
-- New flags and safety flow section
+2. **Content comparison via hash**
+   - `_compute_dir_hash()` — recursive MD5 hash
+   - Detecta cópias divergentes (⚠️ diverge)
 
-### SCOPE 3: dotagents-protocol ✅
-**New files:**
-- `src/agent_sync/centralize/handlers/dot_agents_handler.py` — DotAgentsHandler class
-  - `fmt()` method for path normalization (fmt:.agents)
-  - `ensure_structure()` for creating ~/.agents/ structure
-  - `list_subdirs()` for listing .agents/ subdirectories
+3. **Pós-seleção Keep/Remove**
+   - Mantém ou remove órfãos não-selecionados
+   - Controlled cleanup
 
-**agent_registry.yaml updated:**
-- Protocol alignment header comments
-- VS Code Extensions section with DotAgents notes
+**New CLI flags:**
+- `--yes` — Non-interactive: skip all orphans
+- `--import-all` — Import all orphans (old behavior)
+- `--dry-run` — Preview without modifying
 
-**docs/dotagents.md created:**
-- Protocol analysis and alignment documentation
+### DotAgents Protocol Compatibility (v0.15+)
 
-## Pending Documentation Updates
+**Implemented:**
+- `~/.agents/skills/` como hub canônico (DotAgents compliant)
+- `~/.agents/` estrutura automática (sem flag)
+- `DotAgentsHandler` com `fmt:.agents` para normalização de paths
 
-### Required:
-1. **README.md**: Add `--dot-agents` flag to centralize command description
-2. **CHANGELOG.md**: Already has safe centralize + DotAgents alignment sections
-3. **docs/dotagents.md**: Already created
+**Files:**
+- `src/agent_sync/centralize/handlers/dot_agents_handler.py`
+- `src/agent_sync/centralize/handlers/__init__.py`
 
-### Optional improvements:
-1. Add `--dot-agents` flag example to README centralize section
-2. Create test for DotAgentsHandler.fmt() method
-3. Document DotAgents protocol in contributing guide
+**Config export (`config export`):**
+- `agent-sync config export` → `~/.agents/config.json`
+- Formato JSON compatível com DotAgents
+
+**MCP export (`mcp`):**
+- `agent-sync mcp --dry-run` — preview merge
+- `agent-sync mcp --force` — export unified MCP config
+- Detecta e reporta conflitos entre vendors
+
+### Documentation
+
+- **AGENTS.md**: Seção DotAgents Protocol Alignment adicionada
+- **README.md**: Seção DotAgents Protocol com tabela comparativa
+- **docs/dotagents-comparison.md**: Comparação completa agent-sync vs DotAgents
+- **docs/dotagents.md**: Análise do protocolo
+- **CHANGELOG.md**: Todas as features documentadas
+
+---
+
+## Test Coverage
+
+| Metric | Value |
+|--------|-------|
+| Total tests | 167 |
+| Test files | 17 |
+| LOC | 7,228 |
+| Exit code | 0 failures |
+
+---
+
+## Files Changed (v0.15 release)
+
+| File | Changes |
+|------|---------|
+| `src/agent_sync/skills.py` | +512 lines (safe centralize pipeline) |
+| `src/agent_sync/cli.py` | +17 lines (config export, mcp commands) |
+| `src/agent_sync/config_exporter.py` | New (JSON export) |
+| `src/agent_sync/mcp_merger.py` | New (MCP merge) |
+| `src/agent_sync/centralize/handlers/dot_agents_handler.py` | New |
+| `tests/test_config_exporter.py` | New (13 tests) |
+| `tests/test_mcp_merger.py` | New (13 tests) |
+| `tests/test_dotagents_handler.py` | New (9 tests) |
+| `README.md` | Updated (DotAgents section) |
+| `AGENTS.md` | Updated (DotAgents section) |
+| `CHANGELOG.md` | Updated |

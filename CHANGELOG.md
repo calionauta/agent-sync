@@ -43,6 +43,25 @@ New CLI flags:
 
 **Files:** `docs/dotagents.md`, `src/agent_sync/agent_registry.yaml`
 
+#### DotAgents Config Export
+
+**New command:** `agent-sync config export`
+- Exports current registry to `~/.agents/config.json`
+- DotAgents Protocol compatible format
+- Options: `--dry-run`, `--output PATH`
+
+**Files:** `src/agent_sync/config_exporter.py`, `tests/test_config_exporter.py`
+
+#### DotAgents MCP Unified Export
+
+**New command:** `agent-sync mcp`
+- Scans vendor MCP configs (`~/.claude/mcp.json`, etc.)
+- Merges into `~/.agents/mcp.json`
+- Detects conflicts (same server in multiple configs)
+- Options: `--dry-run`, `--force`, `--conflicts`, `-s/--source PATH`
+
+**Files:** `src/agent_sync/mcp_merger.py`, `tests/test_mcp_merger.py`
+
 #### Rich Push Output with Status Indicators
 
 **Problem:**  
