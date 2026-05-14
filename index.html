@@ -331,6 +331,47 @@
       white-space: pre;
       overflow-x: auto;
     }
+    .demo-terminals {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      padding: 16px;
+    }
+    
+    .demo-terminal {
+      background: var(--bg-primary);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      border: 1px solid var(--bg-tertiary);
+    }
+    
+    .demo-terminal-header {
+      padding: 8px 12px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--accent-green);
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--bg-tertiary);
+    }
+    
+    .demo-terminal .terminal-output {
+      margin: 0;
+      padding: 12px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.4;
+      color: var(--text-primary);
+      white-space: pre;
+      overflow-x: auto;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    
+    @media (max-width: 768px) {
+      .demo-terminals {
+        grid-template-columns: 1fr;
+      }
+    }
 
     /* ═══════════════════════════════════════════════════════════
        FEATURES SECTION
@@ -801,66 +842,67 @@
           <div class="terminal-title">Terminal — agent-sync</div>
         </div>
         <div class="terminal-body">
-          <pre class="terminal-output">Usage: agent-sync [OPTIONS] COMMAND [ARGS]...
+          
+        <div class="demo-terminals">
+          <div class="demo-terminal">
+            <div class="demo-terminal-header">$ agent-sync agents</div>
+            <pre class="terminal-output">
+🤖 Supported Agents
 
-  🔄 agent-sync - Sync configs and skills across multiple AI agents.
+┏━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Agent       ┃ Status ┃ Sync  ┃ Skills Method ┃ Config Path                   ┃
+┡━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ opencode    │ ✓      │ 🟢 ON │ config        │ /Users/cali/.config/opencode… │
+│ claude-code │ ✗      │ 🟢 ON │ copy          │ /Users/cali/.claude/settings… │
+│ gemini-cli  │ ✓      │ 🟢 ON │ copy          │ /Users/cali/.gemini/settings… │
+│ pi.dev      │ ✓      │ 🟢 ON │ native        │ /Users/cali/.pi/agent/settin… │
+│ qwen-code   │ ✓      │ 🟢 ON │ copy          │ /Users/cali/.qwen/settings.j… │
+│ roocode     │ ✗      │ 🟢 ON │ native        │ /Users/cali/.roo/custom_mode… │
+│ cline       │ ✗      │ 🟢 ON │ copy          │ /Users/cali/.cline/state.json │
+│ cursor      │ ✗      │ 🟢 ON │ native        │ /Users/cali/.cursor/settings… │
+│ windsurf    │ ✗      │ 🟢 ON │ copy          │ /Users/cali/.codeium/windsur… │
+└─────────────┴────────┴───────┴───────────────┴───────────────────────────────┘
 
-  Supported agents: opencode, claude-code, gemini-cli, pi.dev, qwen-code
+💡 Use 'agent-sync enable &lt;agent&gt;' or 'agent-sync disable &lt;agent&gt;' to toggle 
+sync
 
-Options:
-  --version  Show the version and exit.
-  --help     Show this message and exit.
+🔧 How to customize skills method:
+  Edit your config with agent-sync config edit and add:
+  agents_config:
+    claude-code:
+      skills_method: copy  # Options: native, config, copy
 
-🔄 Sync Commands:
-  push    Commit and push local changes. [-m, --skills-only, --configs-only,
-          --agents-only]
-  pull    Fetch and apply remote configuration. [--force, --skills-only,
-          --configs-only, --agents-only]
-  status  Show sync status and last sync times.
-
-🤖 Agent Management:
-  agents   List supported agents and their status.
-  enable   Enable sync for a specific agent.
-  disable  Disable sync for a specific agent.
-
-⚙️  Configuration:
-  setup            Run the interactive setup wizard to...
-  init             Initialize a new sync repository (first... [--name,
-                   --agents, --no-wizard, --force]
-  link             Link to an existing sync repository...
-  config           Manage configuration (view, edit, reset).
-    ├── edit       Open configuration file in editor.
-    ├── export     Export configuration to DotAgents JSON... [--dry-run,
-                   --output]
-    ├── repo       View or set the GitHub repository URL. [--remove]
-    ├── reset      Reset configuration to defaults (keeps... [--yes]
-    └── show       Show current configuration.
-  generate-config  Generate initial configuration file. [--agent]
-
-📚 Skills &amp; Agents:
-  skills            Manage global skills.
-    ├── centralize  Centralize skills from all agents to... [--copy, --push,
-                    --distribute, --yes, --import-all, --dry-run]
-    ├── delete      Delete skills from hub and all agent... [--dry-run,
-                    --push, --interactive]
-    ├── diff        Show differences between local and remote...
-    ├── list        List all centralized skills.
-    ├── publish     [DEPRECATED] Use 'agent-sync publish... [--repo, --dry-
-                    run, --interactive]
-    └── reconcile   Reconcile differences between local and... [--auto, --dry-
-                    run]
-  custom-agents     Manage custom agents (.claude/agents/,...
-    └── list        List custom agents for all supported agents.
-
-🛠️  System:
-  update         Check for available updates and install them.
-  version        Show version information.
-  secrets        Manage secrets and environment variables.
-    ├── disable  Disable secrets synchronization.
-    ├── edit     Edit secrets in your $EDITOR.
-    ├── enable   Enable secrets synchronization.
-    └── list     List all secrets and environment variables.
 </pre>
+          </div>
+          <div class="demo-terminal">
+            <div class="demo-terminal-header">$ agent-sync status</div>
+            <pre class="terminal-output">
+📊 Sync Status
+
+┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┓
+┃ Agent       ┃ Status           ┃ Installed ┃ Last Sync           ┃ Changes   ┃
+┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━┩
+│ opencode    │ ✅ active        │ ✓         │ 2026-05-14T17:51:0… │ 107 files │
+│ claude-code │ ⚠️ not_installed │ ✗         │ 2026-05-14T17:51:0… │ -         │
+│ gemini-cli  │ ✅ active        │ ✓         │ 2026-05-14T17:51:0… │ -         │
+│ pi.dev      │ ✅ active        │ ✓         │ 2026-05-14T17:51:0… │ -         │
+│ qwen-code   │ ✅ active        │ ✓         │ 2026-05-14T17:51:0… │ -         │
+│ roocode     │ ⚠️ not_installed │ ✗         │ 2026-05-14T17:51:0… │ -         │
+│ cline       │ ⚠️ not_installed │ ✗         │ 2026-05-14T17:51:0… │ -         │
+│ cursor      │ ⚠️ not_installed │ ✗         │ 2026-05-14T17:51:0… │ -         │
+│ windsurf    │ ⚠️ not_installed │ ✗         │ 2026-05-14T17:51:0… │ -         │
+└─────────────┴──────────────────┴───────────┴─────────────────────┴───────────┘
+
+Legend:
+  ✅ active = Enabled in config + Installed
+  ⚠️ not_installed = Enabled in config but not installed
+  ❌ disabled = Disabled in config
+
+🔗 Repository: https://github.com/renatocaliari/agent-sync-configs.git
+</pre>
+          </div>
+        </div>
+      </div>
         </div>
       </div>
     </div>
