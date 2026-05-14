@@ -57,6 +57,40 @@ agents_config:
 
 ---
 
+## [0.19.0] - 2026-05-15
+
+### 🧹 Code Quality — 39 Experiments Across 10 Sessions
+
+**Cleanup:**
+- Removed 25 dead/unused functions, 15 unused imports, 3 dead parameters
+- Eliminated 30+ duplication instances via shared helpers (`push_to_github()`, `_stage_pi_extra_paths()`, `_restore_pi_extra_paths()`, `_copy_item()`, `scan_skills_dir()`, `_step_title()`, `parse_multiselect_input()`)
+- Modernized typing: `List` / `Dict` / `Set` → `list` / `dict` / `set` (14 files)
+- Simplified `skills_reconcile.py` — now inherits from `SkillsDiff`, 3 duplicated methods eliminated
+- `secrets.py` shrunk from 198 to 60 lines (7 dead methods removed)
+- `transforms.py` removed entirely (168 lines, all dead code)
+
+**Bug Fixes:**
+- Fixed 3 failing publish tests (timeout assertion mismatch)
+- Fixed `setup.py` extension-skills iteration crash (dict vs list type mismatch)
+- Fixed `config.py` YAML loading — defensive `isinstance` checks prevent `AttributeError` on malformed configs
+- Fixed `_load_state` — try/except prevents crash on corrupted state file
+
+**Tests:**
+- Added 23 new tests: 14 for `parse_multiselect_input()`, 13 for `scan_skills_dir()` + `SkillsDiff.diff()`, 4 for `SkillsReconcile.apply_decisions()`, 6 for `generate_readme()`
+- Total: 126 tests, all passing (+20 net from baseline 106)
+- Removed 2 obsolete test files (`test_transforms.py`, `test_security_harden.py`)
+
+**Dev Experience:**
+- Updated `pyproject.toml`: Python 3.13/3.14 classifiers + Black targets, bumped ruff/black minimums, added `RUF100` ruff rule
+- CI matrix expanded to test Python 3.10–3.14 (was 3.10–3.12)
+- `docs/adding-agents.md` — removed references to dead `sync_skills` method, fixed Cline/Windsurf examples, expanded schema docs
+- `README.md` — expanded CLI commands reference, fixed quick-start flow, removed nonexistent `--private` flag example
+- `skills/agent-sync/SKILL.md` — removed reference to nonexistent `secrets export` command
+
+**Files Changed:** 44 files, +1,709 / −2,425 lines (net −716)
+
+---
+
 ## [0.15.1] - 2026-03-06
 
 ### 🐛 Critical Fix: Extension Skills Not Centralized
