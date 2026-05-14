@@ -8,17 +8,17 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ New Features
 
-#### Safe Centralize — Proteção contra importação não-intencional de skills
+#### Safe Centralize — Protection against unintentional skill import
 
 **Problem:**
-`agent-sync skills centralize` escaneava agentes e importava skills de volta pro hub sem diferenciação, causando ressurreição de skills deletadas, importação de cópias velhas, e destruição silenciosa de skills não-selecionadas.
+`agent-sync skills centralize` scanned agents and imported skills back to the hub without differentiation, causing resurrection of deleted skills, importing old copies, and silent destruction of unselected skills.
 
 **Solution:**
-Pipeline reordenado com 3 camadas de proteção:
+Pipeline reordered with 3 layers of protection:
 
-1. **TUI de seleção de órfãos** (Hybrid A+E): Interactive TUI with checkboxes, default none selected. Atalhos `a`=all, `n`=none, Enter=done.
+1. **Orphan selection TUI** (Hybrid A+E): Interactive TUI with checkboxes, default none selected. Shortcuts: `a`=all, `n`=none, Enter=done.
 2. **Content comparison via hash**: Recursive MD5 hash detects divergent copies. Shows `⚠️ diverge` when agent copies differ.
-3. **Pós-seleção Keep/Remove**: Após importar selecionadas, pergunta o que fazer com as não-selecionadas — Keep (default) ou Remove.
+3. **Post-selection Keep/Remove**: After importing selected, asks what to do with unselected — Keep (default) or Remove.
 
 New CLI flags:
 - `--yes` — Non-interactive: skip all orphans, auto-keep
