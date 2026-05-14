@@ -1,11 +1,11 @@
 """Integration tests for all skills configuration methods (native, config, copy)."""
 
 import json
-import shutil
 from pathlib import Path
 from unittest.mock import patch
-from agent_sync.skills import SkillsManager
+
 from agent_sync.agents import BaseAgent
+from agent_sync.skills import SkillsManager
 
 
 def setup_mock_environment(tmp_path):
@@ -77,7 +77,7 @@ def test_method_copy_performs_physical_copy(tmp_path):
     home, global_dir = setup_mock_environment(tmp_path)
     agent_home = home / ".copy-agent"
     agent_home.mkdir(parents=True)
-    
+
     # Create agent skills directory (required for copy method)
     agent_skills_dir = agent_home / "plugins"
     agent_skills_dir.mkdir(parents=True)
@@ -129,7 +129,7 @@ def test_centralize_with_conflicts(tmp_path):
 
 def test_centralize_does_not_move_extension_skills(tmp_path):
     """Test that centralize does NOT move skills from extension subdirectories.
-    
+
     Extension skills (e.g., ~/.config/opencode/superpowers/skills/) should:
     - Stay in their original location
     - Only be backed up via symlinks during push
@@ -171,7 +171,7 @@ def test_centralize_does_not_move_extension_skills(tmp_path):
     with patch("agent_sync.skills.get_all_agents", return_value=[agent]), \
          patch.object(manager, '_sync_from_repo', return_value=0):
         # Use dry_run=False to actually move files, move=True to move (not copy)
-        stats = manager.centralize(dry_run=False, move=True)
+        manager.centralize(dry_run=False, move=True)
 
     # Extension skill should NOT be moved to global directory
     assert not (global_dir / "extension-skill").exists(), \

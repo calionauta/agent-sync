@@ -1,9 +1,12 @@
-import pytest
-import subprocess
 import json
-from unittest.mock import MagicMock, patch, ANY
+import subprocess
 from pathlib import Path
+from unittest.mock import ANY, MagicMock, patch
+
+import pytest
+
 from agent_sync.publish import publish_skills
+
 
 class TestPublish:
     """Tests for publishing functionality."""
@@ -63,7 +66,7 @@ class TestPublish:
         # Check that git push was called
         mock_run.assert_any_call(
             ["git", "push", "-u", "origin", "main", "--force"],
-            cwd=ANY, capture_output=True, check=True
+            cwd=ANY, capture_output=True, check=True, timeout=120
         )
 
     @patch("agent_sync.publish.get_available_skills")
@@ -103,7 +106,7 @@ class TestPublish:
         assert result is False
         mock_run.assert_any_call(
             ["git", "push", "-u", "origin", "main", "--force"],
-            cwd=ANY, capture_output=True, check=True
+            cwd=ANY, capture_output=True, check=True, timeout=120
         )
 
     @patch("agent_sync.publish.get_available_skills")
@@ -140,7 +143,7 @@ class TestPublish:
 
         # Verify
         assert result is False
-        mock_run.assert_any_call(["git", "init"], cwd=ANY, capture_output=True, check=True)
+        mock_run.assert_any_call(["git", "init"], cwd=ANY, capture_output=True, check=True, timeout=15)
 
     @patch("agent_sync.publish.get_available_skills")
     def test_publish_skills_no_skills_available(self, mock_get_skills):

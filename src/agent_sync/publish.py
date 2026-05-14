@@ -4,21 +4,19 @@ Publish selected skills to a PUBLIC repository for sharing with the community.
 Separate from private agent-sync-configs repository.
 """
 
+import json
 import shutil
 import subprocess
 import tempfile
-import json
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Set
 
 import yaml
-from rich.console import Console
-from rich.live import Live
-from rich.layout import Layout
-from rich.panel import Panel
-from rich.prompt import Prompt, Confirm
-from rich.table import Table
 from rich import box
+from rich.console import Console
+from rich.panel import Panel
+from rich.prompt import Confirm, Prompt
+from rich.table import Table
+
 from .config import Config
 from .validators import validate_github_url, validate_repo_name
 
@@ -33,11 +31,11 @@ def get_available_skills() -> list[dict]:
     skills_list = []
     if not SKILLS_DIR.exists():
         return []
-        
+
     for item in SKILLS_DIR.iterdir():
         if item.name.startswith("."):
             continue
-        
+
         # We consider anything in the skills directory a publishable unit
         if item.is_dir() or (item.is_file() and item.suffix in [".md", ".py", ".sh"]):
             skills_list.append({
@@ -58,47 +56,35 @@ def render_selection_table(skills: list, selected_names: set) -> Table:
         is_selected = skill["name"] in selected_names
         status = "[bold green]✓[/]" if is_selected else "[red]○[/]"
         table.add_row(str(i), status, skill["name"])
-    
+
     return table
 
 
 def interactive_selection(skills: list, initial_selected: set) -> set:
     """TUI for selecting skills to publish."""
+    from ._selection import parse_multiselect_input
+
     selected = set(initial_selected)
-    
+    item_names = [s["name"] for s in skills]
+
     while True:
         console.clear()
         console.print("\n[bold magenta]📤 Select Skills to Publish[/bold magenta]\n")
-        
+
         table = render_selection_table(skills, selected)
         console.print(table)
-        
+
         console.print("\n[bold]Controls:[/bold]")
         console.print("  • Enter numbers to toggle (e.g. [green]'1,3,5'[/green])")
         console.print("  • Type [cyan]'all'[/cyan] or [cyan]'none'[/cyan]")
         console.print("  • Press [bold white]Enter[/] when done")
-        
+
         choice = Prompt.ask("\nSelection", default="done")
-        
-        if choice.lower() in ["done", ""]:
+        result = parse_multiselect_input(choice, item_names, selected)
+        if result is None:
             break
-        elif choice.lower() == "all":
-            selected = {s["name"] for s in skills}
-        elif choice.lower() == "none":
-            selected = set()
-        else:
-            try:
-                indices = [int(x.strip()) - 1 for x in choice.split(",")]
-                for idx in indices:
-                    if 0 <= idx < len(skills):
-                        name = skills[idx]["name"]
-                        if name in selected:
-                            selected.remove(name)
-                        else:
-                            selected.add(name)
-            except ValueError:
-                pass
-                
+        selected = result
+
     return selected
 
 
@@ -110,18 +96,18 @@ def show_selection_summary(selected_names: set) -> bool:
     for name in sorted(list(selected_names)):
         summary_table.add_row(f"  • {name}")
     console.print(summary_table)
-    
+
     return Confirm.ask("\n[bold]Confirm this selection?[/]", default=True)
 
 
-def publish_skills(repo_url: Optional[str] = None, dry_run: bool = False, interactive: bool = False) -> bool:
+def publish_skills(repo_url: str | None = None, dry_run: bool = False, interactive: bool = False) -> bool:
     """Publish selected skills to a public GitHub repository."""
     if repo_url and not validate_github_url(repo_url):
         console.print(f"\n[red]✗ Invalid repository URL: {repo_url}[/red]\n")
         return False
 
     config = Config()
-    
+
     # 1. Scan for skills on disk
     available_skills = get_available_skills()
     if not available_skills:
@@ -140,7 +126,7 @@ def publish_skills(repo_url: Optional[str] = None, dry_run: bool = False, intera
 
     # 3. Interactive flow
     selected_names = set()
-    
+
     if interactive:
         confirmed = False
         while not confirmed:
@@ -157,9 +143,9 @@ def publish_skills(repo_url: Optional[str] = None, dry_run: bool = False, intera
                 console.print("  [[bold green]u[/]] Use this selection")
                 console.print("  [[bold cyan]e[/]] Edit selection")
                 console.print("  [[bold magenta]a[/]] Select ALL available")
-                
+
                 choice = Prompt.ask("\nChoice", choices=["u", "e", "a"], default="u")
-                
+
                 if choice == "u":
                     selected_names = set(saved_selection)
                     confirmed = True
@@ -176,7 +162,7 @@ def publish_skills(repo_url: Optional[str] = None, dry_run: bool = False, intera
                     console.print("\n[bold]Publishing Mode[/]")
                     console.print("  [[bold green]a[/]] Publish ALL available")
                     console.print("  [[bold cyan]s[/]] Select specific skills")
-                    
+
                     mode = Prompt.ask("\nChoice", choices=["a", "s"], default="a")
                     if mode == "a":
                         selected_names = available_names
@@ -184,9 +170,9 @@ def publish_skills(repo_url: Optional[str] = None, dry_run: bool = False, intera
                         selected_names = interactive_selection(available_skills, selected_names)
                 else:
                     selected_names = interactive_selection(available_skills, selected_names)
-                
+
                 confirmed = show_selection_summary(selected_names)
-            
+
             if not confirmed:
                 selected_names = set()
                 console.clear()
@@ -195,7 +181,7 @@ def publish_skills(repo_url: Optional[str] = None, dry_run: bool = False, intera
     else:
         # Non-interactive: use saved selection or all available
         selected_names = set(saved_selection) if saved_selection else available_names
-    
+
     # Final skill objects
     selected_skills = [s for s in available_skills if s["name"] in selected_names]
     if not selected_skills:
@@ -235,7 +221,7 @@ def publish_skills(repo_url: Optional[str] = None, dry_run: bool = False, intera
             username = result.stdout.strip() if result.returncode == 0 else "YOUR_USERNAME"
         except Exception:
             username = "YOUR_USERNAME"
-        
+
         default_repo = f"{username}/agent-sync-public-skills"
         repo_url = Prompt.ask(
             "\n[bold]Enter GitHub repository URL for publishing[/]",
@@ -278,17 +264,17 @@ def publish_skills(repo_url: Optional[str] = None, dry_run: bool = False, intera
         tmp_path = Path(tmpdir)
         skills_tmp_dir = tmp_path / "skills"
         skills_tmp_dir.mkdir(parents=True, exist_ok=True)
-        
+
         for skill in selected_skills:
             src, dst = skill["path"], skills_tmp_dir / skill["name"]
             if src.is_dir(): shutil.copytree(src, dst)
             else: shutil.copy2(src, dst)
-        
+
         (tmp_path / "README.md").write_text(generate_readme(selected_skills, repo_url))
         (tmp_path / ".gitignore").write_text("*.json\n*.yaml\n*.yml\n.env\n*auth*\n*token*\n*key*\n*secret*\n*credentials*\n")
-        
+
         console.print(f"\n[bold]📤 Publishing {len(selected_skills)} skills...[/]")
-        
+
         try:
             # Final safety check on repo_name before subprocess
             if not validate_repo_name(repo_name):
@@ -301,7 +287,7 @@ def publish_skills(repo_url: Optional[str] = None, dry_run: bool = False, intera
             subprocess.run(["git", "branch", "-M", "main"], cwd=tmp_path, capture_output=True, check=True, timeout=15)
             subprocess.run(["git", "remote", "add", "origin", repo_url], cwd=tmp_path, capture_output=True, check=True, timeout=15)
             subprocess.run(["git", "push", "-u", "origin", "main", "--force"], cwd=tmp_path, capture_output=True, check=True, timeout=120)
-            
+
             console.print(f"\n[green]✓ Successfully published to {repo_url}![/green]")
             console.print(f"💡 Others can install with: [bold]npx skills add {repo_name}[/]\n")
             return True

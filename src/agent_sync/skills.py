@@ -7,13 +7,11 @@ Supports extension subdirectories (e.g., ~/.config/opencode/superpowers/skills/)
 """
 
 import shutil
-import json
 from pathlib import Path
-from typing import Optional
+
 from rich.console import Console
 
-from .agents import get_all_agents, BaseAgent
-
+from .agents import BaseAgent, get_all_agents
 
 console = Console()
 
@@ -25,7 +23,7 @@ MANIFEST_FILENAME = ".agent-sync-manifest.json"
 class SkillsManager:
     """Manages skills centralization and distribution."""
 
-    def __init__(self, global_skills_dir: Optional[Path] = None):
+    def __init__(self, global_skills_dir: Path | None = None):
         self.global_skills_dir = global_skills_dir or GLOBAL_SKILLS_DIR
         self.conflicts: list[dict] = []
         self.resolved_conflicts: dict[str, str] = {}
@@ -34,30 +32,30 @@ class SkillsManager:
     def _is_extension_symlink(self, symlink: Path, agent: BaseAgent) -> bool:
         """
         Check if symlink points to internal extension directory.
-        
+
         Examples:
             superpowers: ~/.config/opencode/skills/superpowers → ../superpowers/skills/
             → Target resolves to ~/.config/opencode/superpowers/skills/
             → This is INSIDE agent config dir → PRESERVE
-            
+
             User symlink: ~/.config/opencode/skills/my-skill → ~/.agents/skills/my-skill/
             → Target resolves to ~/.agents/skills/my-skill/
             → This is OUTSIDE agent config dir → REMOVE
-        
+
         Args:
             symlink: Path to symlink
             agent: Agent object with config_dir
-            
+
         Returns:
             True if symlink points to internal extension directory
         """
         try:
             # Resolve symlink target (follow the symlink)
             target = symlink.resolve()
-            
+
             # Get agent's config directory (resolved to absolute path)
             config_dir = Path(agent.config_dir).expanduser().resolve()
-            
+
             # Check if target is within agent's config directory
             # This will raise ValueError if target is not relative to config_dir
             target.relative_to(config_dir)
@@ -68,14 +66,14 @@ class SkillsManager:
     def _scan_extension_subdirs(self, agent: BaseAgent) -> dict[str, dict]:
         """
         Scan for extension subdirectories with their own skills/.
-        
+
         Example structure:
             ~/.config/opencode/superpowers/skills/
             ~/.config/opencode/my-extension/skills/
-        
+
         Args:
             agent: Agent object to scan
-            
+
         Returns:
             dict mapping "agent-extension" name to info dict with:
                 - agent: agent name
@@ -86,30 +84,30 @@ class SkillsManager:
         """
         extension_skills = {}
         config_dir = Path(agent.config_dir).expanduser()
-        
+
         if not config_dir.exists():
             return extension_skills
-        
+
         for subdir in config_dir.iterdir():
             # Skip hidden dirs and main skills dir
             if subdir.name.startswith(".") or subdir.name == "skills":
                 continue
-            
+
             if not subdir.is_dir():
                 continue
-            
+
             # Check if subdir has its own skills/
             skills_dir = subdir / "skills"
             if not skills_dir.exists() or not skills_dir.is_dir():
                 continue
-            
+
             # Found extension skills!
             ext_name = f"{agent.name}-{subdir.name}"
-            
+
             # Check if there's a symlink pointing to this skills dir
             symlink_path = agent.skills_path / subdir.name
             symlink_info = None
-            
+
             if symlink_path.is_symlink():
                 try:
                     symlink_target = symlink_path.readlink()
@@ -119,29 +117,29 @@ class SkillsManager:
                     }
                 except (OSError, ValueError):
                     pass
-            
+
             extension_skills[ext_name] = {
                 "agent": agent.name,
                 "extension": subdir.name,
                 "skills_dir": str(skills_dir),
                 "symlink": symlink_info,
             }
-        
+
         return extension_skills
 
     def _is_valid_skill(self, path: Path) -> bool:
         """Check if a directory is a valid skill (has SKILL.md or common skill files)."""
         if not path.is_dir():
             return False
-        
+
         # Check for SKILL.md
         if (path / "SKILL.md").exists():
             return True
-        
+
         # Check for common skill files
         if any(path.glob("*.md")) or any(path.glob("*.py")) or any(path.glob("*.sh")):
             return True
-        
+
         return False
 
     def scan_all_agents(self) -> dict[str, list[Path]]:
@@ -259,7 +257,7 @@ class SkillsManager:
         return conflicts
 
     def resolve_conflicts(
-        self, conflicts: Optional[list[dict]] = None, auto: bool = True
+        self, conflicts: list[dict] | None = None, auto: bool = True
     ) -> dict[str, str]:
         """Resolve conflicts by renaming duplicates.
 
@@ -358,7 +356,7 @@ class SkillsManager:
         # Show what was found (deduplicated)
         unique_skill_names = set()
         total_copies = 0
-        
+
         for agent_name, skill_data in skills_found.items():
             # Handle both old format (list) and new format (dict with "paths")
             if isinstance(skill_data, dict):
@@ -367,13 +365,13 @@ class SkillsManager:
             else:
                 skill_paths = skill_data
                 is_extension = False
-            
+
             total_copies += len(skill_paths)
-            
+
             # Display
             suffix = " [dim](extension - backup only)[/dim]" if is_extension else ""
             console.print(f"  • {agent_name}: [green]{len(skill_paths)}[/green] skills{suffix}")
-            
+
             # Only count non-extension skills for centralization
             if not is_extension:
                 for skill_path in skill_paths:
@@ -411,11 +409,11 @@ class SkillsManager:
             else:
                 skill_paths = skill_data
                 is_extension = False
-            
+
             # Skip extension skills entirely - they are NOT centralized
             if is_extension:
                 continue
-            
+
             for skill_path in skill_paths:
                 skill_name = skill_path.stem if skill_path.is_file() else skill_path.name
                 # Keep first occurrence (or could keep from preferred agent)
@@ -510,14 +508,14 @@ class SkillsManager:
     def _cleanup_user_symlinks(self, preserve_extension_symlinks: bool = True) -> int:
         """
         Remove user-created symlinks from agent skill directories.
-        
+
         Extension symlinks (pointing to internal subdirectories) are preserved.
         User symlinks (pointing to ~/.agents/skills/) are removed.
-        
+
         Args:
             preserve_extension_symlinks: If True, keep symlinks pointing to internal
                                          extension directories (default: True)
-        
+
         Returns:
             Number of symlinks removed
         """
@@ -539,7 +537,7 @@ class SkillsManager:
                         console.print(f"  [dim]Preserving extension symlink: {item.name}[/dim]")
                         symlinks_preserved += 1
                         continue
-                    
+
                     # User symlink - remove
                     try:
                         item.unlink()
@@ -585,7 +583,7 @@ class SkillsManager:
         """
         from .config import Config
         user_config = Config()
-        
+
         # Determine method (priority: user override -> registry default)
         agent_conf = user_config.get_agent_config(agent.name)
         method = agent_conf.get("skills_method") or agent.method
@@ -713,7 +711,7 @@ class SkillsManager:
 
     def _copy_skills_to_agent(self, agent: BaseAgent) -> int:
         """Copy all skills from global dir to agent skills directory.
-        
+
         IMPORTANT: This method assumes agent.skills_path already exists.
         It will NOT create the directory - that check is done in _configure_agent.
         """
@@ -828,7 +826,7 @@ class SkillsManager:
                 console.print(f"    [green]✓ {agent_count} skills copied[/green]")
                 stats["agents_configured"] += 1
             else:
-                console.print(f"    [dim]No new skills to copy[/dim]")
+                console.print("    [dim]No new skills to copy[/dim]")
 
         console.print()
         return stats

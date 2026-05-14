@@ -27,6 +27,14 @@ class SetupWizard:
         self.skills_centralized = False
         self.agent_configure_results: dict = {}
 
+    def _step_title(self, step: str, title: str, description: str = "", border: str = "green") -> None:
+        """Print a standardized step header."""
+        body = f"[bold]{step}: {title}[/]"
+        if description:
+            body += f"\n\n{description}"
+        console.print(Panel.fit(body, border_style=border))
+        console.print()
+
     def run(self) -> bool:
         """Run the complete setup wizard."""
         from . import __version__
@@ -65,13 +73,7 @@ class SetupWizard:
 
     def _step_detect_agents(self) -> None:
         """Step 1: Detect installed agents."""
-        console.print(
-            Panel.fit(
-                "[bold]Step 1: Detecting Installed Agents[/]",
-                border_style="green",
-            )
-        )
-        console.print()
+        self._step_title("Step 1", "Detecting Installed Agents")
 
         installed = []
         not_installed = []
@@ -121,14 +123,7 @@ class SetupWizard:
 
     def _step_select_agents(self) -> None:
         """Step 2: Select agents to sync."""
-        console.print(
-            Panel.fit(
-                "[bold]Step 2: Select Agents to Sync[/]\n\n"
-                "Choose which agents you want to synchronize.",
-                border_style="green",
-            )
-        )
-        console.print()
+        self._step_title("Step 2", "Select Agents to Sync", "Choose which agents you want to synchronize.")
 
         # Show all agents with status
         table = Table(box=box.SIMPLE)
@@ -184,15 +179,9 @@ class SetupWizard:
         Asks once if user wants to sync configs from ALL agents.
         Only asks individually if user declines.
         """
-        console.print(
-            Panel.fit(
-                "[bold]Step 4: Configure Sync Options[/]\n\n"
-                "Choose what to sync for each agent.\n"
-                "[dim]Note: Skills are already synced to ~/.agents/skills/ (Step 3)[/dim]",
-                border_style="green",
-            )
-        )
-        console.print()
+        self._step_title("Step 4", "Configure Sync Options",
+            "Choose what to sync for each agent.\n"
+            "[dim]Note: Skills are already synced to ~/.agents/skills/ (Step 3)[/dim]")
 
         # First question: sync configs from ALL agents?
         sync_all_configs = Confirm.ask(
@@ -264,15 +253,9 @@ class SetupWizard:
 
     def _step_centralize_skills(self) -> None:
         """Step 3: Centralize skills to ~/.agents/skills/ (single question)."""
-        console.print(
-            Panel.fit(
-                "[bold]Step 3: Centralizing Skills[/]\n\n"
-                "Scanning for existing skills in all agents...\n"
-                "All skills will be centralized to ~/.agents/skills/",
-                border_style="green",
-            )
-        )
-        console.print()
+        self._step_title("Step 3", "Centralizing Skills",
+            "Scanning for existing skills in all agents...\n"
+            "All skills will be centralized to ~/.agents/skills/")
 
         skills_mgr = SkillsManager()
 
@@ -280,14 +263,19 @@ class SetupWizard:
         skills_found = skills_mgr.scan_all_agents()
 
         if skills_found:
-            # Count unique skills by name (deduplicate across agents)
+            # Count unique skills by name (deduplicate across agents, skip extensions)
             unique_skill_names = set()
             for agent_skills in skills_found.values():
+                if isinstance(agent_skills, dict):
+                    continue  # extension skills — not centralized, skip
                 for skill_path in agent_skills:
                     unique_skill_names.add(skill_path.name)
 
             total_unique = len(unique_skill_names)
-            total_copies = sum(len(s) for s in skills_found.values())
+            total_copies = sum(
+                len(s.get("paths", [])) if isinstance(s, dict) else len(s)
+                for s in skills_found.values()
+            )
 
             if total_copies > total_unique:
                 console.print(
@@ -324,14 +312,7 @@ class SetupWizard:
 
     def _step_auto_configure_agents(self) -> None:
         """Step 5: Configure agents to use global skills (automatic)."""
-        console.print(
-            Panel.fit(
-                "[bold]Step 5: Configuring Agents[/]\n\n"
-                "Automatically configuring agents to use global skills...",
-                border_style="green",
-            )
-        )
-        console.print()
+        self._step_title("Step 5", "Configuring Agents", "Automatically configuring agents to use global skills...")
 
         skills_mgr = SkillsManager()
         self.agent_configure_results = skills_mgr.configure_agents()
@@ -340,16 +321,10 @@ class SetupWizard:
 
     def _step_repo_settings(self) -> None:
         """Step 6: Repository settings."""
-        console.print(
-            Panel.fit(
-                "[bold]Step 6: Repository Settings[/]\n\n"
-                "[yellow]⚠ SECURITY: Use PRIVATE repository for configs![/yellow]\n\n"
-                "Your configs may contain sensitive information.\n"
-                "Private repositories are FREE on GitHub.",
-                border_style="yellow",
-            )
-        )
-        console.print()
+        self._step_title("Step 6", "Repository Settings",
+            "[yellow]⚠ SECURITY: Use PRIVATE repository for configs![/yellow]\n\n"
+            "Your configs may contain sensitive information.\n"
+            "Private repositories are FREE on GitHub.")
 
         # Repository name
         while True:
@@ -373,13 +348,7 @@ class SetupWizard:
 
     def _step_review(self) -> bool:
         """Step 7: Review configuration and show summary."""
-        console.print(
-            Panel.fit(
-                "[bold]Step 7: Summary[/]",
-                border_style="blue",
-            )
-        )
-        console.print()
+        self._step_title("Step 7", "Summary", border="blue")
 
         # Show final summary
         self._show_final_summary()

@@ -26,10 +26,11 @@ Each agent entry in the YAML registry supports the following fields:
 - `config_update`: Required if `method` is `config`.
     - `path`: Dot-notation path to the configuration key (e.g., `skills.paths`).
     - `action`: `append` (for lists) or `set` (for single values).
-- `extra_paths`: A dictionary of additional paths to be synced (used by `pi.dev`).
-    - `extensions`: List of paths.
-    - `prompts`: List of paths.
-    - `themes`: List of paths.
+- `extra_paths`: A dictionary of additional paths to be synced (used by `pi.dev` and generic agents).
+    Keys are category names; values are lists of paths (supports `~`).
+    Example: `extensions`, `prompts`, `themes`, `bin`, `git`, `lsp`, `models`,
+    `global_extensions`, `global_prompts`, `global_skills_local`, `global_themes`.
+    Generic agents (non-pi.dev) also sync any extra_paths declared in the registry.
 
 ## Example: Adding a New Agent
 
@@ -71,7 +72,7 @@ roocode:
 ```
 
 ### Cline (Copy Method)
-Cline uses copy to sync skills from the global hub:
+Cline copies skills from project directories to the global hub on `push`:
 
 ```yaml
 cline:
@@ -81,11 +82,11 @@ cline:
   skills_dir_name: "skills"
   check:
     binary: "cline"
-  copy_from: "~/.agents/skills/"
-  copy_to: "~/.cline/skills/"
-  project_skills:
+  copy_from:
     - ".cline/skills/"
     - ".clinerules/skills/"
+    - ".claude/skills/"
+  copy_to: "~/.agents/skills/"
 ```
 
 ### Cursor (Native Method)
@@ -106,7 +107,7 @@ cursor:
 ```
 
 ### Windsurf (Copy Method)
-Windsurf uses the same structure as Cline:
+Windsurf copies skills from project/global directories to the global hub on `push`:
 
 ```yaml
 windsurf:
@@ -116,38 +117,34 @@ windsurf:
   skills_dir_name: "skills"
   check:
     binary: "windsurf"
-  copy_from: "~/.agents/skills/"
-  copy_to: "~/.codeium/windsurf/skills/"
+  copy_from:
+    - ".windsurf/skills/"
+    - "~/.codeium/windsurf/skills/"
+  copy_to: "~/.agents/skills/"
 ```
 
 ## Specialized Handlers
 
-For agents that need custom logic (like Cursor's flatten transform), create a handler in `src/agent_sync/agents/{agent}.py`:
+For agents that need custom logic (custom path resolution, extra configuration parsing, etc.), create a handler in `src/agent_sync/agents/{agent}.py`:
 
 ```python
 """{Agent Name} agent handler."""
 
-from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any
 from .base import BaseAgent
 
 class {AgentName}Agent(BaseAgent):
     """Custom handler for {agent}."""
-    
-    def __init__(self, name: str, data: Dict[str, Any]):
+
+    def __init__(self, name: str, data: dict[str, Any]):
         super().__init__(name, data)
-        # Custom initialization
-    
-    def sync_skills(self, source: Path, dry_run: bool = False) -> List[str]:
-        """Custom sync logic."""
-        # Your implementation
-        return []
+        # Custom initialization here
 ```
 
 Then register it in `src/agent_sync/agents/__init__.py`:
 
 ```python
-AGENT_HANDLERS = {
+AGENT_HANDLERS: dict[str, type] = {
     "{agent}": {AgentName}Agent,
     # ... other agents
 }

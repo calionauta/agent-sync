@@ -62,7 +62,7 @@ agent-sync pull
 - `agent-sync agents` - List agents and status
 
 ### Secrets
-- `agent-sync secrets export` - Backup secrets to file
+- `agent-sync secrets` - View secrets sync status (enabled/disabled)
 
 ## Skills Flow
 
@@ -147,7 +147,6 @@ agent-sync push -m "feat: add gemini-cli sync"
 ## Security
 
 - **Private repository required** for configs with secrets
-- **API keys auto-scrubbed** before sync (stored in `~/.config/agent-sync/.env`)
 - **Secrets sync disabled by default** (secure by design)
 - **Auth files excluded** (`*auth*.json`, `*accounts*.json`)
 

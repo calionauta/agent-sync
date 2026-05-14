@@ -1,9 +1,19 @@
 """Security regression tests for agent-sync."""
 
-import pytest
-from pathlib import Path
-from agent_sync.validators import validate_skill_name, validate_repo_name, validate_github_url
 from agent_sync.skills_delete import SkillsDeleter
+from agent_sync.validators import validate_github_url, validate_repo_name, validate_skill_name
+
+
+def test_validate_repo_name_argument_injection():
+    """Verify argument injection prevention in repo names."""
+    assert validate_repo_name("-bad/repo") is False
+    assert validate_repo_name("owner/repo") is True
+
+
+def test_validate_github_url_argument_injection():
+    """Verify argument injection prevention in GitHub URLs."""
+    assert validate_github_url("https://github.com/-bad/repo") is False
+    assert validate_github_url("https://github.com/owner/repo") is True
 
 
 def test_validate_skill_name_security():

@@ -2,16 +2,16 @@
 
 import os
 import threading
-from pathlib import Path
 from datetime import datetime, timedelta
+from pathlib import Path
+
 import click
 from rich.console import Console
 from rich.table import Table
-from typing import Optional
 
 from . import __version__
+from .config import DEFAULT_STATE_DIR, Config
 from .sync import SyncManager
-from .config import Config, DEFAULT_STATE_DIR
 from .validators import validate_github_url, validate_repo_name
 
 console = Console()
@@ -25,7 +25,7 @@ def check_for_updates_async():
     """Check for updates once per week, asynchronously."""
     if not _should_check_for_updates():
         return
-    
+
     # Run in background thread (doesn't block command)
     thread = threading.Thread(target=_check_and_notify, daemon=True)
     thread.start()
@@ -35,7 +35,7 @@ def _should_check_for_updates() -> bool:
     """Check if we should check for updates (once per week)."""
     if not UPDATE_CHECK_FILE.exists():
         return True
-    
+
     try:
         last_check = datetime.fromisoformat(UPDATE_CHECK_FILE.read_text())
         return datetime.now() - last_check > timedelta(days=7)
@@ -46,51 +46,83 @@ def _should_check_for_updates() -> bool:
 def _check_and_notify():
     """Check for updates and notify if available."""
     try:
-        import requests
-        
         # Try with GITHUB_TOKEN if available (for private repos)
         import os
+
+        import requests
         headers = {}
         token = os.environ.get("GITHUB_TOKEN")
         if token:
             headers["Authorization"] = f"token {token}"
-        
+
         response = requests.get(
             "https://api.github.com/repos/renatocaliari/agent-sync/releases/latest",
             headers=headers,
             timeout=3,  # Fast timeout
         )
-        
+
         # If 404, repo might be private or no releases yet
         if response.status_code == 404:
             return
-        
+
         response.raise_for_status()
-        
+
         latest = response.json()["tag_name"].lstrip("v")
-        
+
         if latest > __version__:
             # Save notification so we can show it after command completes
             UPDATE_PENDING_FILE.parent.mkdir(parents=True, exist_ok=True)
             UPDATE_PENDING_FILE.write_text(f"{latest}|{datetime.now().isoformat()}")
-        
+
         # Save last check time
         UPDATE_CHECK_FILE.parent.mkdir(parents=True, exist_ok=True)
         UPDATE_CHECK_FILE.write_text(datetime.now().isoformat())
-        
+
     except Exception:
         pass  # Silently fail (don't annoy user)
+
+
+def push_to_github(message: str = "chore: sync updates") -> bool:
+    """Push tracked files to GitHub repository.
+
+    Args:
+        message: Commit message for the push
+
+    Returns:
+        True if push succeeded or nothing to push, False on error
+    """
+    config = Config()
+
+    if not config.repo_url:
+        console.print("[yellow]⚠ No repository configured yet.[/yellow]")
+        console.print("Run [green]agent-sync init[/green] to create a repository first.\n")
+        return False
+
+    try:
+        sync_manager = SyncManager(config)
+        pushed = sync_manager.push(message=message)
+
+        if pushed:
+            console.print(f"\n[green]✓ Pushed {len(pushed)} files to GitHub[/green]\n")
+            console.print("💡 On other machines, run [green]agent-sync pull[/green]\n")
+        else:
+            console.print("\n[yellow]✓ Nothing to push (already up to date)[/yellow]\n")
+        return True
+    except Exception as e:
+        console.print(f"\n[red]✗ Push failed: {e}[/red]\n")
+        console.print("[dim]You can run [green]agent-sync push[/green] manually later.[/dim]\n")
+        return False
 
 
 def show_pending_update_notification():
     """Show update notification if one is pending."""
     if not UPDATE_PENDING_FILE.exists():
         return
-    
+
     try:
         latest, timestamp = UPDATE_PENDING_FILE.read_text().split("|")
         console.print(f"\n[dim]✨ Update available: v{latest} (Run 'agent-sync update' to install)[/dim]\n")
-        
+
         # Clear notification
         UPDATE_PENDING_FILE.unlink()
     except Exception:
@@ -109,29 +141,29 @@ class ExtendedHelpGroup(click.Group):
             "📚 Skills & Agents": ["skills", "custom-agents"],
             "🛠️  System": ["update", "version", "secrets"]
         }
-        
+
         # Get all commands available in this group
         all_commands = {name: self.get_command(ctx, name) for name in self.list_commands(ctx)}
-        
+
         for category, cmd_names in categories.items():
             category_commands = []
-            
+
             for name in cmd_names:
                 cmd = all_commands.get(name)
                 if not cmd or cmd.hidden:
                     continue
-                
+
                 # Main Command Description
                 help_text = cmd.get_short_help_str()
-                
+
                 # If it's NOT a group, show its options
                 if not isinstance(cmd, click.Group):
                     opts = [p.opts[0] for p in cmd.params if isinstance(p, click.Option)]
                     if opts:
                         help_text += f" [{', '.join(opts)}]"
-                
+
                 category_commands.append((name, help_text))
-                
+
                 # If it IS a group, list its subcommands vertically
                 if isinstance(cmd, click.Group):
                     sub_names = cmd.list_commands(ctx)
@@ -140,15 +172,15 @@ class ExtendedHelpGroup(click.Group):
                         if sub_cmd:
                             is_last = (i == len(sub_names) - 1)
                             tree_char = "└──" if is_last else "├──"
-                            
+
                             sub_help = sub_cmd.get_short_help_str()
                             sub_opts = [p.opts[0] for p in sub_cmd.params if isinstance(p, click.Option)]
                             if sub_opts:
                                 sub_help += f" [{', '.join(sub_opts)}]"
-                            
+
                             # Indented with tree structure
                             category_commands.append((f"  {tree_char} {sub_name}", sub_help))
-            
+
             if category_commands:
                 with formatter.section(category):
                     formatter.write_dl(category_commands)
@@ -159,7 +191,7 @@ class ExtendedHelpGroup(click.Group):
 def main():
     """
     🔄 agent-sync - Sync configs and skills across multiple AI agents.
-    
+
     Supported agents: opencode, claude-code, gemini-cli, pi.dev, qwen-code
     """
     pass
@@ -170,7 +202,7 @@ def main():
 @click.option("--agents", multiple=True, help="Agents to sync (skips wizard if provided)")
 @click.option("--no-wizard", is_flag=True, help="Skip interactive wizard")
 @click.option("--force", is_flag=True, help="Force initialization even if already configured")
-def init(name: Optional[str], agents: tuple[str, ...], no_wizard: bool, force: bool):
+def init(name: str | None, agents: tuple[str, ...], no_wizard: bool, force: bool):
     """Initialize a new sync repository (first machine).
 
     Runs the setup wizard and creates a new GitHub repository.
@@ -258,7 +290,7 @@ def init(name: Optional[str], agents: tuple[str, ...], no_wizard: bool, force: b
 @main.command()
 def setup():
     """Run the interactive setup wizard to configure or reconfigure.
-    
+
     This can be used:
     - On first time setup
     - To add/remove agents
@@ -266,28 +298,28 @@ def setup():
     - To reconfigure repository settings
     """
     from .setup import run_setup_wizard
-    
+
     config = Config()
-    
+
     if config.repo_url:
         console.print("\n[yellow]⚠ You already have an existing configuration![/yellow]")
         console.print(f"   Repository: {config.repo_url}")
         console.print("\nThis will [bold]overwrite[/] your current configuration.")
         console.print()
-        
+
         if not Confirm.ask("Continue?", default=False):
             console.print("\n[yellow]Setup cancelled[/yellow]")
             return
-        
+
         console.print("\n[bold]🔄 Reconfiguring Agent Sync[/]\n")
     else:
         console.print("\n[bold]🔄 Agent Sync Setup Wizard[/]\n")
-    
+
     repo_config = run_setup_wizard()
-    
+
     if repo_config:
         console.print("\n[green]✓ Setup complete![/green]")
-        
+
         if config.repo_url:
             console.print("\n💡 Your repository URL is still the same.")
             console.print("   Run 'agent-sync push' to sync new configuration")
@@ -308,19 +340,19 @@ def config():
 def show():
     """Show current configuration."""
     from rich.panel import Panel
-    
+
     config = Config()
-    
+
     console.print("\n[bold]📋 Current Configuration[/]\n")
-    
+
     if not config.repo_url:
         console.print("[yellow]⚠ Not configured yet. Run 'agent-sync setup'[/yellow]\n")
         return
-    
+
     # Show repo info
     console.print(Panel(f"[cyan]Repository:[/cyan] {config.repo_url}", border_style="blue"))
     console.print()
-    
+
     # Show agents
     console.print("[bold]Enabled Agents:[/]")
     for agent_name in config.agents:
@@ -340,17 +372,17 @@ def show():
 @config.command()
 @click.argument("repo_url", required=False)
 @click.option("--remove", is_flag=True, help="Remove repository configuration")
-def repo(repo_url: Optional[str], remove: bool):
+def repo(repo_url: str | None, remove: bool):
     """View or set the GitHub repository URL.
-    
+
     \b
     Examples:
       # View current repository
       agent-sync config repo
-      
+
       # Set repository URL
       agent-sync config repo https://github.com/user/repo.git
-      
+
       # Remove repository configuration
       agent-sync config repo --remove
     """
@@ -360,10 +392,10 @@ def repo(repo_url: Optional[str], remove: bool):
         if not config.repo_url:
             console.print("\n[yellow]No repository configured[/yellow]\n")
             return
-        
+
         old_url = config.repo_url
         config.repo_url = None
-        console.print(f"\n[green]✓ Repository configuration removed[/green]")
+        console.print("\n[green]✓ Repository configuration removed[/green]")
         console.print(f"  Was: {old_url}")
         console.print("\n[dim]Your local files are still intact.[/dim]")
         console.print("[dim]Run 'agent-sync config repo <url>' to configure again.[/dim]\n")
@@ -372,13 +404,13 @@ def repo(repo_url: Optional[str], remove: bool):
     if repo_url:
         # Set repository URL
         if not validate_github_url(repo_url):
-            console.print(f"\n[red]✗ Invalid repository URL[/red]")
-            console.print(f"   Expected: https://github.com/user/repo.git")
+            console.print("\n[red]✗ Invalid repository URL[/red]")
+            console.print("   Expected: https://github.com/user/repo.git")
             console.print(f"   Got: {repo_url}\n")
             return
-        
+
         config.repo_url = repo_url
-        console.print(f"\n[green]✓ Repository configured[/green]")
+        console.print("\n[green]✓ Repository configured[/green]")
         console.print(f"  URL: {repo_url}")
         console.print("\n💡 Run 'agent-sync pull' to download configs")
         console.print("   Run 'agent-sync push' to upload configs\n")
@@ -398,19 +430,18 @@ def repo(repo_url: Optional[str], remove: bool):
 
 
 @config.command()
-@click.option("--agent", help="Specific agent to configure")
-def edit(agent: Optional[str]):
+def edit():
     """Open configuration file in editor."""
     import subprocess
-    
+
     config = Config()
-    
+
     if not config.config_path.exists():
         config.generate_default()
-    
+
     # Try to open with default editor
     editor = os.environ.get("EDITOR", "nano")
-    
+
     try:
         subprocess.run([editor, str(config.config_path)])
         console.print("\n[green]✓ Configuration saved[/green]\n")
@@ -423,20 +454,19 @@ def edit(agent: Optional[str]):
 @click.confirmation_option(prompt="Are you sure you want to reset configuration?")
 def reset():
     """Reset configuration to defaults (keeps repo linked)."""
-    from rich.prompt import Confirm
-    
+
     config = Config()
-    
+
     if not config.repo_url:
         console.print("\n[yellow]No configuration to reset[/yellow]\n")
         return
-    
+
     repo_url = config.repo_url
-    
+
     # Generate fresh default config
     config.generate_default()
     config.repo_url = repo_url
-    
+
     console.print("\n[green]✓ Configuration reset to defaults[/green]")
     console.print(f"  Repository: {repo_url}")
     console.print("\n💡 Run 'agent-sync setup' to reconfigure\n")
@@ -451,8 +481,8 @@ def skills():
 @skills.command("list")
 def list_skills():
     """List all centralized skills."""
-    from rich.table import Table
     from rich import box
+    from rich.table import Table
 
     skills_dir = Path.home() / ".agents" / "skills"
 
@@ -489,7 +519,7 @@ def list_skills():
 
     for skill in sorted(skills, key=lambda s: s["name"]):
         icon = "✓" if skill["valid"] else "⚠"
-        status = "Valid" if skill["valid"] else "File (no SKILL.md)"
+        "Valid" if skill["valid"] else "File (no SKILL.md)"
         table.add_row(icon, skill["name"], skill["path"])
 
     console.print(table)
@@ -505,24 +535,25 @@ def custom_agents():
 @custom_agents.command("list")
 def list_custom_agents():
     """List custom agents for all supported agents."""
-    from rich.table import Table
     from rich import box
+    from rich.table import Table
+
     from .agents import get_all_agents
-    
+
     console.print("\n[bold]🤖 Custom Agents\n[/]\n")
-    
+
     table = Table(box=box.SIMPLE)
     table.add_column("Agent", style="cyan")
     table.add_column("Type", style="yellow")
     table.add_column("Path", style="dim")
     table.add_column("Files", style="green")
-    
+
     found_any = False
-    
+
     for agent in get_all_agents():
         if not agent.supports_custom_agents():
             continue
-        
+
         # Check project-level agents
         if agent.agents_path and agent.agents_path.exists():
             found_any = True
@@ -534,7 +565,7 @@ def list_custom_agents():
                     str(agent.agents_path),
                     str(len(agent_files))
                 )
-        
+
         # Check global agents
         if agent.agents_path_global and agent.agents_path_global.exists():
             found_any = True
@@ -546,7 +577,7 @@ def list_custom_agents():
                     str(agent.agents_path_global),
                     str(len(agent_files))
                 )
-    
+
     if not found_any:
         console.print("[yellow]No custom agents found.[/yellow]\n")
         console.print("Custom agents are stored in:")
@@ -555,7 +586,7 @@ def list_custom_agents():
         console.print("  • [dim]~/.config/opencode/agents/[/dim] - OpenCode global agents")
         console.print("  • [dim].opencode/agents/[/dim] - OpenCode project agents\n")
         return
-    
+
     console.print(table)
     console.print()
 
@@ -563,28 +594,28 @@ def list_custom_agents():
 @skills.command()
 def diff():
     """Show differences between local and remote skills.
-    
+
     \b
     Compares skills in ~/.agents/skills/ with skills in GitHub repository.
     Shows which skills exist only locally or only remotely.
-    
+
     \b
     Examples:
       # Show differences
       agent-sync skills diff
-      
+
       # Check if in sync
       agent-sync skills diff  # Shows "✓ Local and remote are in sync" if matched
     """
     from .skills_diff import SkillsDiff
-    
+
     diff_mgr = SkillsDiff()
-    
+
     if not diff_mgr.repo_dir:
         console.print("[yellow]⚠ No repository configured yet.[/yellow]")
         console.print("Run [green]agent-sync init[/green] or [green]agent-sync link[/green] first.\n")
         return
-    
+
     diff_mgr.show_diff()
 
 
@@ -593,103 +624,83 @@ def diff():
 @click.option("--dry-run", is_flag=True, help="Show what would be done without applying")
 def reconcile(auto: bool, dry_run: bool):
     """Reconcile differences between local and remote skills.
-    
+
     \b
     Resolves divergences where skills exist only locally or only remotely.
-    
+
     \b
     Examples:
       # Interactive reconciliation
       agent-sync skills reconcile
-      
+
       # Auto-resolve (keep local for all)
       agent-sync skills reconcile --auto
-      
+
       # Dry run (preview)
       agent-sync skills reconcile --dry-run
-    
+
     \b
     Actions:
       - Local-only skills: Will be added to remote on next push
       - Remote-only skills: Choose to download or delete from remote
     """
-    from .skills_reconcile import SkillsReconcile
     from rich.prompt import Confirm
-    
+
+    from .skills_reconcile import SkillsReconcile
+
     reconcile_mgr = SkillsReconcile()
-    
+
     if not reconcile_mgr.repo_dir:
         console.print("[yellow]⚠ No repository configured yet.[/yellow]")
         console.print("Run [green]agent-sync init[/green] or [green]agent-sync link[/green] first.\n")
         return
-    
+
     # Get decisions
     if auto:
         # Auto mode: keep local for everything
         from .skills_diff import SkillsDiff
         diff_mgr = SkillsDiff()
         diff_result = diff_mgr.diff()
-        
+
         decisions = {}
         for skill in diff_result["local_only"]:
             decisions[skill] = "local"
         for skill in diff_result["remote_only"]:
             decisions[skill] = "remote"  # Download to local
-        
+
         if not decisions:
             console.print("[green]✓ No divergences to reconcile[/green]\n")
             return
-        
+
         console.print(f"[bold]Auto mode: {len(decisions)} skills will be reconciled[/]\n")
     else:
         # Interactive mode
         decisions = reconcile_mgr.reconcile_interactive()
-        
+
         if not decisions:
             return
-        
+
         if not dry_run:
             if not Confirm.ask("Apply these changes?", default=True):
                 console.print("\n[yellow]Reconciliation cancelled.[/yellow]\n")
                 return
-    
+
     # Apply decisions
     stats = reconcile_mgr.apply_decisions(decisions, dry_run=dry_run)
     reconcile_mgr.show_summary(stats)
-    
+
     # Ask if user wants to push
     if not dry_run and (stats["added_to_remote"] > 0 or stats["downloaded_to_local"] > 0):
         from rich.prompt import Confirm
-        
+
         should_push = Confirm.ask(
             "\n[bold]Would you like to push these changes to GitHub now?[/]",
             default=True,
         )
-        
+
         if should_push:
             console.print("\n[bold]📤 Pushing to GitHub...[/]\n")
-            
-            from .sync import SyncManager
-            from .config import Config
-            
-            config = Config()
-            
-            if not config.repo_url:
-                console.print("[yellow]⚠ No repository configured yet.[/yellow]")
-                console.print("Run [green]agent-sync init[/green] to create a repository first.\n")
-            else:
-                try:
-                    sync_manager = SyncManager(config)
-                    pushed = sync_manager.push(message="chore: reconcile skills")
-                    
-                    if pushed:
-                        console.print(f"\n[green]✓ Pushed {len(pushed)} files to GitHub[/green]\n")
-                        console.print("💡 On other machines, run [green]agent-sync pull[/green]\n")
-                    else:
-                        console.print("\n[yellow]✓ Nothing to push (already up to date)[/yellow]\n")
-                except Exception as e:
-                    console.print(f"\n[red]✗ Push failed: {e}[/red]\n")
-                    console.print("[dim]You can run [green]agent-sync push[/green] manually later.[/dim]\n")
+            push_to_github(message="chore: reconcile skills")
 
 
 @skills.command()
@@ -699,47 +710,49 @@ def reconcile(auto: bool, dry_run: bool):
 @click.option("--interactive/--no-interactive", default=True, help="Toggle interactive TUI selection")
 def delete(skill_names: tuple[str, ...], dry_run: bool, push: bool, interactive: bool):
     """Delete skills from hub and all agent directories.
-    
+
     \b
     Examples:
       # Interactive selection (default)
       agent-sync skills delete
-      
+
       # Delete specific skills
       agent-sync skills delete my-skill another-skill
-      
+
       # Dry run (see what would be deleted)
       agent-sync skills delete my-skill --dry-run
-      
+
       # Delete and push to GitHub
       agent-sync skills delete my-skill --push
-    
+
     \b
     What happens:
       1. Deletes skills from ~/.agents/skills/ (hub)
       2. Deletes copies from all agent directories
       3. Optionally pushes changes to GitHub
-    
+
     \b
     Note: To delete ALL skills, use interactive mode and type 'all'.
     """
-    from .skills_delete import SkillsDeleter
+    from rich import box
     from rich.prompt import Confirm, Prompt
     from rich.table import Table
-    from rich import box
-    
+
+    from ._selection import parse_multiselect_input
+    from .skills_delete import SkillsDeleter
+
     deleter = SkillsDeleter()
-    
+
     # Get list of all available skills
     all_skills = deleter.list_skills()
-    
+
     if not all_skills:
         console.print("[yellow]No skills found in ~/.agents/skills/[/yellow]\n")
         return
-    
+
     # Determine which skills to delete
     skills_to_delete = set()
-    
+
     if skill_names:
         # Validate provided skill names
         from .validators import validate_skill_name
@@ -752,80 +765,62 @@ def delete(skill_names: tuple[str, ...], dry_run: bool, push: bool, interactive:
     elif interactive:
         # Interactive TUI selection
         console.print("\n[bold red]🗑 Select Skills to Delete[/bold red]\n")
-        
+
         selected = set()
-        
+
         while True:
-            # Render table
             table = Table(box=box.SIMPLE)
             table.add_column("#", style="dim", width=4)
             table.add_column("Status", style="green", width=8)
             table.add_column("Skill Name", style="cyan")
-            
+
             for idx, name in enumerate(sorted(all_skills), 1):
                 status = "[red]✓ DEL[/]" if name in selected else ""
                 table.add_row(f"{idx}.", status, name)
-            
+
             console.print(table)
-            
             console.print(f"\n[dim]Selected: {len(selected)} / {len(all_skills)} skills[/dim]\n")
-            
             console.print("[bold]Controls:[/bold]")
             console.print("  • Enter numbers to toggle (e.g. [green]'1,3,5'[/green])")
             console.print("  • Type [cyan]'all'[/cyan] or [cyan]'none'[/cyan]")
             console.print("  • Press [bold white]Enter[/] when done")
-            
+
             choice = Prompt.ask("\nSelection", default="done")
-            
-            if choice.lower() in ["done", ""]:
+            result = parse_multiselect_input(choice, all_skills, selected)
+            if result is None:
                 break
-            elif choice.lower() == "all":
-                selected = set(all_skills)
-            elif choice.lower() == "none":
-                selected = set()
-            else:
-                try:
-                    indices = [int(x.strip()) - 1 for x in choice.split(",")]
-                    for idx in indices:
-                        if 0 <= idx < len(all_skills):
-                            name = all_skills[idx]
-                            if name in selected:
-                                selected.remove(name)
-                            else:
-                                selected.add(name)
-                except ValueError:
-                    pass
-        
+            selected = result
+
         skills_to_delete = selected
     else:
         console.print("[yellow]No skills specified.[/yellow]\n")
         console.print("Usage: [green]agent-sync skills delete <skill-name> [skill-name...][/green]\n")
         console.print("Or run interactively: [green]agent-sync skills delete[/green]\n")
         return
-    
+
     if not skills_to_delete:
         console.print("[yellow]No skills selected for deletion.[/yellow]\n")
         return
-    
+
     # Show confirmation
     console.print(f"\n[bold red]⚠ Skills to be deleted ({len(skills_to_delete)}):[/]\n")
-    
+
     for name in sorted(skills_to_delete):
         console.print(f"  • {name}")
-    
+
     console.print()
-    
+
     if not dry_run:
         if not Confirm.ask("Continue with deletion?", default=True):
             console.print("\n[yellow]Deletion cancelled.[/yellow]\n")
             return
-    
+
     # Delete skills
     stats = deleter.delete_skills(list(skills_to_delete), dry_run=dry_run)
-    
+
     # Show summary
-    console.print(f"\n[bold]📊 Summary:[/]\n")
-    
+    console.print("\n[bold]📊 Summary:[/]\n")
+
     if dry_run:
         console.print(f"  [yellow]Would delete {stats['deleted_from_hub']} skills ({stats['hub_files']} files) from hub[/yellow]")
         console.print(f"  [yellow]Would delete {stats['deleted_from_agents']} agent copies ({stats['agent_files']} files)[/yellow]")
@@ -834,47 +829,26 @@ def delete(skill_names: tuple[str, ...], dry_run: bool, push: bool, interactive:
         console.print(f"  [green]✓ Deleted {stats['deleted_from_hub']} skills[/green] ({stats['hub_files']} files from hub)")
         console.print(f"  [green]✓ Deleted {stats['deleted_from_agents']} agent copies[/green] ({stats['agent_files']} files)")
         console.print(f"\n  [dim]Total: {total_files} files removed[/dim]")
-    
+
     if stats["not_found"] > 0:
         console.print(f"  [yellow]⚠ {stats['not_found']} skills not found[/yellow]")
     if stats["errors"] > 0:
         console.print(f"  [red]✗ {stats['errors']} errors[/red]")
-    
+
     console.print()
-    
+
     # Ask if user wants to push
     should_push = push
-    
+
     if not should_push and not dry_run:
         should_push = Confirm.ask(
             "[bold]Would you like to push these changes to GitHub now?[/]",
             default=True,
         )
-    
+
     if should_push and not dry_run:
         console.print("\n[bold]📤 Pushing to GitHub...[/]\n")
-        
-        from .sync import SyncManager
-        from .config import Config
-        
-        config = Config()
-        
-        if not config.repo_url:
-            console.print("[yellow]⚠ No repository configured yet.[/yellow]")
-            console.print("Run [green]agent-sync init[/green] to create a repository first.\n")
-        else:
-            try:
-                sync_manager = SyncManager(config)
-                pushed = sync_manager.push(message="chore: delete skills")
-                
-                if pushed:
-                    console.print(f"\n[green]✓ Pushed {len(pushed)} files to GitHub[/green]\n")
-                    console.print("💡 On other machines, run [green]agent-sync pull[/green]\n")
-                else:
-                    console.print("\n[yellow]✓ Nothing to push (already up to date)[/yellow]\n")
-            except Exception as e:
-                console.print(f"\n[red]✗ Push failed: {e}[/red]\n")
-                console.print("[dim]You can run [green]agent-sync push[/green] manually later.[/dim]\n")
+        push_to_github(message="chore: delete skills")
     elif not dry_run:
         console.print("💡 Run [green]agent-sync push[/green] to sync to GitHub\n")
 
@@ -885,27 +859,27 @@ def delete(skill_names: tuple[str, ...], dry_run: bool, push: bool, interactive:
 @click.option("--distribute", is_flag=True, help="After centralizing, copy all skills to all agent directories (for backup or testing)")
 def centralize(copy: bool, push: bool, distribute: bool):
     """Centralize skills from all agents to ~/.agents/skills/.
-    
+
     This command scans all agent directories for existing skills and centralizes
     them to the global ~/.agents/skills/ directory (single source of truth).
-    
+
     \b
     Examples:
       # Move skills (default - removes from agent directories)
       agent-sync skills centralize
-      
+
       # Copy skills (keeps originals in agent directories)
       agent-sync skills centralize --copy
-      
+
       # Move skills and push to GitHub automatically
       agent-sync skills centralize --push
-      
+
       # Copy skills and push to GitHub
       agent-sync skills centralize --copy --push
-      
+
       # Centralize AND copy to all agent directories (backup/testing)
       agent-sync skills centralize --distribute
-    
+
     \b
     What happens:
       1. Scans all agent directories for skills
@@ -914,7 +888,7 @@ def centralize(copy: bool, push: bool, distribute: bool):
       4. Moves/copies skills to ~/.agents/skills/
       5. Optionally pushes to GitHub
       6. With --distribute: copies all skills to all agent directories
-    
+
     \b
     After centralizing:
       - Skills live in ~/.agents/skills/ (source of truth)
@@ -922,38 +896,39 @@ def centralize(copy: bool, push: bool, distribute: bool):
       - Original skill directories may be removed (if --copy not used)
       - With --distribute: all agents have local copies for backup/testing
     """
-    from .skills import SkillsManager
     from rich.prompt import Confirm
-    
+
+    from .skills import SkillsManager
+
     move = not copy
     action = "Copying" if copy else "Moving"
-    
+
     console.print(f"\n[bold]📁 {action} Skills[/]\n")
-    
+
     skills_mgr = SkillsManager()
     stats = skills_mgr.centralize(move=move)
-    
+
     # Show final reassurance
     console.print("[bold green]🎉 Centralization Complete![/bold green]\n")
     console.print("What happened:\n")
-    
+
     if move:
         console.print(f"  ✓ [green]{stats['moved']} skills moved[/green] to ~/.agents/skills/")
         console.print("    [dim]Original files removed from agent directories[/dim]\n")
     else:
         console.print(f"  ✓ [green]{stats['copied']} skills copied[/green] to ~/.agents/skills/")
         console.print("    [dim]Original files kept in agent directories[/dim]\n")
-    
+
     if stats['symlinks_removed'] > 0:
         console.print(f"  ✓ [yellow]{stats['symlinks_removed']} user symlinks removed[/yellow]")
         console.print("    [dim]Cleaning up manual symlinks from agent directories[/dim]\n")
-    
+
     if stats['conflicts_resolved'] > 0:
         console.print(f"  ✓ [yellow]{stats['conflicts_resolved']} conflicts resolved[/yellow]")
         console.print("    [dim]Duplicate skill names renamed with agent prefix[/dim]\n")
-    
+
     console.print("Where are my skills now?\n")
-    console.print(f"  [bold cyan]~/.agents/skills/[/bold cyan] [dim]← Single source of truth[/dim]\n")
+    console.print("  [bold cyan]~/.agents/skills/[/bold cyan] [dim]← Single source of truth[/dim]\n")
     console.print("All your skills are now in one place and will be synced to GitHub.\n")
 
     if move:
@@ -983,31 +958,10 @@ def centralize(copy: bool, push: bool, distribute: bool):
             "\n[bold]Would you like to push these changes to GitHub now?[/]",
             default=True,
         )
-    
+
     if should_push:
         console.print("\n[bold]📤 Pushing to GitHub...[/]\n")
-        
-        from .sync import SyncManager
-        from .config import Config
-        
-        config = Config()
-        
-        if not config.repo_url:
-            console.print("[yellow]⚠ No repository configured yet.[/yellow]")
-            console.print("Run [green]agent-sync init[/green] to create a repository first.\n")
-        else:
-            try:
-                sync_manager = SyncManager(config)
-                pushed = sync_manager.push(message="chore: centralize skills")
-                
-                if pushed:
-                    console.print(f"\n[green]✓ Pushed {len(pushed)} files to GitHub[/green]\n")
-                    console.print("💡 On other machines, run [green]agent-sync pull[/green]\n")
-                else:
-                    console.print("\n[yellow]✓ Nothing to push (already up to date)[/yellow]\n")
-            except Exception as e:
-                console.print(f"\n[red]✗ Push failed: {e}[/red]\n")
-                console.print("[dim]You can run [green]agent-sync push[/green] manually later.[/dim]\n")
+        push_to_github(message="chore: centralize skills")
     else:
         console.print("💡 Run [green]agent-sync push[/green] to sync to GitHub\n")
 
@@ -1016,7 +970,7 @@ def centralize(copy: bool, push: bool, distribute: bool):
 @click.option("--repo", "repo_url", help="GitHub repository URL for publishing skills")
 @click.option("--dry-run", is_flag=True, help="Show what would be published without actually publishing")
 @click.option("--interactive/--no-interactive", default=True, help="Toggle interactive TUI selection")
-def publish(repo_url: Optional[str], dry_run: bool, interactive: bool):
+def publish(repo_url: str | None, dry_run: bool, interactive: bool):
     """Publish selected skills to a public GitHub repository."""
     from .publish import publish_skills
     success = publish_skills(repo_url=repo_url, dry_run=dry_run, interactive=interactive)
@@ -1029,19 +983,19 @@ def publish(repo_url: Optional[str], dry_run: bool, interactive: bool):
 def link(repo_url: str):
     """Link to an existing sync repository (additional machines)."""
     if not validate_github_url(repo_url):
-        console.print(f"\n[red]✗ Invalid repository URL[/red]")
-        console.print(f"   Expected: https://github.com/user/repo.git")
+        console.print("\n[red]✗ Invalid repository URL[/red]")
+        console.print("   Expected: https://github.com/user/repo.git")
         console.print(f"   Got: {repo_url}\n")
         raise click.Abort()
 
     console.print(f"\n🔗 Linking to repository: {repo_url}")
-    
+
     config = Config()
     sync_manager = SyncManager(config)
-    
+
     try:
         sync_manager.link_repo(repo_url)
-        console.print(f"\n✅ Successfully linked to repository")
+        console.print("\n✅ Successfully linked to repository")
         console.print("\n📥 Run 'agent-sync pull' to download configs")
     except Exception as e:
         console.print(f"\n❌ Error: {e}", style="red")
@@ -1177,7 +1131,7 @@ def status():
                 status_display = "❌ disabled"
             else:
                 status_display = status
-            
+
             # Installed indicator
             installed = info.get("installed", False)
             if installed:
@@ -1196,7 +1150,7 @@ def status():
             )
 
         console.print(table)
-        
+
         # Legend
         console.print("\n[dim]Legend:[/]")
         console.print("  [green]✅ active[/] = Enabled in config + Installed")
@@ -1213,7 +1167,7 @@ def status():
 @main.group(cls=ExtendedHelpGroup)
 def secrets():
     """Manage secrets and environment variables.
-    
+
     Note: agent-sync does not scrub secrets. Config files are synced as-is.
     ALWAYS use a private repository.
     """
@@ -1223,12 +1177,13 @@ def secrets():
 @main.command()
 def update():
     """Check for available updates and install them."""
-    import requests
     import os
     import subprocess
-    from rich.prompt import Confirm
-    from rich.panel import Panel
+
+    import requests
     from packaging import version
+    from rich.panel import Panel
+    from rich.prompt import Confirm
 
     console.print("[bold]🔍 Checking for updates...[/]\n")
 
@@ -1260,14 +1215,14 @@ def update():
         try:
             current_ver = version.parse(current)
             latest_ver = version.parse(latest)
-            
+
             # Skip update check if current is a dev version
             if current_ver.is_devrelease:
                 console.print(f"[dim]Current version: v{current} (development)[/dim]")
                 console.print("[yellow]⚠ You are running a development version.[/yellow]")
                 console.print("Update manually with: [cyan]pipx upgrade agent-sync[/cyan]\n")
                 return
-            
+
             if latest_ver > current_ver:
                 console.print(f"✨ [green]Update available:[/green] [bold]v{latest}[/] (Current: v{current})")
             else:
@@ -1283,7 +1238,7 @@ def update():
 
         if Confirm.ask("\nDo you want to update now?", default=True):
             console.print("\n🚀 [bold]Updating agent-sync...[/]")
-            
+
             # Execution logic with captured output for better UX
             def run_upgrade(cmd_list):
                 return subprocess.run(cmd_list, capture_output=True, text=True, timeout=120)
@@ -1323,7 +1278,7 @@ def update():
             console.print("\n")
             console.print(Panel(instruction, title="[bold red]Update Required[/bold red]", expand=False))
             console.print("\n")
-            
+
     except Exception as e:
         console.print(f"[dim]Current version: v{current}[/dim]")
         console.print(f"[yellow]⚠ Could not check for updates: {e}\n[/yellow]")
@@ -1398,12 +1353,8 @@ def generate_config(agent: tuple[str, ...]):
         raise click.Abort()
 
 
-@main.command()
-@click.argument("agent_name")
-def enable(agent_name: str):
-    """Enable sync for a specific agent."""
-    console.print(f"\n✅ Enabling sync for: {agent_name}")
-
+def _resolve_agent(agent_name: str):
+    """Look up an agent by name, printing available agents on failure."""
     from .agents import get_agent, get_agents
 
     agent = get_agent(agent_name)
@@ -1413,10 +1364,17 @@ def enable(agent_name: str):
         for a in get_agents():
             console.print(f"  • {a.name}")
         raise click.Abort()
+    return agent
 
+
+@main.command()
+@click.argument("agent_name")
+def enable(agent_name: str):
+    """Enable sync for a specific agent."""
+    console.print(f"\n✅ Enabling sync for: {agent_name}")
+    agent = _resolve_agent(agent_name)
     try:
-        config = Config()
-        config.enable_agent(agent_name)
+        Config().enable_agent(agent_name)
         agent.enable()
         console.print(f"✅ Sync enabled for {agent_name}", style="green")
         console.print("\n💡 Run 'agent-sync push' to sync this agent's configs")
@@ -1430,20 +1388,9 @@ def enable(agent_name: str):
 def disable(agent_name: str):
     """Disable sync for a specific agent."""
     console.print(f"\n🚫 Disabling sync for: {agent_name}")
-
-    from .agents import get_agent, get_agents
-
-    agent = get_agent(agent_name)
-    if not agent:
-        console.print(f"❌ Unknown agent: {agent_name}", style="red")
-        console.print("\nAvailable agents:", style="yellow")
-        for a in get_agents():
-            console.print(f"  • {a.name}")
-        raise click.Abort()
-    
+    agent = _resolve_agent(agent_name)
     try:
-        config = Config()
-        config.disable_agent(agent_name)
+        Config().disable_agent(agent_name)
         agent.disable()
         console.print(f"✅ Sync disabled for {agent_name}", style="green")
         console.print("\n💡 This agent's configs will no longer be synced")
