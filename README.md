@@ -127,9 +127,9 @@ agent-sync skills publish --repo https://github.com/YOUR_USERNAME/agent-sync-pub
   - `--dry-run` - Preview changes without modifying anything
   - `--copy` - Copy instead of move
   - `--distribute` - After centralizing, copy all skills to all agent directories
-  - `--dot-agents` - Ensure `~/.agents/` DotAgents protocol structure
 
   > 🛡️ **Safety features** (v0.15+): Interactive TUI selects which orphans to import (default: none). Content comparison via hash detects divergent copies. Post-selection prompt: Keep or Remove unselected.
+  > 🔗 **DotAgents Protocol**: Structure automatically follows `.agents/` convention (https://dotagentsprotocol.com/)
 - `skills diff` - Show differences between local and remote skills
 - `skills reconcile` - Resolve divergences between local and remote
 - `skills delete` - Delete skills from hub and all agent directories (interactive)
@@ -192,6 +192,41 @@ If you are an AI model (LLM) contributing to this project, please read [AGENTS.m
 ## 🙏 Inspiration
 
 Inspired by [opencode-synced](https://github.com/iHildy/opencode-synced), expanded to support multiple agent CLIs and other powerful features.
+
+---
+
+## 🔗 DotAgents Protocol
+
+This project aligns with the [DotAgents Protocol](https://dotagentsprotocol.com/) for AI agent configuration.
+
+### What we follow
+
+| Aspect | Status | Details |
+|--------|--------|---------|
+| `~/.agents/skills/` hub | ✅ Applied | Vendor-neutral skills directory |
+| `.agents/` directory structure | ✅ Applied | Skills and agents organized under `.agents/` |
+| Git-friendly config | ✅ Applied | Version-controllable via private GitHub repo |
+| Vendor-neutral skills | ✅ Applied | All skills share `~/.agents/skills/` as source of truth |
+
+### What's different (and why)
+
+| Aspect | DotAgents | agent-sync | Why |
+|--------|-----------|------------|-----|
+| Sub-agents | `~/.agents/agents/` (unified) | Per-vendor paths | Agents store profiles in vendor-specific formats; unificar perderia features |
+| MCP config | `~/.agents/mcp.json` (unified) | Per-vendor MCPs | Each vendor has unique MCP capabilities; merging would lose features |
+| Workspace override | `./.agents/` (overlay) | Not supported | Would require complex merge semantics; not a priority |
+| Config format | JSON | YAML | YAML is more readable for humans; JSON is optional in the spec |
+| Public bundles | hub.dotagentsprotocol.com | Not integrated | Would require separate publishing workflow |
+
+### What we'd need to change for 100% compliance
+
+These are **not planned** because they would reduce functionality:
+
+1. **Unified `~/.agents/agents/`** — Would require converting Claude/Cursor/etc. agent formats to a standard format
+2. **Unified `~/.agents/mcp.json`** — Would lose vendor-specific MCP features
+3. **Workspace overrides** — Complex merge semantics for marginal benefit
+
+The current approach (DotAgents for skills, vendor-specific for everything else) gives you the best of both: standard skills management + full vendor features.
 
 ---
 

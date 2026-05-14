@@ -26,4 +26,25 @@ This project uses `hatch-vcs` for dynamic versioning based on Git Tags.
 ## 📦 Distribution
 
 -   Users update via `agent-sync update`. Ensure this command remains bulletproof and supports both `pipx` and `pip` (with `--break-system-packages` for macOS).
-\n- Gemini CLI: AI contributor overseeing architectural mandates.
+
+## 🔗 DotAgents Protocol Alignment
+
+This project follows the [DotAgents Protocol](https://dotagentsprotocol.com/) conventions for AI agent configuration.
+
+**What we follow:**
+- `~/.agents/skills/` as the canonical skills hub (vendor-neutral, shared across all agents)
+- `.agents/` directory structure for centralized configuration
+- Git-friendly, version-controllable agent configurations
+
+**Why vendor-specific paths still exist:**
+Some agents (Claude Code, Gemini CLI, etc.) don't natively read from `~/.agents/`. agent-sync bridges this by:
+1.  Using `~/.agents/skills/` as the **source of truth**
+2.  Copying/syncing to vendor-specific paths when needed
+3.  Supporting multiple sync methods: `native`, `config`, and `copy`
+
+**Not implemented (yet):**
+- `./.agents/` workspace overrides
+- `~/.agents/mcp.json` unified MCP configuration
+- `.dotagents` bundles from hub.dotagentsprotocol.com
+
+- Gemini CLI: AI contributor overseeing architectural mandates.
