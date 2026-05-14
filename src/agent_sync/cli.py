@@ -1370,12 +1370,8 @@ def generate_config(agent: tuple[str, ...]):
         raise click.Abort()
 
 
-@main.command()
-@click.argument("agent_name")
-def enable(agent_name: str):
-    """Enable sync for a specific agent."""
-    console.print(f"\n✅ Enabling sync for: {agent_name}")
-
+def _resolve_agent(agent_name: str):
+    """Look up an agent by name, printing available agents on failure."""
     from .agents import get_agent, get_agents
 
     agent = get_agent(agent_name)
@@ -1385,10 +1381,17 @@ def enable(agent_name: str):
         for a in get_agents():
             console.print(f"  • {a.name}")
         raise click.Abort()
+    return agent
 
+
+@main.command()
+@click.argument("agent_name")
+def enable(agent_name: str):
+    """Enable sync for a specific agent."""
+    console.print(f"\n✅ Enabling sync for: {agent_name}")
+    agent = _resolve_agent(agent_name)
     try:
-        config = Config()
-        config.enable_agent(agent_name)
+        Config().enable_agent(agent_name)
         agent.enable()
         console.print(f"✅ Sync enabled for {agent_name}", style="green")
         console.print("\n💡 Run 'agent-sync push' to sync this agent's configs")
@@ -1402,20 +1405,9 @@ def enable(agent_name: str):
 def disable(agent_name: str):
     """Disable sync for a specific agent."""
     console.print(f"\n🚫 Disabling sync for: {agent_name}")
-
-    from .agents import get_agent, get_agents
-
-    agent = get_agent(agent_name)
-    if not agent:
-        console.print(f"❌ Unknown agent: {agent_name}", style="red")
-        console.print("\nAvailable agents:", style="yellow")
-        for a in get_agents():
-            console.print(f"  • {a.name}")
-        raise click.Abort()
-    
+    agent = _resolve_agent(agent_name)
     try:
-        config = Config()
-        config.disable_agent(agent_name)
+        Config().disable_agent(agent_name)
         agent.disable()
         console.print(f"✅ Sync disabled for {agent_name}", style="green")
         console.print("\n💡 This agent's configs will no longer be synced")
