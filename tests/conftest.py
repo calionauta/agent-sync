@@ -11,9 +11,4 @@ def tmp_config_dir(tmp_path):
     return config_dir
 
 
-@pytest.fixture
-def tmp_env_file(tmp_config_dir):
-    """Create a temporary .env file."""
-    env_file = tmp_config_dir / ".env"
-    env_file.touch()
-    return env_file
+

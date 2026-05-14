@@ -1,5 +1,6 @@
 """Sync management for agent-sync."""
 
+import os
 import subprocess
 import shutil
 import json
@@ -70,9 +71,6 @@ class SyncManager:
             timeout: Maximum seconds to wait for the command (default 60).
                      Prevents infinite hangs on auth prompts or network issues.
         """
-        import os
-        import subprocess
-        
         # Create a copy of environment without GITHUB_TOKEN
         # This prevents git from using the invalid token
         env = os.environ.copy()
@@ -127,11 +125,7 @@ class SyncManager:
         Returns:
             Repository URL
         """
-        import json
-        from rich.console import Console
         from rich.prompt import Confirm
-
-        console = Console()
 
         if not self._check_gh_installed():
             raise RuntimeError("GitHub CLI (gh) is required. Install with: brew install gh")
@@ -290,9 +284,6 @@ class SyncManager:
         Returns:
             List of applied changes
         """
-        from rich.console import Console
-        console = Console()
-
         # If repo doesn't exist or is not a valid git repo, clone it automatically
         is_valid_git_repo = self.repo_dir.exists() and (self.repo_dir / ".git").exists()
 
@@ -837,7 +828,6 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         - skills/_global/ or skills/<skill-name>/ - Global skills from ~/.agents/skills/
         - skills/<agent>-<extension>/ - Extension skills
         """
-        from pathlib import Path
         from .skills import SkillsManager
         
         global_skills_dir = Path.home() / ".agents" / "skills"
@@ -1475,8 +1465,6 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         2. Restore symlinks
         3. Restore global skills to ~/.agents/skills/
         """
-        from pathlib import Path
-        
         changes = []
         synced_skills_dir = self.repo_dir / "skills"
         global_skills_dir = Path.home() / ".agents" / "skills"
@@ -1722,8 +1710,6 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
     
     def _save_state(self, action: str, repo_url: Optional[str] = None) -> None:
         """Save sync state."""
-        import json
-        
         state = {
             "last_sync": datetime.now().isoformat(),
             "last_action": action,
@@ -1735,8 +1721,6 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
     
     def _load_state(self) -> Optional[dict]:
         """Load sync state."""
-        import json
-        
         if self.state_file.exists():
             with open(self.state_file) as f:
                 return json.load(f)
