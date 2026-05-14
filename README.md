@@ -134,18 +134,21 @@ agent-sync skills publish --repo https://github.com/YOUR_USERNAME/agent-sync-pub
 - `skills reconcile` - Resolve divergences between local and remote
 - `skills delete` - Delete skills from hub and all agent directories (interactive)
 
-#### 🔧 Utilities
-- `config export` - Export DotAgents-compatible config to `~/.agents/config.json`
-  - `--dry-run` - Preview without creating file
-  - `--output PATH` - Custom output path
-- `mcp` - Export unified MCP config from vendor configs
-  - `--dry-run` - Preview merge without creating file
-  - `--force` - Overwrite existing `~/.agents/mcp.json`
-  - `--conflicts` - Show conflict report only
-  - `-s, --source PATH` - Additional MCP config sources
-- `skills delete` - Delete skills from hub and all agent directories (interactive)
-- `skills publish` - Share selected skills to a public repository
-- `custom-agents list` - List custom agents per CLI tool
+#### 📤 Publish
+- `publish` - Publish skills and/or agent instructions to public GitHub
+  - `publish` (default) — Publish both skills AND agent instructions
+  - `publish --skills` — Publish only skills
+  - `publish --agents` — Publish only agent instructions (AGENTS.md, GEMINI.md, etc.)
+  - `--dry-run` — Preview without publishing
+  - `--repo <url>` — Specify target repository
+
+  **Security Scanner:** Scans for sensitive content before publishing:
+  - Absolute paths (`/Users/`, `/home/`, `/root/`)
+  - API tokens (`sk-`, `ghp_`)
+  - Internal commands (`/skill:`, `ctx_batch_execute()`)
+  - Server paths (`server.`, `.renatocaliari.com`)
+
+  **⚠️ Deprecated:** `skills publish` → Use `publish --skills` instead
 
 #### 🛠️ System
 - `config show` - View current configuration

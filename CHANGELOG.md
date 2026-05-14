@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.20.0] - 2026-05-14
+
+### ✨ New Features
+
+#### `publish --agents` — Publish Agent Instructions
+
+Publish AGENTS.md, GEMINI.md, and other agent instruction files to a public GitHub repository.
+
+**New CLI commands:**
+```bash
+agent-sync publish              # Publish both skills AND agent instructions (default)
+agent-sync publish --skills    # Publish only skills
+agent-sync publish --agents    # Publish only agent instructions (NEW!)
+```
+
+**Features:**
+- **Agent discovery** via `config_patterns` from agent_registry.yaml
+- **Security scanner** with 12 regex patterns detecting:
+  - Absolute paths: `/Users/`, `/home/`, `/root/`, `C:\`
+  - API tokens: OpenAI `sk-`, GitHub `ghp_`, `gho_`
+  - Internal commands: `/skill:`, `ctx_batch_execute()`, `ctx_search()`
+  - Server paths: `server.`, `.renatocaliari.com`
+- **TUI** with security indicators (⚠️ / ✓) per file
+- **Security panel** with options: edit, skip, continue, cancel
+- **Config persistence** for selection
+
+**Repository structure:**
+```
+agents/
+├── pi.dev/AGENTS.md
+├── opencode/AGENTS.md
+└── qwen-code/output-language.md
+```
+
+**New files:**
+- `src/agent_sync/agent_discovery.py` — Discovery module
+- `src/agent_sync/security_scanner.py` — Security scanner with 12 patterns
+- `tests/test_agent_discovery.py` — 17 tests
+- `tests/test_security_scanner.py` — 26 tests
+
+---
+
 ## [Unreleased]
 
 ### ✨ New Features
