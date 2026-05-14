@@ -127,6 +127,7 @@ agent-sync skills publish --repo https://github.com/YOUR_USERNAME/agent-sync-pub
   - `--dry-run` - Preview changes without modifying anything
   - `--copy` - Copy instead of move
   - `--distribute` - After centralizing, copy all skills to all agent directories
+  - `--dot-agents` - Ensure `~/.agents/` DotAgents protocol structure
 
   > 🛡️ **Safety features** (v0.15+): Interactive TUI selects which orphans to import (default: none). Content comparison via hash detects divergent copies. Post-selection prompt: Keep or Remove unselected.
 - `skills diff` - Show differences between local and remote skills
