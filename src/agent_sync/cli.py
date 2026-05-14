@@ -1598,6 +1598,7 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
     from rich.panel import Panel
     from rich.table import Table
     from rich import box
+    from rich.prompt import Confirm
 
     # Default: publish all if no specific flags
     do_all = publish_all and not skills and not agents

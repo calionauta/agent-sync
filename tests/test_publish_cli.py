@@ -17,14 +17,15 @@ class TestPublishCLI:
     def runner(self):
         return CliRunner()
 
-    @patch("agent_sync.cli.publish_agents")
-    @patch("agent_sync.cli.publish_skills")
-    @patch("agent_sync.cli.get_available_skills")
-    @patch("agent_sync.cli.get_available_agents")
-    @patch("agent_sync.cli.scan_file")
-    @patch("agent_sync.cli.format_issues_for_display")
+    @patch("agent_sync.publish.publish_agents")
+    @patch("agent_sync.publish.publish_skills")
+    @patch("agent_sync.publish.get_available_skills")
+    @patch("agent_sync.publish.get_available_agents")
+    @patch("agent_sync.publish.scan_file")
+    @patch("agent_sync.publish.format_issues_for_display")
+    @patch("rich.prompt.Confirm.ask")
     def test_publish_all_dry_run(
-        self, mock_format, mock_scan, mock_get_agents, mock_get_skills,
+        self, mock_confirm, mock_format, mock_scan, mock_get_agents, mock_get_skills,
         mock_publish_skills, mock_publish_agents, runner
     ):
         """Test --all --dry-run shows summary and security scan."""
@@ -54,12 +55,12 @@ class TestPublishCLI:
         mock_publish_skills.assert_not_called()
         mock_publish_agents.assert_not_called()
 
-    @patch("agent_sync.cli.publish_agents")
-    @patch("agent_sync.cli.publish_skills")
-    @patch("agent_sync.cli.get_available_skills")
-    @patch("agent_sync.cli.get_available_agents")
-    @patch("agent_sync.cli.scan_file")
-    @patch("agent_sync.cli.Confirm.ask")
+    @patch("agent_sync.publish.publish_agents")
+    @patch("agent_sync.publish.publish_skills")
+    @patch("agent_sync.publish.get_available_skills")
+    @patch("agent_sync.publish.get_available_agents")
+    @patch("agent_sync.publish.scan_file")
+    @patch("rich.prompt.Confirm.ask")
     def test_publish_skills_only(
         self, mock_confirm, mock_scan, mock_get_agents, mock_get_skills,
         mock_publish_skills, mock_publish_agents, runner
@@ -86,12 +87,12 @@ class TestPublishCLI:
         mock_publish_skills.assert_called_once()
         mock_publish_agents.assert_not_called()
 
-    @patch("agent_sync.cli.publish_agents")
-    @patch("agent_sync.cli.publish_skills")
-    @patch("agent_sync.cli.get_available_skills")
-    @patch("agent_sync.cli.get_available_agents")
-    @patch("agent_sync.cli.scan_file")
-    @patch("agent_sync.cli.Confirm.ask")
+    @patch("agent_sync.publish.publish_agents")
+    @patch("agent_sync.publish.publish_skills")
+    @patch("agent_sync.publish.get_available_skills")
+    @patch("agent_sync.publish.get_available_agents")
+    @patch("agent_sync.publish.scan_file")
+    @patch("rich.prompt.Confirm.ask")
     def test_publish_agents_only(
         self, mock_confirm, mock_scan, mock_get_agents, mock_get_skills,
         mock_publish_skills, mock_publish_agents, runner
@@ -118,12 +119,12 @@ class TestPublishCLI:
         mock_publish_skills.assert_not_called()
         mock_publish_agents.assert_called_once()
 
-    @patch("agent_sync.cli.publish_agents")
-    @patch("agent_sync.cli.publish_skills")
-    @patch("agent_sync.cli.get_available_skills")
-    @patch("agent_sync.cli.get_available_agents")
-    @patch("agent_sync.cli.scan_file")
-    @patch("agent_sync.cli.Confirm.ask")
+    @patch("agent_sync.publish.publish_agents")
+    @patch("agent_sync.publish.publish_skills")
+    @patch("agent_sync.publish.get_available_skills")
+    @patch("agent_sync.publish.get_available_agents")
+    @patch("agent_sync.publish.scan_file")
+    @patch("rich.prompt.Confirm.ask")
     def test_publish_cancelled_by_user(
         self, mock_confirm, mock_scan, mock_get_agents, mock_get_skills,
         mock_publish_skills, mock_publish_agents, runner
@@ -143,8 +144,8 @@ class TestPublishCLI:
         mock_publish_skills.assert_not_called()
         mock_publish_agents.assert_not_called()
 
-    @patch("agent_sync.cli.get_available_skills")
-    @patch("agent_sync.cli.get_available_agents")
+    @patch("agent_sync.publish.get_available_skills")
+    @patch("agent_sync.publish.get_available_agents")
     def test_publish_nothing_found(self, mock_get_agents, mock_get_skills, runner):
         """Test when nothing to publish."""
         mock_get_skills.return_value = []
@@ -157,12 +158,12 @@ class TestPublishCLI:
         assert result.exit_code == 0
         assert "Nothing found to publish" in result.output
 
-    @patch("agent_sync.cli.publish_agents")
-    @patch("agent_sync.cli.publish_skills")
-    @patch("agent_sync.cli.get_available_skills")
-    @patch("agent_sync.cli.get_available_agents")
-    @patch("agent_sync.cli.scan_file")
-    @patch("agent_sync.cli.Confirm.ask")
+    @patch("agent_sync.publish.publish_agents")
+    @patch("agent_sync.publish.publish_skills")
+    @patch("agent_sync.publish.get_available_skills")
+    @patch("agent_sync.publish.get_available_agents")
+    @patch("agent_sync.publish.scan_file")
+    @patch("rich.prompt.Confirm.ask")
     def test_publish_security_warning_for_agents(
         self, mock_confirm, mock_scan, mock_get_agents, mock_get_skills,
         mock_publish_skills, mock_publish_agents, runner
@@ -184,12 +185,12 @@ class TestPublishCLI:
         assert "Scanned for sensitive patterns" in result.output
         assert "publishing agent instructions" in result.output
 
-    @patch("agent_sync.cli.publish_agents")
-    @patch("agent_sync.cli.publish_skills")
-    @patch("agent_sync.cli.get_available_skills")
-    @patch("agent_sync.cli.get_available_agents")
-    @patch("agent_sync.cli.scan_file")
-    @patch("agent_sync.cli.Confirm.ask")
+    @patch("agent_sync.publish.publish_agents")
+    @patch("agent_sync.publish.publish_skills")
+    @patch("agent_sync.publish.get_available_skills")
+    @patch("agent_sync.publish.get_available_agents")
+    @patch("agent_sync.publish.scan_file")
+    @patch("rich.prompt.Confirm.ask")
     def test_publish_both_shows_contextual_warning(
         self, mock_confirm, mock_scan, mock_get_agents, mock_get_skills,
         mock_publish_skills, mock_publish_agents, runner
@@ -213,12 +214,12 @@ class TestPublishCLI:
         assert "📚 Skills" in result.output
         assert "🤖 Agent Instructions" in result.output
 
-    @patch("agent_sync.cli.publish_agents")
-    @patch("agent_sync.cli.publish_skills")
-    @patch("agent_sync.cli.get_available_skills")
-    @patch("agent_sync.cli.get_available_agents")
-    @patch("agent_sync.cli.scan_file")
-    @patch("agent_sync.cli.Confirm.ask")
+    @patch("agent_sync.publish.publish_agents")
+    @patch("agent_sync.publish.publish_skills")
+    @patch("agent_sync.publish.get_available_skills")
+    @patch("agent_sync.publish.get_available_agents")
+    @patch("agent_sync.publish.scan_file")
+    @patch("rich.prompt.Confirm.ask")
     def test_publish_shows_security_status_table(
         self, mock_confirm, mock_scan, mock_get_agents, mock_get_skills,
         mock_publish_skills, mock_publish_agents, runner
