@@ -430,8 +430,7 @@ def repo(repo_url: str | None, remove: bool):
 
 
 @config.command()
-@click.option("--agent", help="Specific agent to configure")
-def edit(agent: str | None):
+def edit():
     """Open configuration file in editor."""
     import subprocess
 
