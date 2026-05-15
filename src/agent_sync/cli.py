@@ -632,11 +632,11 @@ def list_skills(json_output: bool):
     if not skills:
         console.print("\n[yellow]No skills found in ~/.agents/skills/[/yellow]\n")
         return
-    
+
     if json_output:
         console.print_json(json.dumps(skills, indent=2))
         return
-    
+
     console.print(f"\n[bold]📚 Centralized Skills ({len(skills)})[/]\n")
     table = Table(box=box.SIMPLE)
     table.add_column("Status", style="green")
@@ -666,7 +666,7 @@ def list_custom_agents(json_output: bool):
     from rich.table import Table
 
     from .agents import get_all_agents
-    
+
     result = []
     for agent in get_all_agents():
         if not agent.supports_custom_agents():
@@ -682,11 +682,11 @@ def list_custom_agents(json_output: bool):
                 entry["types"].append({"type": "global", "path": str(agent.agents_path_global), "files": len(files)})
         if entry["types"]:
             result.append(entry)
-    
+
     if json_output:
         console.print_json(json.dumps(result, indent=2))
         return
-    
+
     console.print("\n[bold]🤖 Custom Agents\n[/]\n")
     table = Table(box=box.SIMPLE)
     table.add_column("Agent", style="cyan")
@@ -717,21 +717,10 @@ def list_custom_agents(json_output: bool):
 
 
 @skills.command()
-def diff():
-    """Show differences between local and remote skills.
-
-    \b
-    Compares skills in ~/.agents/skills/ with skills in GitHub repository.
-    Shows which skills exist only locally or only remotely.
-
-    \b
-    Examples:
-      # Show differences
-      agent-sync skills diff
-
-      # Check if in sync
-      agent-sync skills diff  # Shows "✓ Local and remote are in sync" if matched
-    """
+@click.option("--json", "json_output", is_flag=True, help="Output as JSON for programmatic use")
+def diff(json_output: bool):
+    """Show differences between local and remote skills."""
+    import json
     from .skills_diff import SkillsDiff
 
     diff_mgr = SkillsDiff()
@@ -740,7 +729,12 @@ def diff():
         console.print("[yellow]⚠ No repository configured yet.[/yellow]")
         console.print("Run [green]agent-sync init[/green] or [green]agent-sync link[/green] first.\n")
         return
-
+    
+    diff_data = diff_mgr.get_diff_data()
+    if json_output:
+        console.print_json(json.dumps(diff_data, indent=2))
+        return
+    
     diff_mgr.show_diff()
 
 
@@ -1309,7 +1303,7 @@ def mcp(dry_run: bool, force: bool, conflicts: bool, source: tuple[str, ...], ou
 def status(json_output: bool):
     """Show sync status and last sync times."""
     import json
-    
+
     config = Config()
     sync_manager = SyncManager(config)
 
@@ -1906,7 +1900,7 @@ def agents(json_output: bool):
     from .agents import get_agents
     agents_list = get_agents()
     config = Config()
-    
+
     if json_output:
         output = {}
         for agent in agents_list:
@@ -1918,7 +1912,7 @@ def agents(json_output: bool):
             }
         console.print_json(json.dumps(output, indent=2))
         return
-    
+
     console.print("\n🤖 Supported Agents\n")
     table = Table(show_header=True, header_style="bold magenta")
     table.add_column("Agent", style="cyan")
