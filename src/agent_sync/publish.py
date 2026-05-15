@@ -107,6 +107,30 @@ def _git_clone_or_init(repo_url: str, tmp_path: Path) -> None:
         subprocess.run(["git", "branch", "-M", "main"], cwd=tmp_path, capture_output=True, timeout=15)
 
 
+def _git_push(tmp_path: Path, repo_url: str, message: str) -> None:
+    """Add, commit and push to remote."""
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, timeout=30)
+    subprocess.run(
+        ["git", "commit", "-m", message],
+        cwd=tmp_path,
+        capture_output=True,
+        timeout=30,
+    )
+    subprocess.run(
+        ["git", "remote", "add", "origin", repo_url],
+        cwd=tmp_path,
+        capture_output=True,
+        timeout=15,
+    )
+    subprocess.run(
+        ["git", "push", "-u", "origin", "main", "--force"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+        timeout=120,
+    )
+
+
 # =============================================================================
 # SHARED HELPERS (DRY)
 # =============================================================================
