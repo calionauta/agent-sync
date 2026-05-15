@@ -12,8 +12,6 @@ The .agents/ directory (global: ~/.agents/) is the canonical location for:
 Supports fmt:.agents for path normalization.
 """
 
-import json
-import shutil
 from pathlib import Path
 
 from rich.console import Console

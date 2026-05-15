@@ -5,9 +5,8 @@ Scans agent_registry.yaml to find instruction files (.md) in agent
 config directories based on config_patterns.
 """
 
-from pathlib import Path
 from dataclasses import dataclass
-from typing import Optional
+from pathlib import Path
 
 import yaml
 
@@ -29,8 +28,8 @@ def load_registry() -> dict:
 
 
 def discover_agent_instructions(
-    include_agents: Optional[list[str]] = None,
-    exclude_agents: Optional[list[str]] = None,
+    include_agents: list[str] | None = None,
+    exclude_agents: list[str] | None = None,
 ) -> list[AgentInstructionFile]:
     """
     Scan config_patterns from registry and find .md instruction files.

@@ -67,27 +67,27 @@ def _mask_false_positives(content: str) -> tuple[str, dict]:
         "placeholders": 0,
         "examples": 0,
     }
-    
+
     # Count and mask code blocks
     mask_info["code_blocks"] = len(CODE_BLOCK_PATTERN.findall(content))
     content = CODE_BLOCK_PATTERN.sub('[CODE_BLOCK_REDACTED]', content)
-    
+
     # Count and mask inline code (less aggressive)
     mask_info["env_refs"] = len(PROCESS_ENV_PATTERN.findall(content))
     content = PROCESS_ENV_PATTERN.sub('[ENV_REF_REDACTED]', content)
-    
+
     # Mask variable references like $VAR, ${VAR}
     mask_info["variables"] = len(VARIABLE_REF_PATTERN.findall(content))
     content = VARIABLE_REF_PATTERN.sub('[VAR_REDACTED]', content)
-    
+
     # Mask <placeholder> patterns
     mask_info["placeholders"] = len(PLACEHOLDER_PATTERN.findall(content))
     content = PLACEHOLDER_PATTERN.sub('[PLACEHOLDER]', content)
-    
+
     # Mask example secrets like "secret_abc123", "password_example"
     mask_info["examples"] = len(SECRET_EXAMPLE_PATTERN.findall(content))
     content = SECRET_EXAMPLE_PATTERN.sub('[EXAMPLE_SECRET]', content)
-    
+
     return content, mask_info
 
 
@@ -113,7 +113,7 @@ PATTERNS: list[tuple[str, str, re.Pattern, str]] = [
      "Contains root directory reference"),
     ("ABS_PATH_WINDOWS", "high", re.compile(r"[A-Z]:\\[\w\\]+"),
      "Contains Windows absolute path"),
-    
+
     # REAL tokens - these are NEVER false positives (real key format)
     ("TOKEN_OPENAI", "critical", re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"),
      "OpenAI API key detected - NEVER publish this!"),
@@ -121,17 +121,17 @@ PATTERNS: list[tuple[str, str, re.Pattern, str]] = [
      "GitHub personal access token - NEVER publish this!"),
     ("TOKEN_GITHUB_ALT", "critical", re.compile(r"\bgho_[A-Za-z0-9]{36}\b"),
      "GitHub OAuth token detected - NEVER publish this!"),
-    
+
     # Internal commands - these reveal private infrastructure
     ("INTERNAL_CMD_SKILL", "high", re.compile(r"/skill:[a-z0-9-]+"),
      "Internal /skill command - reveals private skill names not in public registry"),
     ("INTERNAL_CMD_CTX", "high", re.compile(r"ctx_(batch_execute|search|execute)\s*\("),
      "Internal ctx command - reveals private tooling"),
-    
+
     # Server paths - specific private infrastructure
     ("SERVER_PATH", "medium", re.compile(r"(?i)\b(server\.|renatocaliari\.com|SSH)\b"),
      "Private server path or domain detected"),
-    
+
     # SSH keys - real key format
     ("SSH_KEY", "critical", re.compile(r"-----BEGIN (RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----"),
      "SSH private key detected - NEVER publish this!"),
@@ -162,10 +162,10 @@ def scan_file(path: Path) -> ScanResult:
 
     # Step 1: Mask false positives FIRST
     masked_content, mask_info = _mask_false_positives(content)
-    
+
     # Track which issues are in masked regions
     masked_regions: list[tuple[int, int]] = []
-    for pattern in [CODE_BLOCK_PATTERN, PROCESS_ENV_PATTERN, VARIABLE_REF_PATTERN, 
+    for pattern in [CODE_BLOCK_PATTERN, PROCESS_ENV_PATTERN, VARIABLE_REF_PATTERN,
                     PLACEHOLDER_PATTERN, SECRET_EXAMPLE_PATTERN]:
         for m in pattern.finditer(content):
             masked_regions.append((m.start(), m.end()))
@@ -174,15 +174,15 @@ def scan_file(path: Path) -> ScanResult:
     for rule, severity, pattern, explanation in PATTERNS:
         for match in pattern.finditer(masked_content):
             snippet = match.group(0)
-            
+
             # Truncate snippet for display (max 50 chars)
             if len(snippet) > 50:
                 snippet = snippet[:50] + "..."
-            
+
             # Determine context
             match_pos = match.start()
             context = "hardcoded"
-            
+
             # Check if this match overlaps with a masked region in original
             for orig_start, orig_end in masked_regions:
                 if abs(match_pos - orig_start) < 10:  # Close to masked region
@@ -197,7 +197,7 @@ def scan_file(path: Path) -> ScanResult:
                     elif 'code' in lookback or '```' in lookback:
                         context = "code"
                     break
-            
+
             # Special handling for /skill: commands - check if skill exists
             if rule == "INTERNAL_CMD_SKILL":
                 skill_name = snippet.replace("/skill:", "")
@@ -211,7 +211,7 @@ def scan_file(path: Path) -> ScanResult:
                     effective_severity = severity
             else:
                 effective_severity = severity
-            
+
             issues.append(Issue(
                 rule=rule,
                 severity=effective_severity,
@@ -231,7 +231,7 @@ def scan_file(path: Path) -> ScanResult:
 
     # File is safe if no critical hardcoded issues
     has_critical_hardcoded = any(
-        i["severity"] == "critical" and i.get("context") != "variable" 
+        i["severity"] == "critical" and i.get("context") != "variable"
         for i in unique
     )
     safe = len(unique) == 0 or not has_critical_hardcoded
@@ -308,7 +308,7 @@ def format_issues_for_display(issues: list[Issue]) -> str:
         context_icon = get_context_icon(context)
         snippet = issue["snippet"]
         explanation = issue.get("explanation", "")
-        
+
         # Format based on context
         if context == "variable":
             lines.append(f"  • [{color}]{issue['severity']}[/{color}] [{color}]{issue['rule']}[/{color}]: `{snippet}`")
@@ -320,7 +320,7 @@ def format_issues_for_display(issues: list[Issue]) -> str:
             lines.append(f"  • [{color}]{issue['severity']}[/{color}] [{color}]{issue['rule']}[/{color}]: `{snippet}`")
             if explanation:
                 lines.append(f"    ⚠️  {explanation}")
-    
+
     return "\n".join(lines)
 
 
