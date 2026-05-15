@@ -185,15 +185,30 @@ def _interactive_flagged_selection(
         table.add_column("Item", style="cyan")
         table.add_column("Security", justify="center", width=10)
         
+        # Filter to only items with significant issues (skip low/deprecated)
+        flagged_items_filtered = [
+            (item, result, prefix) for item, result, prefix in flagged_items
+            if not result.safe or any(
+                issue.get('context') not in ('variable', 'deprecated') 
+                and issue.get('severity') in ('critical', 'high')
+                for issue in result.issues
+            )
+        ]
+        
+        if not flagged_items_filtered:
+            return [], True  # No significant issues, auto-confirm
+        
+        console.print(f"\n[dim]Showing items with HIGH or CRITICAL security concerns[/dim]\n")
+        
         # Render table with security status + detailed issues
         table = Table(box=box.ROUNDED, show_header=True, header_style="bold cyan")
         table.add_column("ID", justify="right", style="dim", width=4)
         table.add_column("Pub", justify="center", width=5)
         table.add_column("Item", style="cyan")
         table.add_column("Security", justify="center", width=10)
-        table.add_column("Type", style="red")
+        table.add_column("Issues", style="red")
         
-        for i, (item, result, prefix) in enumerate(flagged_items, 1):
+        for i, (item, result, prefix) in enumerate(flagged_items_filtered, 1):
             name = item.get("name") or item.get("filename") or str(item)
             if prefix:
                 name = f"{prefix}/{name}"
@@ -204,31 +219,46 @@ def _interactive_flagged_selection(
             
             icon = "[red]⚠️[/]" if not result.safe else "[green]✓[/]"
             
-            # Build issue type summary with severity colors
+            # Build issue summary with context (hardcoded vs variable)
             if hasattr(result, "issues") and result.issues:
-                # Aggregate unique rules and severities
                 rules_seen: list = []
                 severities: set = set()
+                contexts: set = set()
+                
                 for issue in result.issues:
                     if issue.get("rule") not in rules_seen:
                         rules_seen.append(issue.get("rule", "UNKNOWN"))
                     severities.add(issue.get("severity", "medium"))
+                    if issue.get("context"):
+                        contexts.add(issue["context"])
                 
-                # Priority for severity - show highest
+                # Priority for severity
                 priority = {"critical": 4, "high": 3, "medium": 2, "low": 1}
                 highest = max((priority.get(s, 0) for s in severities), default=2)
                 sev_label = next((k for k, v in priority.items() if v == highest), "medium")
                 
-                # Color mapping for Rich
-                color_map = {"critical": "red", "high": "yellow", "medium": "magenta", "low": "cyan"}
+                # Color mapping
+                color_map = {"critical": "red bold", "high": "yellow bold", "medium": "magenta", "low": "cyan"}
                 color = color_map.get(sev_label, "white")
                 
-                # Show rules with color
+                # Show rules
                 rules_text = ", ".join(rules_seen[:3])
                 if len(rules_seen) > 3:
                     rules_text += f" +{len(rules_seen) - 3}"
                 
+                # Context indicator
+                if "hardcoded" in contexts:
+                    context_note = "🔴 hardcoded"
+                elif "deprecated" in contexts:
+                    context_note = "🟠 deprecated"
+                elif "variable" in contexts:
+                    context_note = "🟡 env var"
+                else:
+                    context_note = ""
+                
                 issue_text = f"[{color}]{sev_label.upper()}[/{color}]: {rules_text}"
+                if context_note:
+                    issue_text += f" {context_note}"
             else:
                 issue_text = "[dim]none[/dim]"
             
