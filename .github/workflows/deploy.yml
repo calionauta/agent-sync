@@ -43,10 +43,10 @@ jobs:
 
       - name: Create deployment directory
         run: |
-          # Copy index.html to root
+          mkdir -p _site
           cp index.html _site/
-          # Copy docs to /docs subfolder
-          cp -r site_docs/* _site/docs/ 2>/dev/null || mkdir -p _site/docs && cp -r site_docs/* _site/docs/
+          mkdir -p _site/docs
+          cp -r site_docs/* _site/docs/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
