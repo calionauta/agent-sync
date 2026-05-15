@@ -145,6 +145,9 @@ def scan_file(path: Path) -> ScanResult:
     """
     Scan a single file for sensitive content.
 
+    Skips binary/non-text files (.pyc, .pyo, .pyd, .so, .dll, .dylib, .exe, .bin)
+    that cannot be meaningfully scanned and would cause issues.
+
     Uses smart masking to reduce false positives from:
     - Code blocks (``` ``` ```)
     - Environment variable references (process.env.XYZ)
@@ -158,6 +161,13 @@ def scan_file(path: Path) -> ScanResult:
     Returns:
         ScanResult with safe status, list of issues found, and any error summary.
     """
+    # Skip binary/non-text files
+    if path.suffix in (".pyc", ".pyo", ".pyd", ".so", ".dll", ".dylib", ".exe", ".bin",
+                       ".whl", ".zip", ".tar", ".gz", ".bz2", ".xz",
+                       ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico",
+                       ".pdf", ".doc", ".docx", ".xls", ".xlsx"):
+        return ScanResult(safe=True, issues=[], summary="Binary file skipped")
+
     try:
         content = path.read_text(encoding="utf-8", errors="ignore")
     except Exception as e:
