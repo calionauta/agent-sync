@@ -35,6 +35,10 @@ jobs:
           pip install --no-cache-dir -r docs/requirements.txt
           pip install --no-cache-dir -e .
 
+      - name: Generate CLI documentation
+        run: |
+          python scripts/generate_cli_docs.py
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
@@ -43,8 +47,9 @@ jobs:
 
       - name: Create deployment directory
         run: |
-          mkdir -p _site
+          # Copy index.html to root
           cp index.html _site/
+          # Copy docs to /docs subfolder
           mkdir -p _site/docs
           cp -r site_docs/* _site/docs/
 
