@@ -1,0 +1,6 @@
+# Documentation dependencies
+# By cali (Renato Caliari)
+
+mkdocs>=1.5,<2
+mkdocs-material>=9.5,<10
+mkdocs-click>=0.8,<1
