@@ -167,3 +167,58 @@ class TestCLI:
 
         assert result.exit_code == 0
         assert "MCP" in result.output or "mcp" in result.output
+
+    def test_link_help(self):
+        """Test link command help."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["link", "--help"])
+
+        assert result.exit_code == 0
+        assert "repository" in result.output.lower()
+
+    def test_agents_list_command(self):
+        """Test agents list command."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["agents"])
+
+        assert result.exit_code == 0
+        assert "opencode" in result.output or "Claude" in result.output or "Supported" in result.output
+
+    def test_enable_agent_help(self):
+        """Test enable agent command help."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["enable", "--help"])
+
+        assert result.exit_code == 0
+        assert "agent" in result.output.lower()
+
+    def test_disable_agent_help(self):
+        """Test disable agent command help."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["disable", "--help"])
+
+        assert result.exit_code == 0
+        assert "agent" in result.output.lower()
+
+    def test_custom_agents_help(self):
+        """Test custom-agents command help."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["custom-agents", "--help"])
+
+        assert result.exit_code == 0
+        assert "agent" in result.output.lower()
+
+    def test_update_help(self):
+        """Test update command help."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["update", "--help"])
+
+        assert result.exit_code == 0
+
+    def test_reconcile_help(self):
+        """Test reconcile command help."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["skills", "reconcile", "--help"])
+
+        assert result.exit_code == 0
+        assert "reconcile" in result.output.lower()
