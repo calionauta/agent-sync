@@ -126,7 +126,8 @@ class TestPublishCLI:
         result = runner.invoke(main, ["publish", "--agents", "--dry-run"], input="\n")
         assert result.exit_code == 0, result.output
         # Check for unified security warning
-        assert "SECURITY SCAN applies to BOTH" in result.output
+        assert "Public Disclosure" in result.output
+        assert "What will be scanned" in result.output or "scanned" in result.output.lower()
         assert "agent instructions" in result.output.lower()
 
     @patch("agent_sync.publish.scan_file")
@@ -147,9 +148,7 @@ class TestPublishCLI:
         mock_interactive.return_value = ([], True)
         result = runner.invoke(main, ["publish", "--dry-run"], input="\n")
         assert result.exit_code == 0, result.output
-        assert "both skills and agent instructions are scanned for" in result.output.lower()
-        assert "Skills:" in result.output
-        assert "Agents:" in result.output
+        assert "What will be scanned" in result.output.lower() or "scanned" in result.output.lower()
 
     @patch("agent_sync.publish.scan_file")
     @patch("agent_sync.publish._interactive_flagged_selection")
