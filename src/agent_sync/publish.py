@@ -21,6 +21,7 @@ from rich.table import Table
 from .agent_discovery import get_available_agents as get_available_agents_from_discovery
 from .config import Config
 from .security_scanner import scan_file, ScanResult, format_issues_for_display
+from .security_scanner import scan_file, ScanResult, format_issues_for_display
 from .validators import validate_github_url, validate_repo_name
 
 console = Console()
@@ -594,7 +595,52 @@ def publish_skills(repo_url: str | None = None, dry_run: bool = False, interacti
         console.print("\n[yellow]Publish cancelled[/yellow]\n")
         return False
 
-    # 5. EXECUTION
+    # 5. SECURITY SCAN (same as agents)
+    console.print("\n[dim]🔍 Scanning skills for sensitive content...[/dim]")
+    
+    # Collect all files from selected skills
+    all_files: list[Path] = []
+    file_to_skill: dict[Path, str] = {}
+    for skill in selected_skills:
+        if skill["path"].is_dir():
+            for f in skill["path"].rglob("*"):
+                if f.is_file() and not f.name.startswith("."):
+                    all_files.append(f)
+                    file_to_skill[f] = skill["name"]
+        elif skill["path"].is_file():
+            all_files.append(skill["path"])
+            file_to_skill[skill["path"]] = skill["name"]
+    
+    # Scan all files
+    scan_results = {f: scan_file(f) for f in all_files}
+    
+    # Identify files to skip (dangerous names)
+    SKIP_NAMES = {"auth", "token", "key", "secret", "credentials", "password"}
+    skip_files = set()
+    for f in all_files:
+        if any(skip in f.name.lower() for skip in SKIP_NAMES):
+            skip_files.add(f)
+    
+    # Identify flagged files (scanner detected issues but not critical block)
+    flagged_files = {
+        f: r for f, r in scan_results.items() 
+        if f not in skip_files and not r.safe
+    }
+    
+    # Show skip summary
+    if skip_files:
+        console.print(f"[yellow]  ⏭ {len(skip_files)} files skipped (dangerous name)[/yellow]")
+    
+    # Show flagged (warning only, still published)
+    if flagged_files:
+        console.print(f"[yellow]  ⚠️ {len(flagged_files)} files flagged (review after publish)[/yellow]")
+        for f, result in flagged_files.items():
+            skill_name = file_to_skill[f]
+            console.print(f"    [dim]• {skill_name}/{f.name}[/dim]")
+    
+    console.print("")
+    
+    # 6. EXECUTION
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
         skills_tmp_dir = tmp_path / "skills"

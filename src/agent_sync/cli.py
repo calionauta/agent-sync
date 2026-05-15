@@ -1687,42 +1687,35 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
             console.print("\n[dim]These files will still be published. Review before continuing.[/dim]")
 
     # ============================================================================
-    # PHASE 4: Security Warning (Contextual)
+    # PHASE 4: Security Warning (Unified - same scan for skills AND agents)
     # ============================================================================
     warning_lines = []
 
+    # Determine what we're publishing
     if do_skills and do_agents:
-        warning_lines.append("[bold]You are about to publish BOTH skills AND agent instructions.[/bold]")
+        target_desc = f"{skills_count} skills AND {agents_count} agent instructions"
     elif do_skills:
-        warning_lines.append("[bold]You are about to publish skills.[/bold]")
-    elif do_agents:
-        warning_lines.append("[bold]You are about to publish agent instructions.[/bold]")
+        target_desc = f"{skills_count} skills"
+    else:
+        target_desc = f"{agents_count} agent instructions"
 
+    warning_lines.append(f"[bold]Publishing {target_desc} to PUBLIC repository[/bold]")
     warning_lines.append("")
-    warning_lines.append("[bold yellow]⚠️  SECURITY WARNING - PUBLIC REPOSITORY[/bold yellow]")
+    warning_lines.append("[bold yellow]⚠️  SECURITY SCAN applies to BOTH[/bold yellow]")
     warning_lines.append("")
-    warning_lines.append("This repository will be PUBLIC and visible to everyone.")
-    warning_lines.append("Only publish content you want to share openly.")
-
-    if do_skills:
-        warning_lines.append("")
-        warning_lines.append("📚 Skills:")
-        warning_lines.append("  • Published as-is (no scanning performed)")
-        warning_lines.append("  • Files matching 'auth', 'token', 'key', 'secret' are skipped")
-
-    if do_agents:
-        warning_lines.append("")
-        warning_lines.append("🤖 Agent Instructions:")
-        warning_lines.append("  • Scanned for sensitive patterns before publishing")
-        warning_lines.append("  • Patterns detected: API keys, tokens, private URLs, email addresses")
-        warning_lines.append("  • ⚠️ Warning means patterns detected - review and confirm")
-
+    warning_lines.append("[cyan]Both skills AND agent instructions are scanned for:[/cyan]")
+    warning_lines.append("  • API keys / tokens (sk-, ghp_, gho_, etc.)")
+    warning_lines.append("  • Private URLs (server., .internal, /home/, C:\\)")
+    warning_lines.append("  • Absolute paths (/Users/, /root/)")
+    warning_lines.append("  • Internal commands (/skill:, ctx_batch_execute)")
     warning_lines.append("")
-    warning_lines.append("[bold red]What will NEVER be published:[/]")
-    warning_lines.append("  ✗ Config files (settings.json, config.yaml, credentials.json)")
-    warning_lines.append("  ✗ Files containing 'auth', 'token', 'key', 'secret' in name")
+    warning_lines.append("[red]SKIPPED automatically (never published):[/red]")
+    warning_lines.append("  ✗ Files with: auth, token, key, secret, credentials in name")
     warning_lines.append("  ✗ .env files")
-    warning_lines.append("  ✗ Your private agent-sync-configs repository")
+    warning_lines.append("  ✗ Config files: settings.json, config.yaml, credentials.json")
+    warning_lines.append("")
+    warning_lines.append("[yellow]⚠️  Flagged files are STILL published (with warning)[/yellow]")
+    warning_lines.append("[dim]Review flagged items after publishing[/dim]")
 
     console.print(Panel(
         "\n".join(warning_lines),
