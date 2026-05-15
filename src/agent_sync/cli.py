@@ -658,52 +658,52 @@ def custom_agents():
 
 
 @custom_agents.command("list")
-def list_custom_agents():
+@click.option("--json", "json_output", is_flag=True, help="Output as JSON for programmatic use")
+def list_custom_agents(json_output: bool):
     """List custom agents for all supported agents."""
+    import json
     from rich import box
     from rich.table import Table
 
     from .agents import get_all_agents
-
+    
+    result = []
+    for agent in get_all_agents():
+        if not agent.supports_custom_agents():
+            continue
+        entry = {"agent": agent.name, "types": []}
+        if agent.agents_path and agent.agents_path.exists():
+            files = list(agent.agents_path.rglob("*.md"))
+            if files:
+                entry["types"].append({"type": "project", "path": str(agent.agents_path), "files": len(files)})
+        if agent.agents_path_global and agent.agents_path_global.exists():
+            files = list(agent.agents_path_global.rglob("*.md"))
+            if files:
+                entry["types"].append({"type": "global", "path": str(agent.agents_path_global), "files": len(files)})
+        if entry["types"]:
+            result.append(entry)
+    
+    if json_output:
+        console.print_json(json.dumps(result, indent=2))
+        return
+    
     console.print("\n[bold]🤖 Custom Agents\n[/]\n")
-
     table = Table(box=box.SIMPLE)
     table.add_column("Agent", style="cyan")
     table.add_column("Type", style="yellow")
     table.add_column("Path", style="dim")
     table.add_column("Files", style="green")
 
-    found_any = False
+    for entry in result:
+        for t in entry["types"]:
+            table.add_row(
+                entry["agent"],
+                t["type"].capitalize(),
+                t["path"],
+                str(t["files"])
+            )
 
-    for agent in get_all_agents():
-        if not agent.supports_custom_agents():
-            continue
-
-        # Check project-level agents
-        if agent.agents_path and agent.agents_path.exists():
-            found_any = True
-            agent_files = list(agent.agents_path.rglob("*.md"))
-            if agent_files:
-                table.add_row(
-                    agent.name,
-                    "Project",
-                    str(agent.agents_path),
-                    str(len(agent_files))
-                )
-
-        # Check global agents
-        if agent.agents_path_global and agent.agents_path_global.exists():
-            found_any = True
-            agent_files = list(agent.agents_path_global.rglob("*.md"))
-            if agent_files:
-                table.add_row(
-                    agent.name,
-                    "Global",
-                    str(agent.agents_path_global),
-                    str(len(agent_files))
-                )
-
-    if not found_any:
+    if not result:
         console.print("[yellow]No custom agents found.[/yellow]\n")
         console.print("Custom agents are stored in:")
         console.print("  • [dim]~/.claude/agents/[/dim] - Claude Code global agents")
