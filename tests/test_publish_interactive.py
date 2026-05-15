@@ -159,17 +159,18 @@ class TestPublishCLIIntegration:
         assert result.exit_code == 0
         assert "All cleared" in result.output
 
+    @patch("agent_sync.publish.publish_skills")
     @patch("agent_sync.publish._interactive_flagged_selection")
     @patch("agent_sync.publish.get_available_skills")
     @patch("agent_sync.publish.get_available_agents")
     @patch("agent_sync.publish.scan_file")
     def test_publish_cancelled_after_flagged_selection(
-        self, mock_scan, mock_get_agents, mock_get_skills, mock_interactive, runner
+        self, mock_scan, mock_get_agents, mock_get_skills, mock_interactive, mock_publish, runner
     ):
         """Test user can cancel after flagged selection."""
         skill_path = MagicMock(spec=Path)
-        skill_path.is_dir.return_value = True
-        skill_path.rglob.return_value = []
+        skill_path.is_dir.return_value = False
+        skill_path.is_file.return_value = True
         mock_get_skills.return_value = [{"name": "skill1", "path": skill_path}]
         mock_get_agents.return_value = []
         
@@ -178,7 +179,9 @@ class TestPublishCLIIntegration:
         
         result = runner.invoke(main, ["publish", "--skills"], input="\n")
         
+        # Should cancel without attempting publish
         assert "cancelled" in result.output.lower() or "aborted" in result.output.lower()
+        mock_publish.assert_not_called()
 
 
 class TestPublishSkillsOnly:
@@ -295,13 +298,18 @@ class TestUnifiedSecurityScan:
         self, mock_scan, mock_get_agents, mock_get_skills, mock_interactive, runner
     ):
         """Test skipped file types are mentioned."""
-        mock_get_skills.return_value = []
+        # Need at least one skill or agent to go through full flow
+        skill_path = MagicMock(spec=Path)
+        skill_path.is_dir.return_value = True
+        skill_path.rglob.return_value = []
+        
+        mock_get_skills.return_value = [{"name": "empty-skill", "path": skill_path}]
         mock_get_agents.return_value = []
         
         mock_scan.return_value = MagicMock(safe=True, issues=[])
         mock_interactive.return_value = ([], True)
         
-        result = runner.invoke(main, ["publish", "--dry-run"], input="\n")
+        result = runner.invoke(main, ["publish", "--skills", "--dry-run"], input="\n")
         
         assert "SKIPPED automatically" in result.output
         assert "auth, token, key, secret" in result.output
