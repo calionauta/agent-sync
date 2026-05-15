@@ -108,3 +108,62 @@ class TestCLI:
 
         assert result.exit_code == 0
         mock_sync_instance.push.assert_called_once()
+
+    def test_config_show_command(self):
+        """Test config show command."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["config", "show"])
+
+        assert result.exit_code == 0
+        assert "Config" in result.output or "Repository" in result.output
+
+    def test_init_command_help(self):
+        """Test init command help."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["init", "--help"])
+
+        assert result.exit_code == 0
+        assert "Repository name" in result.output or "wizard" in result.output
+
+    def test_skills_list_command(self):
+        """Test skills list command."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["skills", "list"])
+
+        assert result.exit_code == 0
+
+    @patch('agent_sync.cli.Config')
+    def test_diff_command(self, mock_config):
+        """Test diff command."""
+        mock_config_instance = MagicMock()
+        mock_config_instance.repo_url = "https://github.com/test/repo.git"
+        mock_config.return_value = mock_config_instance
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["skills", "diff"])
+
+        assert result.exit_code == 0
+        assert "Local and remote are in sync" in result.output or "remote" in result.output
+
+    def test_centralize_help(self):
+        """Test centralize command help."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["skills", "centralize", "--help"])
+
+        assert result.exit_code == 0
+        assert "centralize" in result.output.lower()
+
+    def test_secrets_list_command(self):
+        """Test secrets list command."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["secrets", "list"])
+
+        assert result.exit_code == 0
+
+    def test_mcp_help(self):
+        """Test mcp command help."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["mcp", "--help"])
+
+        assert result.exit_code == 0
+        assert "MCP" in result.output or "mcp" in result.output
