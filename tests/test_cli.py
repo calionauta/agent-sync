@@ -132,7 +132,7 @@ class TestCLI:
 
         assert result.exit_code == 0
 
-    @patch('agent_sync.cli.Config')
+    @patch('agent_sync.skills_diff.Config')
     def test_diff_command(self, mock_config):
         """Test diff command."""
         mock_config_instance = MagicMock()
