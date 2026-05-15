@@ -8,7 +8,6 @@ Previne operações que excederiam limites de:
 """
 
 import os
-import shutil
 from pathlib import Path
 
 from rich.console import Console

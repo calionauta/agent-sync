@@ -1,11 +1,11 @@
 """Export agent-sync config to DotAgents JSON format."""
+import json
 from datetime import datetime, timezone
 from pathlib import Path
-import json
 
-from agent_sync.config import Config
 from agent_sync.agents import get_agents
 from agent_sync.agents.base import GLOBAL_SKILLS_DIR
+from agent_sync.config import Config
 
 
 class ConfigExporter:

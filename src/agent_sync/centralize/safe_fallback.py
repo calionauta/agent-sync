@@ -6,10 +6,8 @@ restauração em caso de falha.
 
 import json
 import shutil
-import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from rich.console import Console
 
@@ -24,11 +22,11 @@ class Snapshot:
     def __init__(self, hub_path: Path):
         self.hub_path = hub_path
         self.snapshot_dir = hub_path / SNAPSHOT_DIR_NAME
-        self._backup_path: Optional[Path] = None
+        self._backup_path: Path | None = None
         self._manifest: dict = {}
         self._created = False
 
-    def create(self, metadata: Optional[dict] = None) -> Path:
+    def create(self, metadata: dict | None = None) -> Path:
         """Cria um snapshot do estado atual do hub.
 
         Args:
@@ -169,7 +167,7 @@ class Snapshot:
                 json.dump(self._manifest, f, indent=2)
 
     @staticmethod
-    def last_snapshot(hub_path: Path) -> Optional[dict]:
+    def last_snapshot(hub_path: Path) -> dict | None:
         """Retorna o manifest do snapshot mais recente, se houver.
 
         Returns:

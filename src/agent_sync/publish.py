@@ -20,7 +20,7 @@ from rich.table import Table
 
 from .agent_discovery import get_available_agents as get_available_agents_from_discovery
 from .config import Config
-from .security_scanner import scan_file, ScanResult, format_issues_for_display
+from .security_scanner import ScanResult, format_issues_for_display, scan_file
 from .validators import validate_github_url, validate_repo_name
 
 console = Console()
@@ -119,7 +119,7 @@ def _render_flagged_table(
     table = Table(box=box.ROUNDED, show_header=True, header_style="bold yellow")
     table.add_column("Item", style="cyan")
     table.add_column("Issues", style="red")
-    
+
     for item, result, prefix in flagged_items:
         name = item.get("name") or item.get("filename") or str(item)
         if prefix:
@@ -128,7 +128,7 @@ def _render_flagged_table(
         # Truncate for table display
         issues_text = "\n".join(issues_text.split("\n")[:3])  # Max 3 lines
         table.add_row(name, issues_text)
-    
+
     return table
 
 
@@ -151,54 +151,54 @@ def _interactive_flagged_selection(
         Tuple of (selected_items, confirmed)
     """
     from ._selection import parse_multiselect_input
-    
+
     if not flagged_items:
         return [], True
-    
+
     # Filter to only items with significant issues (high/critical, not variable/deprecated)
     def has_significant_issues(result: ScanResult) -> bool:
         """Check if result has issues that warrant user attention."""
         if not result.safe:
             return True
         return any(
-            issue.get('context') not in ('variable', 'deprecated') 
+            issue.get('context') not in ('variable', 'deprecated')
             and issue.get('severity') in ('critical', 'high')
             for issue in result.issues
         )
-    
+
     display_items = [
         (item, result, prefix) for item, result, prefix in flagged_items
         if has_significant_issues(result)
     ]
-    
+
     if not display_items:
         return [], True  # No significant issues, auto-confirm
-    
+
     selected = set()
     item_names = []
     item_map = {}
-    
+
     # Build key-indexed maps using display index
     for i, (item, result, prefix) in enumerate(display_items, 1):
         name = item.get("name") or item.get("filename") or str(item)
         if prefix:
             name = f"{prefix}/{name}"
-        
+
         # Key for selection (include index for uniqueness)
         key = f"{i}:{name}"
         item_names.append(key)
         item_map[key] = (item, result, prefix)
-        
+
         # Default: select items with high/critical issues
         if has_significant_issues(result):
             selected.add(key)
-    
+
     while True:
         console.clear()
         console.print(f"\n[bold yellow]⚠️  {title}[/bold yellow]\n")
         console.print(f"[dim]Showing {len(display_items)} items with HIGH or CRITICAL security concerns[/dim]\n")
         console.print("[dim]Items with 🔴 deprecated or 🟡 env var issues are hidden[/dim]\n")
-        
+
         # Render table with security status + detailed issues
         table = Table(box=box.ROUNDED, show_header=True, header_style="bold cyan")
         table.add_column("ID", justify="right", style="dim", width=4)
@@ -206,45 +206,45 @@ def _interactive_flagged_selection(
         table.add_column("Item", style="cyan")
         table.add_column("Security", justify="center", width=10)
         table.add_column("Issues", style="red")
-        
+
         for i, (item, result, prefix) in enumerate(display_items, 1):
             name = item.get("name") or item.get("filename") or str(item)
             if prefix:
                 name = f"{prefix}/{name}"
-            
+
             key = f"{i}:{name}"
             is_selected = key in selected
             status = "[bold green]✓[/]" if is_selected else "[red]○[/]"
-            
+
             icon = "[red]⚠️[/]" if not result.safe else "[green]✓[/]"
-            
+
             # Build issue summary with context (hardcoded vs variable)
             if hasattr(result, "issues") and result.issues:
                 rules_seen: list = []
                 severities: set = set()
                 contexts: set = set()
-                
+
                 for issue in result.issues:
                     if issue.get("rule") not in rules_seen:
                         rules_seen.append(issue.get("rule", "UNKNOWN"))
                     severities.add(issue.get("severity", "medium"))
                     if issue.get("context"):
                         contexts.add(issue["context"])
-                
+
                 # Priority for severity
                 priority = {"critical": 4, "high": 3, "medium": 2, "low": 1}
                 highest = max((priority.get(s, 0) for s in severities), default=2)
                 sev_label = next((k for k, v in priority.items() if v == highest), "medium")
-                
+
                 # Color mapping
                 color_map = {"critical": "red bold", "high": "yellow bold", "medium": "magenta", "low": "cyan"}
                 color = color_map.get(sev_label, "white")
-                
+
                 # Show rules
                 rules_text = ", ".join(rules_seen[:3])
                 if len(rules_seen) > 3:
                     rules_text += f" +{len(rules_seen) - 3}"
-                
+
                 # Context indicator
                 if "hardcoded" in contexts:
                     context_note = "🔴 hardcoded"
@@ -254,17 +254,17 @@ def _interactive_flagged_selection(
                     context_note = "🟡 env var"
                 else:
                     context_note = ""
-                
+
                 issue_text = f"[{color}]{sev_label.upper()}[/{color}]: {rules_text}"
                 if context_note:
                     issue_text += f" {context_note}"
             else:
                 issue_text = "[dim]none[/dim]"
-            
+
             table.add_row(str(i), status, name, icon, issue_text)
-        
+
         console.print(table)
-        
+
         console.print("\n[bold]Controls:[/bold]")
         console.print("  • Enter numbers to toggle (e.g. [green]'1,3,5'[/green])")
         console.print("  • Type [cyan]'all'[/cyan] or [cyan]'none'[/cyan]")
@@ -275,10 +275,10 @@ def _interactive_flagged_selection(
         if result is None:
             break
         selected = result
-    
+
     # Build selected items list
     selected_items = [item_map[k][0] for k in selected if k in item_map]
-    
+
     # Confirmation
     console.print("\n[bold green]📋 Selection Summary[/]\n")
     summary = Table(box=box.SIMPLE, show_header=False)
@@ -300,11 +300,11 @@ def _generate_public_repo_readme(repo_url: str) -> str:
     repo_name = repo_url.replace("https://github.com/", "").replace(".git", "")
     if "/" not in repo_name:
         return ""
-    
+
     parts = repo_name.split("/")
     username = parts[0]
     full_repo_name = repo_name
-    
+
     # Try to read template
     template_path = TEMPLATES_DIR / "README_public_repo.md"
     if template_path.exists():
@@ -314,7 +314,7 @@ def _generate_public_repo_readme(repo_url: str) -> str:
             full_repo_name=full_repo_name,
             username=username,
         )
-    
+
     # Fallback: generate basic README
     return f"""# {parts[1]}
 
@@ -337,11 +337,11 @@ def _generate_skills_readme(repo_url: str) -> str:
     repo_name = repo_url.replace("https://github.com/", "").replace(".git", "")
     if "/" not in repo_name:
         return ""
-    
+
     parts = repo_name.split("/")
     username = parts[0]
     full_repo_name = repo_name
-    
+
     # Try to read template
     template_path = TEMPLATES_DIR / "README_skills.md"
     if template_path.exists():
@@ -350,7 +350,7 @@ def _generate_skills_readme(repo_url: str) -> str:
             full_repo_name=full_repo_name,
             username=username,
         )
-    
+
     # Fallback
     return f"""# Skills
 
@@ -693,7 +693,7 @@ def publish_skills(repo_url: str | None = None, dry_run: bool = False, interacti
     valid_saved = [name for name in saved_selection if name in available_names]
     missing = set(saved_selection) - set(valid_saved)
     if missing:
-        console.print(f"\n[yellow]⚠ The following previously published skills no longer exist locally [/yellow][red](removed from selection)[/red]:")
+        console.print("\n[yellow]⚠ The following previously published skills no longer exist locally [/yellow][red](removed from selection)[/red]:")
         for name in sorted(missing):
             console.print(f"  [red]• {name}[/red]")
         console.print()
@@ -838,7 +838,7 @@ def publish_skills(repo_url: str | None = None, dry_run: bool = False, interacti
 
     # 5. SECURITY SCAN (same as agents)
     console.print("\n[dim]🔍 Scanning skills for sensitive content...[/dim]")
-    
+
     # Collect all files from selected skills
     all_files: list[Path] = []
     file_to_skill: dict[Path, str] = {}
@@ -851,36 +851,36 @@ def publish_skills(repo_url: str | None = None, dry_run: bool = False, interacti
         elif skill["path"].is_file():
             all_files.append(skill["path"])
             file_to_skill[skill["path"]] = skill["name"]
-    
+
     # Scan all files
     scan_results = {f: scan_file(f) for f in all_files}
-    
+
     # Identify files to skip (dangerous names)
     SKIP_NAMES = {"auth", "token", "key", "secret", "credentials", "password"}
     skip_files = set()
     for f in all_files:
         if any(skip in f.name.lower() for skip in SKIP_NAMES):
             skip_files.add(f)
-    
+
     # Identify flagged files (scanner detected issues but not critical block)
     flagged_files = {
-        f: r for f, r in scan_results.items() 
+        f: r for f, r in scan_results.items()
         if f not in skip_files and not r.safe
     }
-    
+
     # Show skip summary
     if skip_files:
         console.print(f"[yellow]  ⏭ {len(skip_files)} files skipped (dangerous name)[/yellow]")
-    
+
     # Show flagged (warning only, still published)
     if flagged_files:
         console.print(f"[yellow]  ⚠️ {len(flagged_files)} files flagged (review after publish)[/yellow]")
         for f, result in flagged_files.items():
             skill_name = file_to_skill[f]
             console.print(f"    [dim]• {skill_name}/{f.name}[/dim]")
-    
+
     console.print("")
-    
+
     # 6. EXECUTION
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)

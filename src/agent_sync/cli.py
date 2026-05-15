@@ -1,6 +1,7 @@
 """Main CLI entry point for agent-sync."""
 
 import os
+import subprocess
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -465,10 +466,12 @@ def export(dry_run: bool, output: str | None):
       agent-sync config export --output /custom/path/config.json
     """
     from pathlib import Path
+
     from rich.console import Console
 
-    from .config_exporter import ConfigExporter
     from agent_sync.agents import GLOBAL_SKILLS_DIR
+
+    from .config_exporter import ConfigExporter
 
     console = Console()
     output_path = Path(output) if output else Path.home() / ".agents" / "config.json"
@@ -1020,10 +1023,9 @@ def centralize(copy: bool, push: bool, distribute: bool,
     """
     from rich.prompt import Confirm
 
-    from .skills import SkillsManager
-
     # Ensure DotAgents structure (.agents/ directory)
     from .centralize.handlers.dot_agents_handler import DotAgentsHandler
+    from .skills import SkillsManager
     handler = DotAgentsHandler()
     handler.ensure_structure(dry_run=dry_run)
     console.print()
@@ -1590,16 +1592,20 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
       # Publish to a specific repository
       agent-sync publish --repo https://github.com/user/my-repo
     """
-    from .publish import (
-        publish_skills, publish_agents,
-        get_available_skills, get_available_agents,
-        scan_file, format_issues_for_display,
-        _interactive_flagged_selection,
-    )
-    from rich.panel import Panel
-    from rich.table import Table
     from rich import box
+    from rich.panel import Panel
     from rich.prompt import Confirm
+    from rich.table import Table
+
+    from .publish import (
+        _interactive_flagged_selection,
+        format_issues_for_display,
+        get_available_agents,
+        get_available_skills,
+        publish_agents,
+        publish_skills,
+        scan_file,
+    )
 
     # Default: publish all if no specific flags
     do_all = publish_all and not skills and not agents
@@ -1673,7 +1679,7 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
             if unsafe_count > 0:
                 console.print(f"  [red]└── Warnings: {unsafe_count} flagged[/red]")
             else:
-                console.print(f"  [dim]└── All cleared[/dim]")
+                console.print("  [dim]└── All cleared[/dim]")
         else:
             console.print("[cyan]🤖 Agents:[/cyan] None found")
 
@@ -1724,7 +1730,7 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
             result = scan_results.get(agent["path"])
             if result and not result.safe:
                 all_flagged.append((agent, result, agent["agent"]))
-    
+
     # Group by skill to avoid duplicates in table display
     # Each skill may have multiple files with issues, but we show one row per skill
     skills_by_name: dict[str, list[tuple]] = {}
@@ -1732,7 +1738,7 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
         if skill_name not in skills_by_name:
             skills_by_name[skill_name] = []
         skills_by_name[skill_name].append((f, result))
-    
+
     skills_flagged_items = []
     if do_skills and skills_flagged:
         from .security_scanner import ScanResult, Issue  # noqa
@@ -1741,35 +1747,35 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
             all_issues: list[Issue] = []
             for f, result in files_results:
                 all_issues.extend(result.issues)
-            
+
             # Create aggregated result for display
             aggregated_result = ScanResult(
                 safe=False,
                 issues=all_issues,
                 summary=f"{len(files_results)} files flagged"
             )
-            
+
             skill_item = {
                 "name": skill_name,
                 "files": files_results,  # Keep for reference
             }
             skills_flagged_items.append((skill_item, aggregated_result, skill_name))
-    
+
     if all_flagged or skills_flagged_items:
         console.print("\n")
-        
+
         # Combine all flagged
         flagged_combined = all_flagged + skills_flagged_items
-        
+
         selected_flagged, confirmed = _interactive_flagged_selection(
             flagged_combined,
             title="Select flagged items to publish",
         )
-        
+
         if not confirmed:
             console.print("\n[yellow]Publish cancelled[/yellow]\n")
             return
-        
+
         # Filter to only selected items
         selected_names = set()
         for item in selected_flagged:
@@ -1777,17 +1783,17 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
                 selected_names.add(f"{item['agent']}:{item['filename']}")
             elif item.get("name"):
                 selected_names.add(item["name"])
-        
+
         # Update available agents to only selected
         if do_agents and selected_names:
-            available_agents = [a for a in available_agents 
+            available_agents = [a for a in available_agents
                                if f"{a['agent']}:{a['filename']}" in selected_names]
         elif do_agents:
             available_agents = []
-        
+
         # Update skills count based on selected
         if do_skills:
-            selected_skill_count = sum(1 for s in available_skills 
+            selected_skill_count = sum(1 for s in available_skills
                                        if s["name"] in selected_names)
             skills_count = selected_skill_count
 

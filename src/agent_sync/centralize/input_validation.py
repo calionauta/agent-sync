@@ -5,9 +5,7 @@ operação de movimentação/cópia de skills.
 """
 
 import os
-import stat
 from pathlib import Path
-from typing import Optional
 
 from rich.console import Console
 
@@ -71,7 +69,7 @@ def validate_hub_directory(hub_path: Path) -> list[str]:
     return warnings
 
 
-def validate_skill_name(name: str) -> Optional[str]:
+def validate_skill_name(name: str) -> str | None:
     """Valida que um nome de skill é aceitável para o sistema de arquivos.
 
     Returns:
@@ -96,7 +94,7 @@ def validate_skill_name(name: str) -> Optional[str]:
     return None
 
 
-def validate_skill_path(skill_path: Path) -> Optional[str]:
+def validate_skill_path(skill_path: Path) -> str | None:
     """Valida que um caminho de skill existe e é legível.
 
     Returns:
@@ -128,7 +126,7 @@ def validate_skill_path(skill_path: Path) -> Optional[str]:
     return None
 
 
-def validate_agent_directory(path: Path) -> Optional[str]:
+def validate_agent_directory(path: Path) -> str | None:
     """Valida que o diretório de skills de um agente é acessível.
 
     Returns:

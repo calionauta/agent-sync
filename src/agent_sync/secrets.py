@@ -1,6 +1,7 @@
 """Secrets management for agent-sync."""
 
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 
