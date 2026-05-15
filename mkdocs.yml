@@ -52,7 +52,7 @@ plugins:
   - search:
       separator: '[\s\-,:!=\[\]()"/]+|(?={)|^[^a-zA-Z]+(?=[a-zA-Z])|(?<=[a-zA-Z])[^a-zA-Z]+(?=[A-Z])'
 
-# Auto-generate CLI documentation from Click decorators
+# Auto-generate CLI documentation (via Python script)
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
@@ -65,7 +65,6 @@ markdown_extensions:
   - tables
   - attr_list
   - md_in_html
-  - mkdocs-click
 
 # Navigation structure
 nav:
