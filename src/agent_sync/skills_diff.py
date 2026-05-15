@@ -62,7 +62,19 @@ class SkillsDiff:
             "remote_only": sorted(list(remote - local)),
             "both": sorted(list(local & remote)),
         }
-
+    
+    def get_diff_data(self) -> dict:
+        """Get diff data for JSON output."""
+        diff_result = self.diff()
+        return {
+            "in_sync": not diff_result["local_only"] and not diff_result["remote_only"],
+            "local_only": diff_result["local_only"],
+            "remote_only": diff_result["remote_only"],
+            "both": diff_result["both"],
+            "local_count": len(self.get_local_skills()),
+            "remote_count": len(self.get_remote_skills()),
+        }
+    
     def show_diff(self) -> None:
         """Display diff in a formatted table."""
         from rich import box
