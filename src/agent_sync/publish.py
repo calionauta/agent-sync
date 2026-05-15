@@ -1,7 +1,7 @@
 """Skills and Agent Instructions publishing to public GitHub repositories.
 
 Publish selected skills or agent instructions to a PUBLIC repository
-for sharing with the community. Separate from private agent-sync-configs repository.
+for sharing with the community. Separate from private agent-sync-private repository.
 """
 
 import json
@@ -21,7 +21,6 @@ from rich.table import Table
 from .agent_discovery import get_available_agents as get_available_agents_from_discovery
 from .config import Config
 from .security_scanner import scan_file, ScanResult, format_issues_for_display
-from .security_scanner import scan_file, ScanResult, format_issues_for_display
 from .validators import validate_github_url, validate_repo_name
 
 console = Console()
@@ -29,11 +28,8 @@ console = Console()
 PUBLISH_CONFIG_PATH = Path.home() / ".config" / "agent-sync" / "publish.yaml"
 SKILLS_DIR = Path.home() / ".agents" / "skills"
 
-
-console = Console()
-
-PUBLISH_CONFIG_PATH = Path.home() / ".config" / "agent-sync" / "publish.yaml"
-SKILLS_DIR = Path.home() / ".agents" / "skills"
+# Templates path
+TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 
 # =============================================================================
@@ -119,6 +115,74 @@ def _git_push(tmp_path: Path, repo_url: str, message: str) -> None:
         ["git", "push", "-u", "origin", "main", "--force"],
         cwd=tmp_path, capture_output=True, check=True, timeout=120,
     )
+
+
+def _generate_public_repo_readme(repo_url: str) -> str:
+    """Generate README.md for public repo from template."""
+    # Get username and repo name from URL
+    repo_name = repo_url.replace("https://github.com/", "").replace(".git", "")
+    if "/" not in repo_name:
+        return ""
+    
+    parts = repo_name.split("/")
+    username = parts[0]
+    full_repo_name = repo_name
+    
+    # Try to read template
+    template_path = TEMPLATES_DIR / "README_public_repo.md"
+    if template_path.exists():
+        content = template_path.read_text()
+        return content.format(
+            repo_name=parts[1],
+            full_repo_name=full_repo_name,
+            username=username,
+        )
+    
+    # Fallback: generate basic README
+    return f"""# {parts[1]}
+
+Public repository for sharing AI agent skills and configuration.
+
+## Installation
+
+```bash
+npx skills add {full_repo_name}
+```
+
+## About
+
+Published using [agent-sync](https://github.com/{username}/agent-sync).
+"""
+
+
+def _generate_skills_readme(repo_url: str) -> str:
+    """Generate skills/README.md from template."""
+    repo_name = repo_url.replace("https://github.com/", "").replace(".git", "")
+    if "/" not in repo_name:
+        return ""
+    
+    parts = repo_name.split("/")
+    username = parts[0]
+    full_repo_name = repo_name
+    
+    # Try to read template
+    template_path = TEMPLATES_DIR / "README_skills.md"
+    if template_path.exists():
+        content = template_path.read_text()
+        return content.format(
+            full_repo_name=full_repo_name,
+            username=username,
+        )
+    
+    # Fallback
+    return f"""# Skills
+
+Install skills with:
+
+```bash
+npx skills add {full_repo_name}
+```
+"""
 
 
 # =============================================================================
@@ -651,7 +715,8 @@ def publish_skills(repo_url: str | None = None, dry_run: bool = False, interacti
             if src.is_dir(): shutil.copytree(src, dst)
             else: shutil.copy2(src, dst)
 
-        (tmp_path / "README.md").write_text(generate_readme(selected_skills, repo_url))
+        (tmp_path / "README.md").write_text(_generate_public_repo_readme(repo_url))
+        (tmp_path / "skills" / "README.md").write_text(_generate_skills_readme(repo_url))
         (tmp_path / ".gitignore").write_text("*.json\n*.yaml\n*.yml\n.env\n*auth*\n*token*\n*key*\n*secret*\n*credentials*\n")
 
         console.print(f"\n[bold]📤 Publishing {len(selected_skills)} skills...[/]")

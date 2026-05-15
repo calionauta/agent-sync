@@ -1,6 +1,6 @@
 # Skills
 
-AI agent skills published from [agent-sync](https://github.com/renatocaliari/agent-sync).
+AI agent skills published from [agent-sync](https://github.com/{username}/agent-sync).
 
 ## Installation
 
@@ -9,7 +9,7 @@ Use the [`npx skills`](https://www.skills.sh/) CLI to install skills from this r
 ### Install all skills at once
 
 ```bash
-npx skills add renatocaliari/agent-sync-public
+npx skills add {full_repo_name}
 ```
 
 This will install all skills in this `skills/` directory.
@@ -17,7 +17,7 @@ This will install all skills in this `skills/` directory.
 ### Install a specific skill
 
 ```bash
-npx skills add renatocaliari/agent-sync-public/cali-product-workflow
+npx skills add {full_repo_name}/cali-product-workflow
 ```
 
 Replace `cali-product-workflow` with the skill name you want.
@@ -26,7 +26,7 @@ Replace `cali-product-workflow` with the skill name you want.
 
 ```bash
 # From GitHub
-npx skills list renatocaliari/agent-sync-public
+npx skills list {full_repo_name}
 
 # Or browse the skills/ folder in this repository
 ```
@@ -37,7 +37,7 @@ Browse the [skills/](.) folder to see all available skills.
 
 ## About
 
-These skills are maintained in `~/.agents/skills/` on the author's machine and published using [agent-sync](https://github.com/renatocaliari/agent-sync).
+These skills are maintained in `~/.agents/skills/` on the author's machine and published using [agent-sync](https://github.com/{username}/agent-sync).
 
 ## Contributing
 
