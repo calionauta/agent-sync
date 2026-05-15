@@ -1618,6 +1618,23 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
         available_skills = get_available_skills()
         skills_count = len(available_skills)
 
+        # Scan skills for security
+        skills_scan_results = {}
+        skills_flagged = []
+        for skill in available_skills:
+            if skill["path"].is_dir():
+                for f in skill["path"].rglob("*"):
+                    if f.is_file() and not f.name.startswith("."):
+                        result = scan_file(f)
+                        skills_scan_results[f] = result
+                        if not result.safe:
+                            skills_flagged.append((f, skill["name"], result))
+            elif skill["path"].is_file():
+                result = scan_file(skill["path"])
+                skills_scan_results[skill["path"]] = result
+                if not result.safe:
+                    skills_flagged.append((skill["path"], skill["name"], result))
+
     if do_agents:
         available_agents = get_available_agents()
         agents_count = len(available_agents)
@@ -1687,6 +1704,16 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
             console.print("\n[dim]These files will still be published. Review before continuing.[/dim]")
 
     # ============================================================================
+    # PHASE 3b: Show flagged skills details
+    # ============================================================================
+    if do_skills and skills_flagged:
+        console.print("\n[yellow]⚠️  Skills with warnings:[/]")
+        for f, skill_name, result in skills_flagged:
+            console.print(f"\n[bold]{skill_name}/{f.name}[/bold]")
+            console.print(f"[dim]{format_issues_for_display(result.issues)}[/dim]")
+        console.print("\n[dim]These files will still be published. Review before continuing.[/dim]")
+
+    # ============================================================================
     # PHASE 4: Security Warning (Unified - same scan for skills AND agents)
     # ============================================================================
     warning_lines = []
@@ -1726,9 +1753,20 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
     # ============================================================================
     # PHASE 5: Confirm
     # ============================================================================
+    # Count total flagged
+    agents_flagged_count = sum(1 for r in scan_results.values() if not r.safe)
+    skills_flagged_count = len(skills_flagged)
+    total_flagged = agents_flagged_count + skills_flagged_count
+
     if dry_run:
         console.print(f"\n[blue]🔍 DRY RUN: Would publish {skills_count} skills and {agents_count} agents[/blue]\n")
+        if total_flagged > 0:
+            console.print(f"[yellow]⚠️  {total_flagged} files flagged (will publish with warning)[/yellow]\n")
         return
+
+    if total_flagged > 0:
+        console.print(f"\n[yellow]⚠️  {total_flagged} file(s) flagged (will publish with warning)[/yellow]")
+        console.print("[dim]Details shown above. Review before continuing.[/dim]\n")
 
     if not Confirm.ask("\n[bold]Continue with publishing?[/]", default=True):
         console.print("\n[yellow]Publish cancelled[/yellow]\n")
@@ -1750,7 +1788,7 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
             success = False
 
     if success:
-        console.print("\n[bold green]✅ Publishing complete![/green]\n")
+        console.print("\n[bold]✅ Publishing complete![/bold]\n")
     else:
         console.print("\n[red]✗ Some items failed to publish[/red]\n")
         raise click.Abort()

@@ -591,17 +591,17 @@ def publish_skills(repo_url: str | None = None, dry_run: bool = False, interacti
     if not skip_security_panel:
         console.print("\n")
         console.print(Panel(
-            "[bold yellow]⚠️  SECURITY WARNING[/bold yellow]\n\n"
+            "[yellow]⚠️  SECURITY WARNING[/yellow]\n\n"
             "You are about to publish skills to a [bold]PUBLIC[/] repository.\n\n"
             "What WILL be published:\n"
             "  ✓ SKILL.md files (skill definitions)\n"
             "  ✓ .md, .py, .sh files (skill scripts)\n"
             "  ✓ references/, templates/, scripts/ directories\n\n"
-            "What will [bold red]NEVER[/bold red] be published:\n"
+            "What will NEVER be published:\n"
             "  ✗ Any config files (settings.json, config.yaml, etc.)\n"
-            "  ✗ Any files containing 'auth', 'token', 'key', 'secret' in name\n"
+            "  ✗ Files with: auth, token, key, secret, credentials in name\n"
             "  ✗ .env files\n"
-            "  ✗ Your private agent-sync-configs repository",
+            "  ✗ Your private agent-sync-private repository",
             border_style="yellow",
             title="[bold yellow]Public Disclosure[/]",
         ))
