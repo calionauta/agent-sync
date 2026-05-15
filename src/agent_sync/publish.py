@@ -185,6 +185,14 @@ def _interactive_flagged_selection(
         table.add_column("Item", style="cyan")
         table.add_column("Security", justify="center", width=10)
         
+        # Render table with security status + detailed issues
+        table = Table(box=box.ROUNDED, show_header=True, header_style="bold cyan")
+        table.add_column("ID", justify="right", style="dim", width=4)
+        table.add_column("Pub", justify="center", width=5)
+        table.add_column("Item", style="cyan")
+        table.add_column("Security", justify="center", width=10)
+        table.add_column("Type", style="red")
+        
         for i, (item, result, prefix) in enumerate(flagged_items, 1):
             name = item.get("name") or item.get("filename") or str(item)
             if prefix:
@@ -195,7 +203,29 @@ def _interactive_flagged_selection(
             status = "[bold green]✓[/]" if is_selected else "[red]○[/]"
             
             icon = "[red]⚠️[/]" if not result.safe else "[green]✓[/]"
-            table.add_row(str(i), status, name, icon)
+            
+            # Build issue type summary from result.issues
+            if hasattr(result, "issues") and result.issues:
+                # Aggregate unique rules and severities
+                rules_seen: set = set()
+                severities: set = set()
+                for issue in result.issues:
+                    rules_seen.add(issue.get("rule", "UNKNOWN"))
+                    severities.add(issue.get("severity", "medium"))
+                
+                # Priority for severity
+                priority = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+                highest = max((priority.get(s, 0) for s in severities), default=2)
+                sev_label = next((k for k, v in priority.items() if v == highest), "medium")
+                
+                rules_text = ", ".join(sorted(rules_seen)[:3])
+                if len(rules_seen) > 3:
+                    rules_text += f" +{len(rules_seen) - 3}"
+                issue_text = f"[{sev_label}]{rules_text}[/{sev_label}]"
+            else:
+                issue_text = "[dim]none[/dim]"
+            
+            table.add_row(str(i), status, name, icon, issue_text)
         
         console.print(table)
         

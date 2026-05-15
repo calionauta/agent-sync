@@ -1724,11 +1724,35 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
             if result and not result.safe:
                 all_flagged.append((agent, result, agent["agent"]))
     
+    # Group by skill to avoid duplicates in table display
+    # Each skill may have multiple files with issues, but we show one row per skill
+    skills_by_name: dict[str, list[tuple]] = {}
+    for f, skill_name, result in skills_flagged:
+        if skill_name not in skills_by_name:
+            skills_by_name[skill_name] = []
+        skills_by_name[skill_name].append((f, result))
+    
     skills_flagged_items = []
     if do_skills and skills_flagged:
-        for f, skill_name, result in skills_flagged:
-            skill_item = {"name": skill_name, "path": f, "filename": f.name}
-            skills_flagged_items.append((skill_item, result, skill_name))
+        from .security_scanner import ScanResult, Issue  # noqa
+        for skill_name, files_results in skills_by_name.items():
+            # Aggregate all issues across files in this skill
+            all_issues: list[Issue] = []
+            for f, result in files_results:
+                all_issues.extend(result.issues)
+            
+            # Create aggregated result for display
+            aggregated_result = ScanResult(
+                safe=False,
+                issues=all_issues,
+                summary=f"{len(files_results)} files flagged"
+            )
+            
+            skill_item = {
+                "name": skill_name,
+                "files": files_results,  # Keep for reference
+            }
+            skills_flagged_items.append((skill_item, aggregated_result, skill_name))
     
     if all_flagged or skills_flagged_items:
         console.print("\n")
