@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>agent-sync — Sync your AI agents configs & skills</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔄</text></svg>">
+  <meta name="description" content="Unified CLI to sync configs and skills across multiple AI agents. Claude, Gemini, RooCode, Cline, Cursor, Qwen, Pi — all in sync.">
+  <meta name="theme-color" content="#0d1117">
+  
+  <!-- Open Graph / Social sharing -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="agent-sync — Sync your AI agents configs & skills">
+  <meta property="og:description" content="Unified CLI to sync configs and skills across multiple AI agents.">
+  <meta property="og:url" content="https://github.com/renatocaliari/agent-sync">
+  <meta property="og:image" content="https://raw.githubusercontent.com/renatocaliari/agent-sync/main/docs/logo.png">
+  
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="agent-sync — Sync your AI agents">
+  <meta name="twitter:description" content="Unified CLI to sync configs and skills across multiple AI agents.">
+  
+  <!-- Skip to main content for keyboard users -->
+  <a href="#main" class="sr-only">Skip to main content</a>
+
+  <!-- Preload critical font -->
+  <link rel="preconnect" href="https://fonts.bunny.net">
+  <link rel="preload" as="style" href="https://fonts.bunny.net/css?family=inter:400,500,600,700|jetbrains-mono:400,500,700&display=swap">
+  <link rel="stylesheet" href="https://fonts.bunny.net/css?family=inter:400,500,600,700|jetbrains-mono:400,500,700&display=swap">
+  
+
+  
+  
+  <style>
+    /* Screen reader only - visually hidden but accessible */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* Light mode support */
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg-primary: #ffffff;
+        --bg-secondary: #f6f8fa;
+        --text-primary: #24292f;
+        --text-muted: #57606a;
+        --border-color: #d0d7de;
+      }
+    }
+
+    :root {
+      --bg-primary: #0d1117;
+      --bg-secondary: #161b22;
+      --bg-tertiary: #21262d;
+      --text-primary: #c9d1d9;
+      --text-muted: #8b949e;
+      --accent-blue: #58a6ff;
+      --accent-green: #3fb950;
+      --accent-yellow: #d29922;
+      --accent-red: #f85149;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 8px 32px rgba(0,0,0,0.4);
+      --shadow-lg: 0 16px 64px rgba(0,0,0,0.5);
+      --font-mono: 'JetBrains Mono', Consolas, Monaco, 'Courier New', monospace;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    ::selection {
+      background: var(--accent-blue);
+      color: var(--bg-primary);
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       CONTAINER
+    ═══════════════════════════════════════════════════════════ */
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    section {
+      padding: 80px 0;
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       HERO SECTION
+    ═══════════════════════════════════════════════════════════ */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding-top: 40px;
+      position: relative;
+    }
+
+    .hero-content {
+      animation: fadeInUp 600ms ease-out forwards;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--bg-tertiary);
+      padding: 8px 16px;
+      border-radius: 100px;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+    }
+
+    .hero-badge svg {
+      width: 16px;
+      height: 16px;
+      color: var(--accent-green);
+    }
+
+    .hero-title {
+      font-size: clamp(48px, 10vw, 80px);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, #fff 0%, var(--text-muted) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-title span {
+      background: linear-gradient(135deg, var(--accent-blue) 0%, #a78bfa 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+    }
+
+    .hero-tagline {
+      font-size: clamp(18px, 3vw, 24px);
+      color: var(--text-muted);
+      max-width: 600px;
+      margin: 0 auto 40px;
+    }
+
+    /* Install Commands */
+    .install-commands {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      margin-bottom: 60px;
+    }
+
+    .install-cmd {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--bg-tertiary);
+      border-radius: var(--radius-sm);
+      padding: 12px 20px;
+      font-family: var(--font-mono);
+      font-size: 14px;
+      transition: all 200ms ease;
+    }
+
+    .install-cmd:first-child {
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 20px rgba(88, 166, 255, 0.1);
+    }
+
+    .install-cmd:hover {
+      border-color: var(--accent-blue);
+      transform: translateY(-2px);
+    }
+
+    .install-cmd .prompt {
+      color: var(--accent-green);
+    }
+
+    .install-cmd code {
+      color: var(--text-primary);
+    }
+
+    .install-cmd .copy-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+      transition: color 150ms ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .install-cmd .copy-btn:hover {
+      color: var(--accent-blue);
+    }
+
+    .install-cmd .copy-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .install-cmd .copy-btn.copied {
+      color: var(--accent-green);
+    }
+
+    /* Scroll Indicator */
+    .scroll-indicator {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      opacity: 0;
+      animation: fadeIn 400ms ease-out 2s forwards;
+    }
+
+    .scroll-indicator a {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      transition: color 200ms ease;
+    }
+
+    .scroll-indicator a:hover {
+      color: var(--accent-blue);
+    }
+
+    .scroll-arrow {
+      width: 24px;
+      height: 24px;
+      animation: bounce 2s ease-in-out infinite;
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       TERMINAL SECTION
+    ═══════════════════════════════════════════════════════════ */
+    .terminal-section {
+      padding: 100px 0;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+
+    .section-label {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--accent-blue);
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: clamp(28px, 5vw, 40px);
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .section-desc {
+      font-size: 18px;
+      color: var(--text-muted);
+      max-width: 500px;
+      margin: 0 auto;
+    }
+
+    /* Terminal Window */
+    .terminal-window {
+      background: var(--bg-secondary);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+      max-width: 900px;
+      margin: 0 auto;
+      border: 1px solid var(--bg-tertiary);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .terminal-titlebar {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .terminal-btn {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .terminal-btn.close { background: #ff5f56; }
+    .terminal-btn.minimize { background: #ffbd2e; }
+    .terminal-btn.maximize { background: #27c93f; }
+
+    .terminal-title {
+      flex: 1;
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .terminal-body {
+      flex: 1;
+      min-height: 300px;
+      overflow: auto;
+      padding: 0;
+      margin: 0;
+      display: block;
+    }
+
+    #terminal {
+      height: 100%;
+      width: 100%;
+    }
+
+    /* Terminal output styling */
+    .terminal-output {
+      margin: 0;
+      padding: 16px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text-primary);
+      white-space: pre;
+      overflow-x: auto;
+    }
+    .terminal-output-wrapper {
+      padding: 16px;
+      min-height: 300px;
+      overflow-x: auto;
+    }
+    
+    .terminal-prompt {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--accent-green);
+      margin-bottom: 8px;
+    }
+    
+    .terminal-output {
+      margin: 0;
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--text-primary);
+      white-space: pre;
+      overflow-x: auto;
+    }
+    .demo-terminals {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      padding: 16px;
+    }
+    
+    .demo-terminal {
+      background: var(--bg-primary);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      border: 1px solid var(--bg-tertiary);
+    }
+    
+    .demo-terminal-header {
+      padding: 8px 12px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--accent-green);
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--bg-tertiary);
+    }
+    
+    .demo-terminal .terminal-output {
+      margin: 0;
+      padding: 12px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.4;
+      color: var(--text-primary);
+      white-space: pre;
+      overflow-x: auto;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    
+    @media (max-width: 768px) {
+      .demo-terminals {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       FEATURES SECTION
+    ═══════════════════════════════════════════════════════════ */
+    .features-section {
+      background: var(--bg-secondary);
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      margin-top: 48px;
+    }
+
+    .feature-card {
+      background: var(--bg-primary);
+      border: 1px solid var(--bg-tertiary);
+      border-radius: var(--radius);
+      padding: 32px;
+transition: opacity 400ms ease-out, transform 400ms ease-out, border-color 200ms ease;
+    }
+
+    .feature-card {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .feature-card:hover {
+      border-color: var(--accent-blue);
+    }
+
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      background: linear-gradient(135deg, var(--accent-blue) 0%, #a78bfa 100%);
+      border-radius: var(--radius-sm);
+      margin-bottom: 20px;
+    }
+
+    .feature-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .feature-desc {
+      color: var(--text-muted);
+      font-size: 15px;
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       AGENTS SECTION
+    ═══════════════════════════════════════════════════════════ */
+    .agents-section {
+      background: var(--bg-primary);
+    }
+
+    .agents-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 20px;
+      margin-top: 48px;
+    }
+
+    .agent-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 24px 16px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--bg-tertiary);
+      border-radius: var(--radius);
+      text-decoration: none;
+      color: inherit;
+      transition: all 200ms ease;
+      
+    }
+
+    .agent-card {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .agent-card:hover {
+      transform: scale(1.05);
+      border-color: var(--accent-blue);
+      box-shadow: 0 8px 32px rgba(88, 166, 255, 0.15);
+    }
+
+    .agent-logo {
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      background: var(--bg-tertiary);
+      border-radius: 50%;
+    }
+
+    .agent-name {
+      font-weight: 600;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .agent-type {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       INSTALL SECTION
+    ═══════════════════════════════════════════════════════════ */
+    .install-section {
+      background: var(--bg-secondary);
+    }
+
+    .install-blocks {
+      display: grid;
+      gap: 20px;
+      max-width: 700px;
+      margin: 48px auto 0;
+    }
+
+    .install-block {
+      position: relative;
+      background: var(--bg-primary);
+      border: 1px solid var(--bg-tertiary);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+
+    .install-block::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: var(--accent-blue);
+    }
+
+    .install-block .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--bg-tertiary);
+    }
+
+    .install-block .label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .install-block .copy-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 4px;
+      transition: all 150ms ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+    }
+
+    .install-block .copy-btn:hover {
+      color: var(--accent-blue);
+      background: var(--bg-secondary);
+    }
+
+    .install-block .copy-btn.copied {
+      color: var(--accent-green);
+    }
+
+    .install-block .copy-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .install-block pre {
+      padding: 16px;
+      font-family: var(--font-mono);
+      font-size: 14px;
+      overflow-x: auto;
+    }
+
+    .install-block code {
+      color: var(--text-primary);
+    }
+
+    .install-block .comment {
+      color: var(--text-muted);
+    }
+
+    .install-block .command {
+      color: var(--accent-green);
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       CTA SECTION
+    ═══════════════════════════════════════════════════════════ */
+    .cta-section {
+      text-align: center;
+      padding: 120px 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cta-section::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(88, 166, 255, 0.1) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .cta-title {
+      font-size: clamp(32px, 6vw, 48px);
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+
+    .cta-desc {
+      font-size: 18px;
+      color: var(--text-muted);
+      margin-bottom: 40px;
+      max-width: 500px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .cta-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      justify-content: center;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 28px;
+      border-radius: var(--radius-sm);
+      font-size: 16px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 200ms ease;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-primary {
+      background: var(--accent-blue);
+      color: var(--bg-primary);
+    }
+
+    .btn-primary:hover {
+      background: #79b8ff;
+      box-shadow: 0 0 30px rgba(88, 166, 255, 0.4);
+    }
+
+    .btn-secondary {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      border: 1px solid var(--bg-tertiary);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--accent-blue);
+      background: var(--bg-tertiary);
+    }
+
+    .btn svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       FOOTER
+    ═══════════════════════════════════════════════════════════ */
+    footer {
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--bg-tertiary);
+      padding: 40px 0;
+    }
+
+    .footer-content {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .footer-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .footer-logo {
+      font-size: 20px;
+    }
+
+    .footer-name {
+      font-weight: 600;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+    }
+
+    .footer-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 14px;
+      transition: color 150ms ease;
+    }
+
+    .footer-links a:hover {
+      color: var(--accent-blue);
+    }
+
+    .footer-copy {
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       ANIMATIONS
+    ═══════════════════════════════════════════════════════════ */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes bounce {
+      0%, 20%, 50%, 80%, 100% {
+        transform: translateY(0);
+      }
+      40% {
+        transform: translateY(8px);
+      }
+      60% {
+        transform: translateY(4px);
+      }
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       RESPONSIVE
+    ═══════════════════════════════════════════════════════════ */
+    @media (max-width: 768px) {
+      section {
+        padding: 60px 0;
+      }
+
+      .terminal-body {
+        height: 350px;
+      }
+
+      .install-commands {
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .install-cmd {
+        width: 100%;
+        max-width: 350px;
+        justify-content: space-between;
+      }
+
+      .footer-content {
+        flex-direction: column;
+        text-align: center;
+      }
+
+      .footer-links {
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+    }
+    
+    /* Respect user preference for reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+    
+    /* Focus styles for keyboard navigation */
+    :focus-visible {
+      outline: 2px solid #58a6ff;
+      outline-offset: 2px;
+    }
+    
+    /* Remove focus outline for mouse users */
+    :focus:not(:focus-visible) {
+      outline: none;
+    }
+  </style>
+  
+  <!-- Structured data for SEO -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "agent-sync",
+    "description": "Unified CLI to sync configs and skills across multiple AI agents. Claude, Gemini, RooCode, Cline, Cursor, Qwen, Pi — all in sync.",
+    "url": "https://github.com/renatocaliari/agent-sync",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "macOS, Linux, Windows",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "installationMethod": {
+      "@type": "SoftwareApplication",
+      "name": "pipx install agent-sync"
+    }
+  }
+  </script>
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       HERO SECTION
+  ═══════════════════════════════════════════════════════════ -->
+  <section class="hero" id="main">
+    <div class="hero-content">
+      <div class="hero-badge">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zM5.78 8.75a.75.75 0 0 0 0 1.5h3.5a.75.75 0 0 0 0-1.5h-3.5zM8 5.5a.75.75 0 0 1 .75.75v2.5h2.5a.75.75 0 0 1 0 1.5h-2.5v2.5a.75.75 0 0 1-1.5 0v-2.5h-2.5a.75.75 0 0 1 0-1.5h2.5v-2.5A.75.75 0 0 1 8 5.5z"/></svg>
+        MIT License • Python 3.10+
+      </div>
+      <h1 class="hero-title"><span>agent-sync</span></h1>
+      <p class="hero-tagline">Sync your AI agents configs & skills — from one repo, everywhere.</p>
+      
+      <div class="install-commands">
+        <div class="install-cmd">
+          <span class="prompt">$</span>
+          <code>pipx install git+https://github.com/renatocaliari/agent-sync</code>
+          <button class="copy-btn" aria-label="Copy install command" onclick="copyCommand(this)" data-command="pipx install git+https://github.com/renatocaliari/agent-sync">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <div class="scroll-indicator">
+      <a href="#terminal">
+        <span>See it in action</span>
+        <svg class="scroll-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+      </a>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       TERMINAL SECTION
+  ═══════════════════════════════════════════════════════════ -->
+  <section class="terminal-section" id="terminal">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-label">Command Reference</span>
+        <h2 class="section-title">See all available commands</h2>
+        <p class="section-desc">Complete reference of all agent-sync CLI commands.</p>
+      </div>
+
+      <div class="terminal-window">
+        <div class="terminal-titlebar">
+          <div class="terminal-btn close"></div>
+          <div class="terminal-btn minimize"></div>
+          <div class="terminal-btn maximize"></div>
+          <div class="terminal-title">Terminal — agent-sync</div>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-output-wrapper">
+            <div class="terminal-prompt">$ agent-sync --help</div>
+            <pre class="terminal-output">Usage: agent-sync [OPTIONS] COMMAND [ARGS]...
+
+  🔄 agent-sync - Sync configs and skills across multiple AI agents.
+
+  Supported agents: opencode, claude-code, gemini-cli, pi.dev, qwen-code
+
+Options:
+  --version  Show the version and exit.
+  --help     Show this message and exit.
+
+🔄 Sync Commands:
+  push    Commit and push local changes. [-m, --skills-only, --configs-only,
+          --agents-only]
+  pull    Fetch and apply remote configuration. [--force, --skills-only,
+          --configs-only, --agents-only]
+  status  Show sync status and last sync times.
+
+🤖 Agent Management:
+  agents   List supported agents and their status.
+  enable   Enable sync for a specific agent.
+  disable  Disable sync for a specific agent.
+
+⚙️  Configuration:
+  setup            Run the interactive setup wizard to...
+  init             Initialize a new sync repository (first... [--name,
+                   --agents, --no-wizard, --force]
+  link             Link to an existing sync repository...
+  config           Manage configuration (view, edit, reset).
+    ├── edit       Open configuration file in editor.
+    ├── export     Export configuration to DotAgents JSON... [--dry-run,
+                   --output]
+    ├── repo       View or set the GitHub repository URL. [--remove]
+    ├── reset      Reset configuration to defaults (keeps... [--yes]
+    └── show       Show current configuration.
+  generate-config  Generate initial configuration file. [--agent]
+
+📚 Skills &amp; Agents:
+  skills            Manage global skills.
+    ├── centralize  Centralize skills from all agents to... [--copy, --push,
+                    --distribute, --yes, --import-all, --dry-run]
+    ├── delete      Delete skills from hub and all agent... [--dry-run,
+                    --push, --interactive]
+    ├── diff        Show differences between local and remote...
+    ├── list        List all centralized skills.
+    ├── publish     [DEPRECATED] Use 'agent-sync publish... [--repo, --dry-
+                    run, --interactive]
+    └── reconcile   Reconcile differences between local and... [--auto, --dry-
+                    run]
+  custom-agents     Manage custom agents (.claude/agents/,...
+    └── list        List custom agents for all supported agents.
+
+🛠️  System:
+  update         Check for available updates and install them.
+  version        Show version information.
+  secrets        Manage secrets and environment variables.
+    ├── disable  Disable secrets synchronization.
+    ├── edit     Edit secrets in your $EDITOR.
+    ├── enable   Enable secrets synchronization.
+    └── list     List all secrets and environment variables.
+</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       FEATURES SECTION
+  ═══════════════════════════════════════════════════════════ -->
+  <section class="features-section">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-label">Features</span>
+        <h2 class="section-title">Why agent-sync?</h2>
+        <p class="section-desc">Built for developers who live across multiple machines and agents.</p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card" data-animate>
+          <div class="feature-icon" aria-hidden="true">⚡</div>
+          <h3 class="feature-title">One Command Setup</h3>
+          <p class="feature-desc">Initialize in seconds. Push your config repo and pull it everywhere else.</p>
+        </div>
+        <div class="feature-card" data-animate>
+          <div class="feature-icon" aria-hidden="true">🔄</div>
+          <h3 class="feature-title">Real-time Sync</h3>
+          <p class="feature-desc">Changes on one machine? Push and pull instantly. No manual copying.</p>
+        </div>
+        <div class="feature-card" data-animate>
+          <div class="feature-icon" aria-hidden="true">🛡️</div>
+          <h3 class="feature-title">Safe by Default</h3>
+          <p class="feature-desc">Dry-run before any sync. Rollback support. Never lose your configs.</p>
+        </div>
+        <div class="feature-card" data-animate>
+          <div class="feature-icon" aria-hidden="true">🌍</div>
+          <h3 class="feature-title">Multi-Agent Support</h3>
+          <p class="feature-desc">Claude, Gemini, RooCode, Cline, Cursor, Qwen, Pi — all in one sync.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       AGENTS SECTION
+  ═══════════════════════════════════════════════════════════ -->
+  <section class="agents-section">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-label">Supported</span>
+        <h2 class="section-title">Your agents, synced</h2>
+        <p class="section-desc">Works with the most popular AI coding assistants and IDEs.</p>
+      </div>
+
+      <div class="agents-grid">
+        <a href="https://docs.anthropic.com/en/docs/claude-code" class="agent-card" data-animate target="_blank" rel="noopener">
+          <span class="agent-name">Claude Code</span>
+          <span class="agent-type">CLI</span>
+        </a>
+        <a href="https://ai.google.dev/gemini-cli" class="agent-card" data-animate target="_blank" rel="noopener">
+          <span class="agent-name">Gemini CLI</span>
+          <span class="agent-type">CLI</span>
+        </a>
+        <a href="https://roocode.com/" class="agent-card" data-animate target="_blank" rel="noopener">
+          <span class="agent-name">RooCode</span>
+          <span class="agent-type">IDE</span>
+        </a>
+        <a href="https://cline.bot/" class="agent-card" data-animate target="_blank" rel="noopener">
+          <span class="agent-name">Cline</span>
+          <span class="agent-type">IDE</span>
+        </a>
+        <a href="https://cursor.com" class="agent-card" data-animate target="_blank" rel="noopener">
+          <span class="agent-name">Cursor</span>
+          <span class="agent-type">IDE</span>
+        </a>
+        <a href="https://qwen.ai" class="agent-card" data-animate target="_blank" rel="noopener">
+          <span class="agent-name">Qwen</span>
+          <span class="agent-type">CLI</span>
+        </a>
+        <a href="https://pi.dev/" class="agent-card" data-animate target="_blank" rel="noopener">
+          <span class="agent-name">Pi</span>
+          <span class="agent-type">CLI</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       INSTALL SECTION
+  ═══════════════════════════════════════════════════════════ -->
+  <section class="install-section">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-label">Quick Start</span>
+        <h2 class="section-title">Get running in 30 seconds</h2>
+        <p class="section-desc">Choose your preferred installation method.</p>
+      </div>
+
+      <div class="install-blocks">
+        <div class="install-block">
+          <div class="header">
+            <span class="label">pipx (recommended)</span>
+            <button class="copy-btn" aria-label="Copy pipx install command" onclick="copyCommand(this)" data-command="pipx install git+https://github.com/renatocaliari/agent-sync">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copy
+            </button>
+          </div>
+          <pre><code><span class="comment"># Install with pipx from GitHub (avoids PyPI name conflict)</span>
+<span class="command">pipx install git+https://github.com/renatocaliari/agent-sync</span>
+
+<span class="comment"># Verify installation</span>
+<span class="command">agent-sync --version</span></code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       CTA SECTION
+  ═══════════════════════════════════════════════════════════ -->
+  <section class="cta-section">
+    <div class="container">
+      <h2 class="cta-title">Ready to sync?</h2>
+      <p class="cta-desc">Join developers who've ditched manual config management forever.</p>
+      <div class="cta-buttons">
+        <a href="https://github.com/renatocaliari/agent-sync" class="btn btn-primary" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+          Star on GitHub
+        </a>
+        <a href="https://pypi.org/project/agent-sync/" class="btn btn-secondary" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14.25.18l.9.2.73.26.59.3.45.32.34.34.25.34.16.33.1.3.04.26.02.2-.01.13V8.5l-.05.63-.13.55-.21.46-.26.38-.3.31-.33.25-.35.19-.35.14-.33.1-.3.07-.26.04-.21.02H8.77l-.69.05-.59.14-.5.22-.41.27-.33.32-.27.35-.2.36-.15.37-.1.35-.07.32-.04.27-.02.21v3.06H3.17l-.21-.03-.28-.07-.32-.12-.35-.18-.36-.26-.36-.36-.35-.46-.32-.59-.28-.73-.21-.88-.14-1.05-.05-1.23.06-1.22.16-1.04.24-.87.32-.71.36-.57.4-.44.42-.33.42-.24.4-.16.36-.1.32-.05.24-.01h.16l.06.01h8.16v-.83H6.18l-.01-2.75-.02-.37.05-.34.11-.31.17-.28.25-.26.31-.23.38-.2.44-.18.51-.15.58-.12.64-.1.71-.06.77-.04.84-.02 1.27.05zm-6.3 1.98l-.23.33-.08.41.08.41.23.34.33.22.41.09.41-.09.33-.22.23-.34.08-.41-.08-.41-.23-.33-.33-.22-.41-.09-.41.09zm13.09 3.95l.28.06.32.12.35.18.36.27.36.35.35.47.32.59.28.73.21.88.14 1.04.05 1.23-.06 1.23-.16 1.04-.24.86-.32.71-.36.57-.4.45-.42.33-.42.24-.4.16-.36.09-.32.05-.24.02-.16-.01h-8.22v.82h5.84l.01 2.76.02.36-.05.34-.11.31-.17.29-.25.25-.31.24-.38.2-.44.17-.51.15-.58.13-.64.09-.71.07-.77.04-.84.01-1.27-.04-1.07-.14-.9-.2-.73-.25-.59-.3-.45-.33-.34-.34-.25-.34-.16-.33-.1-.3-.04-.25-.02-.2.01-.13v-5.34l.05-.64.13-.54.21-.46.26-.38.3-.32.33-.24.35-.2.35-.14.33-.1.3-.06.26-.04.21-.02.13-.01h5.84l.69-.05.59-.14.5-.21.41-.28.33-.32.27-.35.2-.36.15-.36.1-.35.07-.32.04-.28.02-.21V6.07h2.09l.14.01zm-6.47 14.25l-.23.33-.08.41.08.41.23.33.33.23.41.08.41-.08.33-.23.23-.33.08-.41-.08-.41-.23-.33-.33-.23-.41-.08-.41.08z"/></svg>
+          View on PyPI
+        </a>
+        <a href="./docs/" class="btn btn-secondary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          Read Docs
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       FOOTER
+  ═══════════════════════════════════════════════════════════ -->
+  <footer>
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-brand">
+          <span class="footer-logo" aria-hidden="true">🤖</span>
+          <span class="footer-name">agent-sync</span>
+        </div>
+        <div class="footer-links">
+          <a href="https://github.com/renatocaliari/agent-sync" target="_blank" rel="noopener">GitHub</a>
+          
+          <a href="./docs/">Documentation</a>
+          <a href="https://github.com/renatocaliari/agent-sync/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+        </div>
+        <div class="footer-copy">
+          MIT License • 2026 • cali (renato caliari)
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SCRIPTS
+  ═══════════════════════════════════════════════════════════ -->
+  
+  
+  <script defer>
+// Copy button functionality
+function copyCommand(btn) {
+  const cmd = btn.getAttribute('data-command');
+  if (!cmd) return;
+  
+  // Use modern API with fallback
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(cmd).then(() => {
+      showCopied(btn);
+    }).catch(() => {
+      fallbackCopy(cmd, btn);
+    });
+  } else {
+    fallbackCopy(cmd, btn);
+  }
+}
+
+function fallbackCopy(text, btn) {
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.cssText = 'position:fixed;opacity:0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  try { document.execCommand('copy'); showCopied(btn); } catch (e) {}
+  document.body.removeChild(textarea);
+}
+
+function showCopied(btn) {
+  btn.textContent = 'Copied!';
+  setTimeout(() => {
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  }, 1500);
+}
+  </script>
+</body>
+</html>
