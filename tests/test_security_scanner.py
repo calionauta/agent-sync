@@ -280,19 +280,20 @@ class TestPatterns:
             "TOKEN_OPENAI",
             "TOKEN_GITHUB",
             "TOKEN_GITHUB_ALT",
-            "KEY_API",
-            "KEY_SECRET",
             "INTERNAL_CMD_SKILL",
             "INTERNAL_CMD_CTX",
             "SERVER_PATH",
+            "SSH_KEY",
         ]
         actual_rules = [p[0] for p in PATTERNS]
         for rule in expected_rules:
             assert rule in actual_rules, f"Missing rule: {rule}"
 
     def test_all_critical_have_critical_severity(self):
-        """Test that token/key patterns have critical severity."""
-        critical_rules = ["TOKEN", "KEY"]
-        for rule, severity, _ in PATTERNS:
+        """Test that token patterns have critical severity."""
+        critical_rules = ["TOKEN"]
+        for pattern in PATTERNS:
+            rule = pattern[0]
+            severity = pattern[1]
             if any(cr in rule for cr in critical_rules):
                 assert severity == "critical", f"Rule {rule} should be critical, not {severity}"

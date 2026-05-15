@@ -1628,12 +1628,13 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
                     if f.is_file() and not f.name.startswith("."):
                         result = scan_file(f)
                         skills_scan_results[f] = result
-                        if not result.safe:
+                        if not result.safe or any(i.get('context') != 'variable' and i['severity'] in ('high', 'critical') for i in result.issues):
                             skills_flagged.append((f, skill["name"], result))
             elif skill["path"].is_file():
                 result = scan_file(skill["path"])
                 skills_scan_results[skill["path"]] = result
-                if not result.safe:
+                # Also flag if has high/critical issues even if not marked unsafe
+                if not result.safe or any(i.get('context') != 'variable' and i['severity'] in ('high', 'critical') for i in result.issues):
                     skills_flagged.append((skill["path"], skill["name"], result))
 
     if do_agents:
