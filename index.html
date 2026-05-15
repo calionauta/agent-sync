@@ -910,8 +910,8 @@ transition: opacity 400ms ease-out, transform 400ms ease-out, border-color 200ms
       <div class="install-commands">
         <div class="install-cmd">
           <span class="prompt">$</span>
-          <code>pipx install agent-sync</code>
-          <button class="copy-btn" aria-label="Copy install command" onclick="copyCommand(this)" data-command="pipx install agent-sync">
+          <code>pipx install git+https://github.com/renatocaliari/agent-sync</code>
+          <button class="copy-btn" aria-label="Copy install command" onclick="copyCommand(this)" data-command="pipx install git+https://github.com/renatocaliari/agent-sync">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
           </button>
         </div>
@@ -1086,13 +1086,13 @@ Options:
         <div class="install-block">
           <div class="header">
             <span class="label">pipx (recommended)</span>
-            <button class="copy-btn" aria-label="Copy pipx install command" onclick="copyCommand(this)" data-command="pipx install agent-sync">
+            <button class="copy-btn" aria-label="Copy pipx install command" onclick="copyCommand(this)" data-command="pipx install git+https://github.com/renatocaliari/agent-sync">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               Copy
             </button>
           </div>
-          <pre><code><span class="comment"># Install with pipx (isolated environment)</span>
-<span class="command">pipx install agent-sync</span>
+          <pre><code><span class="comment"># Install with pipx from GitHub (avoids PyPI name conflict)</span>
+<span class="command">pipx install git+https://github.com/renatocaliari/agent-sync</span>
 
 <span class="comment"># Verify installation</span>
 <span class="command">agent-sync --version</span></code></pre>
