@@ -729,19 +729,20 @@ def diff(json_output: bool):
         console.print("[yellow]⚠ No repository configured yet.[/yellow]")
         console.print("Run [green]agent-sync init[/green] or [green]agent-sync link[/green] first.\n")
         return
-    
+
     diff_data = diff_mgr.get_diff_data()
     if json_output:
         console.print_json(json.dumps(diff_data, indent=2))
         return
-    
+
     diff_mgr.show_diff()
 
 
 @skills.command()
 @click.option("--auto", is_flag=True, help="Auto-resolve: keep local for all divergences")
 @click.option("--dry-run", is_flag=True, help="Show what would be done without applying")
-def reconcile(auto: bool, dry_run: bool):
+@click.option("--json", "json_output", is_flag=True, help="Output diff as JSON for programmatic use")
+def reconcile(auto: bool, dry_run: bool, json_output: bool):
     """Reconcile differences between local and remote skills.
 
     \b
@@ -763,17 +764,23 @@ def reconcile(auto: bool, dry_run: bool):
       - Local-only skills: Will be added to remote on next push
       - Remote-only skills: Choose to download or delete from remote
     """
-    from rich.prompt import Confirm
-
+    import json
     from .skills_reconcile import SkillsReconcile
-
+    
     reconcile_mgr = SkillsReconcile()
-
+    
     if not reconcile_mgr.repo_dir:
         console.print("[yellow]⚠ No repository configured yet.[/yellow]")
         console.print("Run [green]agent-sync init[/green] or [green]agent-sync link[/green] first.\n")
         return
-
+    
+    if json_output:
+        diff_data = reconcile_mgr.get_diff_data()
+        console.print_json(json.dumps(diff_data, indent=2))
+        return
+    
+    from rich.prompt import Confirm
+    
     # Get decisions
     if auto:
         # Auto mode: keep local for everything
