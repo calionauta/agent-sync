@@ -139,8 +139,8 @@ def _interactive_flagged_selection(
 ) -> tuple[list, bool]:
     """Interactive selection for flagged items.
     
-    Shows all items (flagged and optionally safe) and lets user select
-    which ones to publish. Uses the same pattern as skills selection.
+    Shows items with HIGH or CRITICAL issues and lets user select
+    which ones to publish. Skips low/deprecated issues automatically.
     
     Args:
         flagged_items: List of (item, result, prefix) tuples
@@ -155,11 +155,31 @@ def _interactive_flagged_selection(
     if not flagged_items:
         return [], True
     
+    # Filter to only items with significant issues (high/critical, not variable/deprecated)
+    def has_significant_issues(result: ScanResult) -> bool:
+        """Check if result has issues that warrant user attention."""
+        if not result.safe:
+            return True
+        return any(
+            issue.get('context') not in ('variable', 'deprecated') 
+            and issue.get('severity') in ('critical', 'high')
+            for issue in result.issues
+        )
+    
+    display_items = [
+        (item, result, prefix) for item, result, prefix in flagged_items
+        if has_significant_issues(result)
+    ]
+    
+    if not display_items:
+        return [], True  # No significant issues, auto-confirm
+    
     selected = set()
     item_names = []
     item_map = {}
     
-    for i, (item, result, prefix) in enumerate(flagged_items, 1):
+    # Build key-indexed maps using display index
+    for i, (item, result, prefix) in enumerate(display_items, 1):
         name = item.get("name") or item.get("filename") or str(item)
         if prefix:
             name = f"{prefix}/{name}"
@@ -169,36 +189,15 @@ def _interactive_flagged_selection(
         item_names.append(key)
         item_map[key] = (item, result, prefix)
         
-        # Default: select flagged if in non-interactive mode
-        if not result.safe:
+        # Default: select items with high/critical issues
+        if has_significant_issues(result):
             selected.add(key)
     
     while True:
         console.clear()
         console.print(f"\n[bold yellow]⚠️  {title}[/bold yellow]\n")
-        console.print("[dim]Select which flagged items to publish (⚠️ = flagged, ✓ = safe)[/dim]\n")
-        
-        # Render table with security status
-        table = Table(box=box.ROUNDED, show_header=True, header_style="bold cyan")
-        table.add_column("ID", justify="right", style="dim", width=4)
-        table.add_column("Pub", justify="center", width=5)
-        table.add_column("Item", style="cyan")
-        table.add_column("Security", justify="center", width=10)
-        
-        # Filter to only items with significant issues (skip low/deprecated)
-        flagged_items_filtered = [
-            (item, result, prefix) for item, result, prefix in flagged_items
-            if not result.safe or any(
-                issue.get('context') not in ('variable', 'deprecated') 
-                and issue.get('severity') in ('critical', 'high')
-                for issue in result.issues
-            )
-        ]
-        
-        if not flagged_items_filtered:
-            return [], True  # No significant issues, auto-confirm
-        
-        console.print(f"\n[dim]Showing items with HIGH or CRITICAL security concerns[/dim]\n")
+        console.print(f"[dim]Showing {len(display_items)} items with HIGH or CRITICAL security concerns[/dim]\n")
+        console.print("[dim]Items with 🔴 deprecated or 🟡 env var issues are hidden[/dim]\n")
         
         # Render table with security status + detailed issues
         table = Table(box=box.ROUNDED, show_header=True, header_style="bold cyan")
@@ -208,7 +207,7 @@ def _interactive_flagged_selection(
         table.add_column("Security", justify="center", width=10)
         table.add_column("Issues", style="red")
         
-        for i, (item, result, prefix) in enumerate(flagged_items_filtered, 1):
+        for i, (item, result, prefix) in enumerate(display_items, 1):
             name = item.get("name") or item.get("filename") or str(item)
             if prefix:
                 name = f"{prefix}/{name}"
@@ -663,8 +662,8 @@ def interactive_selection(skills: list, initial_selected: set) -> set:
 def show_selection_summary(selected_names: set) -> bool:
     """Show summary table and confirm."""
     console.print("\n[bold green]📋 Selection Summary[/] [dim](to be published)[/dim]\n")
-    summary_table = Table(box=box.SIMPLE)
-    summary_table.add_column("Skill Name", style="cyan")
+    summary_table = Table(box=box.SIMPLE, show_header=False)
+    summary_table.add_column("Skill", style="cyan")
     for name in sorted(list(selected_names)):
         summary_table.add_row(f"  • {name}")
     console.print(summary_table)
