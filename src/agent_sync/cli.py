@@ -1813,6 +1813,29 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
         # Combine all flagged
         flagged_combined = all_flagged + skills_flagged_items
 
+        # Show introduction panel
+        from rich.panel import Panel
+        intro_lines = [
+            "[bold]You're about to publish flagged items to a PUBLIC repository.[/bold]",
+            "",
+            "These items have [bold yellow]HIGH or CRITICAL security concerns[/bold yellow] ",
+            "that were detected during the security scan.",
+            "",
+            "[bold cyan]Before publishing, review and confirm:[/bold cyan]",
+            "  • Review each flagged item and its security issues",
+            "  • Deselect items you don't want to publish",
+            "  • Items with [red]🔴 hardcoded[/red] issues are especially risky",
+            "  • You can still publish flagged items after review",
+            "",
+            "[dim]Use Enter to confirm your selection, or 'none' to skip all[/dim]",
+        ]
+        console.print(Panel(
+            "\n".join(intro_lines),
+            title="[bold yellow]⚠️ Security Review Required[/]",
+            border_style="yellow",
+        ))
+        console.print("\n")
+
         selected_flagged, confirmed = _interactive_flagged_selection(
             flagged_combined,
             title="Select flagged items to publish",

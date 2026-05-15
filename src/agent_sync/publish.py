@@ -496,6 +496,7 @@ def publish_agents(
     dry_run: bool = False,
     interactive: bool = False,
     selected_override: set | None = None,
+    skip_confirm: bool = False,
 ) -> bool:
     """Publish selected agent instructions to a public GitHub repository."""
     config = Config()
@@ -565,7 +566,7 @@ def publish_agents(
         console.print(f"\n[blue]🔍 DRY RUN: Would publish {len(selected_items)} agent instructions to {repo_url}[/blue]\n")
         return True
 
-    if interactive and not Confirm.ask("\n[bold red]Confirm publishing?[/]", default=True):
+    if interactive and not skip_confirm and not Confirm.ask("\n[bold red]Confirm publishing?[/]", default=True):
         console.print("\n[yellow]Publish cancelled[/yellow]\n")
         return False
 
