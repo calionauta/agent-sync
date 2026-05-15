@@ -1,4 +1,4 @@
-# agent-sync-public
+# {repo_name}
 
 Public repository for sharing AI agent skills and configuration with the community.
 
@@ -20,12 +20,12 @@ AI agent skills that can be installed using the [`npx skills`](https://www.skill
 
 **Install all skills:**
 ```bash
-npx skills add renatocaliari/agent-sync-public
+npx skills add {full_repo_name}
 ```
 
 **Install a specific skill:**
 ```bash
-npx skills add renatocaliari/agent-sync-public/cali-product-workflow
+npx skills add {full_repo_name}/cali-product-workflow
 ```
 
 See [skills/README.md](skills/README.md) for details.
@@ -39,7 +39,7 @@ Currently supported:
 
 ## About
 
-Published using [agent-sync](https://github.com/renatocaliari/agent-sync) — a CLI tool for synchronizing AI agent configurations and skills across multiple machines.
+Published using [agent-sync](https://github.com/{username}/agent-sync) — a CLI tool for synchronizing AI agent configurations and skills across multiple machines.
 
 ## License
 
