@@ -1816,22 +1816,22 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
         # Show introduction panel
         from rich.panel import Panel
         intro_lines = [
-            "[bold]You're about to publish flagged items to a PUBLIC repository.[/bold]",
+            "[bold]Some items have security concerns that need your attention.[/bold]",
             "",
-            "These items have [bold yellow]HIGH or CRITICAL security concerns[/bold yellow] ",
-            "that were detected during the security scan.",
+            "This command will publish to a [bold]PUBLIC GitHub repository[/bold].",
             "",
-            "[bold cyan]Before publishing, review and confirm:[/bold cyan]",
-            "  • Review each flagged item and its security issues",
-            "  • Deselect items you don't want to publish",
-            "  • Items with [red]🔴 hardcoded[/red] issues are especially risky",
-            "  • You can still publish flagged items after review",
+            "[bold yellow]Security issues detected:[/bold yellow]",
+            "  • Hardcoded paths (/Users/, /root/)",
+            "  • Absolute paths (D:\\, C:\\)",
+            "  • API tokens or hardcoded secrets",
             "",
-            "[dim]Use Enter to confirm your selection, or 'none' to skip all[/dim]",
+            "These items can still be published after you review them.",
+            "",
+            "[bold cyan]Use 'none' to skip all flagged, or press Enter to review.[/bold cyan]",
         ]
         console.print(Panel(
             "\n".join(intro_lines),
-            title="[bold yellow]⚠️ Security Review Required[/]",
+            title="[bold yellow]⚠️ Security Review[/]",
             border_style="yellow",
         ))
         console.print("\n")
@@ -1869,45 +1869,45 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
     # ============================================================================
     # PHASE 4: Security Warning (Unified - same scan for skills AND agents)
     # ============================================================================
+    # Update counts after flagged selection
+    if do_agents:
+        agents_count = len(available_agents)
+    if do_skills:
+        skills_count = len(available_skills)
+
+    console.print("\n")
     warning_lines = []
 
-    # Determine what we're publishing
+    # Determine what we're publishing (with updated counts)
     if do_skills and do_agents:
-        target_desc = f"{skills_count} skills AND {agents_count} agent instructions"
+        target_desc = f"[bold]{skills_count}[/bold] skills and [bold]{agents_count}[/bold] agent instructions"
     elif do_skills:
-        target_desc = f"{skills_count} skills"
+        target_desc = f"[bold]{skills_count}[/bold] skills"
     else:
-        target_desc = f"{agents_count} agent instructions"
+        target_desc = f"[bold]{agents_count}[/bold] agent instructions"
 
-    warning_lines.append(f"[bold]Publishing {target_desc} to PUBLIC repository[/bold]")
+    warning_lines.append(f"Publishing {target_desc} to a [bold red]PUBLIC[/bold red] GitHub repository")
     warning_lines.append("")
-    warning_lines.append("[bold yellow]⚠️  SECURITY SCAN applies to BOTH[/bold yellow]")
+    warning_lines.append("[bold cyan]What will be scanned:[/bold cyan]")
+    warning_lines.append("  • API keys, tokens, credentials")
+    warning_lines.append("  • Private URLs (server., .internal, /home/)")
+    warning_lines.append("  • Absolute paths (/Users/, /root/, D:\\)")
     warning_lines.append("")
-    warning_lines.append("[cyan]Both skills AND agent instructions are scanned for:[/cyan]")
-    warning_lines.append("  • API keys / tokens (sk-, ghp_, gho_, etc.)")
-    warning_lines.append("  • Private URLs (server., .internal, /home/, C:\\)")
-    warning_lines.append("  • Absolute paths (/Users/, /root/)")
-    warning_lines.append("  • Internal commands (/skill:, ctx_batch_execute)")
-    warning_lines.append("")
-    warning_lines.append("[red]SKIPPED automatically (never published):[/red]")
-    warning_lines.append("  ✗ Files with: auth, token, key, secret, credentials in name")
-    warning_lines.append("  ✗ .env files")
-    warning_lines.append("  ✗ Config files: settings.json, config.yaml, credentials.json")
-    warning_lines.append("")
-    warning_lines.append("[yellow]⚠️  Flagged items were already selected interactively[/yellow]")
-    warning_lines.append("[dim]Only selected items will be published[/dim]")
+    warning_lines.append("[bold red]What will NEVER be published:[/bold red]")
+    warning_lines.append("  ✗ Files with: auth, token, key, secret, credentials")
+    warning_lines.append("  ✗ .env files, config files, binary files (.pyc)")
 
     console.print(Panel(
         "\n".join(warning_lines),
         border_style="yellow",
-        title="[bold yellow]Public Disclosure[/]",
+        title="[bold yellow]⚠️ Public Disclosure[/]",
     ))
 
     # ============================================================================
     # PHASE 5: Confirm
     # ============================================================================
     if dry_run:
-        console.print(f"\n[blue]🔍 DRY RUN: Would publish {skills_count} skills and {len(available_agents)} agent instructions[/blue]\n")
+        console.print(f"\n[blue]🔍 DRY RUN: Would publish {skills_count} skills and {agents_count} agent instructions[/blue]\n")
         return
 
     if not Confirm.ask("\n[bold]Continue with publishing?[/]", default=True):
@@ -1915,18 +1915,18 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
         return
 
     # ============================================================================
-    # PHASE 6: Execute (non-interactive, no re-confirmation)
+    # PHASE 6: Execute (non-interactive)
     # ============================================================================
     success = True
 
-    if do_skills:
-        console.print("\n[bold cyan]📚 Publishing Skills...[/bold cyan]\n")
-        if not publish_skills(repo_url=repo_url, dry_run=False, interactive=True, skip_security_panel=True, skip_confirm=True):
+    if do_skills and skills_count > 0:
+        console.print("\n[bold cyan]📤 Publishing Skills...[/bold cyan]\n")
+        if not publish_skills(repo_url=repo_url, dry_run=False, interactive=False, skip_security_panel=True, skip_confirm=True):
             success = False
 
-    if do_agents:
-        console.print("\n[bold cyan]🤖 Publishing Agent Instructions...[/bold cyan]\n")
-        if not publish_agents(repo_url=repo_url, dry_run=False, interactive=True, skip_confirm=True):
+    if do_agents and agents_count > 0:
+        console.print("\n[bold cyan]📤 Publishing Agent Instructions...[/bold cyan]\n")
+        if not publish_agents(repo_url=repo_url, dry_run=False, interactive=False, skip_confirm=True):
             success = False
 
     if success:
