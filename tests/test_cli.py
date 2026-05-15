@@ -143,7 +143,11 @@ class TestCLI:
         result = runner.invoke(main, ["skills", "diff"])
 
         assert result.exit_code == 0
-        assert "Local and remote are in sync" in result.output or "remote" in result.output
+        # Output should contain either sync message OR divergence report
+        assert "Local and remote are in sync" in result.output or \
+               "Skills Divergence Report" in result.output or \
+               "Local only" in result.output or \
+               "Remote:" in result.output
 
     def test_centralize_help(self):
         """Test centralize command help."""

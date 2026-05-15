@@ -6,7 +6,7 @@
 
 `agent-sync` solves the fragmentation of the AI agent ecosystem by providing a unified workflow for your CLI tools.
 
-> 🔗 **DotAgents Protocol compatible** — agent-sync's `~/.agents/skills/` hub follows the [DotAgents Protocol](https://dotagentsprotocol.com/) convention for portable, version-controlled agent configuration. See [docs/dotagents.md](docs/dotagents.md).
+> 🔗 **Protocol Alignment** — agent-sync follows the **DotAgents Protocol** (`~/.agents/` hub) for portable skills. Works alongside **GitAgent Protocol** for comprehensive agent definition. See [docs/dotagents.md](docs/dotagents.md) for details.
 
 ---
 
