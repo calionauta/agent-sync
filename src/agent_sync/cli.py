@@ -1614,6 +1614,7 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
     available_skills = []
     available_agents = []
     scan_results = {}
+    skills_flagged = []  # Initialize to avoid UnboundLocalError
 
     if do_skills:
         available_skills = get_available_skills()
@@ -1621,7 +1622,6 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
 
         # Scan skills for security
         skills_scan_results = {}
-        skills_flagged = []
         for skill in available_skills:
             if skill["path"].is_dir():
                 for f in skill["path"].rglob("*"):

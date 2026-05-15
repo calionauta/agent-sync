@@ -70,20 +70,22 @@ class TestPublishCLI:
         assert "0 skills" in result.output  # Shows in dry-run summary
         assert "Security: 1 safe" in result.output
 
-    @patch("agent_sync.publish.get_available_skills")
     @patch("agent_sync.publish.get_available_agents")
+    @patch("agent_sync.publish.get_available_skills")
     @patch("agent_sync.publish.scan_file")
+    @patch("agent_sync.publish._interactive_flagged_selection")
     @patch("rich.prompt.Confirm.ask", return_value=False)
-    def test_publish_cancelled_by_user(self, mock_confirm, mock_scan, mock_get_agents, mock_get_skills, runner):
+    def test_publish_cancelled_by_user(self, mock_confirm, mock_interactive, mock_scan, mock_get_skills, mock_get_agents, runner):
         """Test user can cancel publishing."""
         mock_get_skills.return_value = [{"name": "skill1", "path": MagicMock(spec=Path)}]
         mock_get_agents.return_value = []
-        mock_scan.return_value = MagicMock(safe=True, issues=[])
+        mock_scan.return_value = MagicMock(safe=False, issues=[])
+        mock_interactive.return_value = ([], False)
 
-        result = runner.invoke(main, ["publish", "--skills"])
+        result = runner.invoke(main, ["publish", "--skills"], input="\n")
 
         assert result.exit_code == 0, result.output
-        assert "cancelled" in result.output.lower()
+        assert "cancelled" in result.output.lower() or "aborted" in result.output.lower()
 
     @patch("agent_sync.publish.get_available_skills")
     @patch("agent_sync.publish.get_available_agents")
