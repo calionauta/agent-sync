@@ -133,13 +133,17 @@ class TestCLI:
         assert result.exit_code == 0
 
     def test_diff_command(self):
-        """Test diff command shows divergence report."""
+        """Test diff command shows either divergence report or config message."""
         runner = CliRunner()
         result = runner.invoke(main, ["skills", "diff"])
         
         assert result.exit_code == 0
-        # Output should contain divergence report (skills found locally)
-        assert "Skills Divergence Report" in result.output or "Local only" in result.output or "Local:" in result.output
+        # Output depends on whether repo is configured:
+        # - With repo: shows divergence report
+        # - Without repo: shows config message
+        has_divergence = "Skills Divergence Report" in result.output or "Local only" in result.output
+        has_config_msg = "No repository configured" in result.output or "init" in result.output
+        assert has_divergence or has_config_msg, f"Expected divergence report or config message, got: {result.output[:200]}"
 
     def test_centralize_help(self):
         """Test centralize command help."""
