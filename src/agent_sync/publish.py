@@ -100,21 +100,132 @@ def _git_clone_or_init(repo_url: str, tmp_path: Path) -> None:
         subprocess.run(["git", "branch", "-M", "main"], cwd=tmp_path, capture_output=True, timeout=15)
 
 
-def _git_push(tmp_path: Path, repo_url: str, message: str) -> None:
-    """Git add, commit, push."""
-    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, check=True, timeout=30)
-    subprocess.run(
-        ["git", "commit", "-m", message],
-        cwd=tmp_path, capture_output=True, check=True, timeout=30,
-    )
-    try:
-        subprocess.run(["git", "remote", "add", "origin", repo_url], cwd=tmp_path, capture_output=True, timeout=15)
-    except Exception:
-        pass
-    subprocess.run(
-        ["git", "push", "-u", "origin", "main", "--force"],
-        cwd=tmp_path, capture_output=True, check=True, timeout=120,
-    )
+# =============================================================================
+# SHARED HELPERS (DRY)
+# =============================================================================
+
+def _render_flagged_table(
+    flagged_items: list[tuple],
+    title: str = "⚠️  Flagged Items",
+) -> Table:
+    """Render a table showing flagged items with their security issues.
+    
+    DRY helper for both skills and agents.
+    
+    Args:
+        flagged_items: List of (item, result, prefix) tuples
+        title: Table title
+    """
+    table = Table(box=box.ROUNDED, show_header=True, header_style="bold yellow")
+    table.add_column("Item", style="cyan")
+    table.add_column("Issues", style="red")
+    
+    for item, result, prefix in flagged_items:
+        name = item.get("name") or item.get("filename") or str(item)
+        if prefix:
+            name = f"{prefix}/{name}"
+        issues_text = format_issues_for_display(result.issues)
+        # Truncate for table display
+        issues_text = "\n".join(issues_text.split("\n")[:3])  # Max 3 lines
+        table.add_row(name, issues_text)
+    
+    return table
+
+
+def _interactive_flagged_selection(
+    flagged_items: list[tuple],
+    title: str = "Select flagged items to publish",
+    include_safe: bool = False,
+) -> tuple[list, bool]:
+    """Interactive selection for flagged items.
+    
+    Shows all items (flagged and optionally safe) and lets user select
+    which ones to publish. Uses the same pattern as skills selection.
+    
+    Args:
+        flagged_items: List of (item, result, prefix) tuples
+        title: Selection title
+        include_safe: If True, also shows safe items
+    
+    Returns:
+        Tuple of (selected_items, confirmed)
+    """
+    from ._selection import parse_multiselect_input
+    
+    if not flagged_items:
+        return [], True
+    
+    selected = set()
+    item_names = []
+    item_map = {}
+    
+    for i, (item, result, prefix) in enumerate(flagged_items, 1):
+        name = item.get("name") or item.get("filename") or str(item)
+        if prefix:
+            name = f"{prefix}/{name}"
+        
+        # Key for selection (include index for uniqueness)
+        key = f"{i}:{name}"
+        item_names.append(key)
+        item_map[key] = (item, result, prefix)
+        
+        # Default: select flagged if in non-interactive mode
+        if not result.safe:
+            selected.add(key)
+    
+    while True:
+        console.clear()
+        console.print(f"\n[bold yellow]⚠️  {title}[/bold yellow]\n")
+        console.print("[dim]Select which flagged items to publish (⚠️ = flagged, ✓ = safe)[/dim]\n")
+        
+        # Render table with security status
+        table = Table(box=box.ROUNDED, show_header=True, header_style="bold cyan")
+        table.add_column("ID", justify="right", style="dim", width=4)
+        table.add_column("Pub", justify="center", width=5)
+        table.add_column("Item", style="cyan")
+        table.add_column("Security", justify="center", width=10)
+        
+        for i, (item, result, prefix) in enumerate(flagged_items, 1):
+            name = item.get("name") or item.get("filename") or str(item)
+            if prefix:
+                name = f"{prefix}/{name}"
+            
+            key = f"{i}:{name}"
+            is_selected = key in selected
+            status = "[bold green]✓[/]" if is_selected else "[red]○[/]"
+            
+            icon = "[red]⚠️[/]" if not result.safe else "[green]✓[/]"
+            table.add_row(str(i), status, name, icon)
+        
+        console.print(table)
+        
+        console.print("\n[bold]Controls:[/bold]")
+        console.print("  • Enter numbers to toggle (e.g. [green]'1,3,5'[/green])")
+        console.print("  • Type [cyan]'all'[/cyan] or [cyan]'none'[/cyan]")
+        console.print("  • Press [bold white]Enter[/] when done")
+
+        choice = Prompt.ask("\nSelection", default="done")
+        result = parse_multiselect_input(choice, item_names, selected)
+        if result is None:
+            break
+        selected = result
+    
+    # Build selected items list
+    selected_items = [item_map[k][0] for k in selected if k in item_map]
+    
+    # Confirmation
+    console.print("\n[bold green]📋 Selection Summary[/]\n")
+    summary = Table(box=box.SIMPLE, show_header=False)
+    summary.add_column("Item", style="cyan")
+    for item, _, _ in [item_map[k] for k in sorted(selected)]:
+        name = item.get("name") or item.get("filename") or str(item)
+        summary.add_row(f"  • {name}")
+    console.print(summary)
+
+    confirmed = Confirm.ask("\n[bold]Confirm this selection?[/]", default=True)
+    return selected_items, confirmed
+
+
 
 
 def _generate_public_repo_readme(repo_url: str) -> str:
