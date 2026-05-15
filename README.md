@@ -6,7 +6,7 @@
 
 `agent-sync` solves the fragmentation of the AI agent ecosystem by providing a unified workflow for your CLI tools.
 
-> 🔗 **Protocol Alignment** — agent-sync follows the **DotAgents Protocol** (`~/.agents/` hub) for portable skills. Works alongside **GitAgent Protocol** for comprehensive agent definition. See [docs/dotagents.md](docs/dotagents.md) for details.
+> 🔗 **Protocol Support** — agent-sync supports **DotAgents Protocol** (`~/.agents/skills/` hub) for portable skills. Optional **GitAgent Protocol** support can be enabled in config.
 
 ---
 
@@ -213,38 +213,53 @@ Inspired by [opencode-synced](https://github.com/iHildy/opencode-synced), expand
 
 ---
 
-## 🔗 DotAgents Protocol
+## 🔗 Protocol Support
 
-This project aligns with the [DotAgents Protocol](https://dotagentsprotocol.com/) for AI agent configuration.
+agent-sync supports two protocols for AI agent configuration.
 
-### What we follow
+### DotAgents Protocol (default)
 
-| Aspect | Status | Details |
-|--------|--------|---------|
-| `~/.agents/skills/` hub | ✅ Applied | Vendor-neutral skills directory |
-| `.agents/` directory structure | ✅ Applied | Skills and agents organized under `.agents/` |
-| Git-friendly config | ✅ Applied | Version-controllable via private GitHub repo |
-| Vendor-neutral skills | ✅ Applied | All skills share `~/.agents/skills/` as source of truth |
+The DotAgents Protocol provides a **vendor-neutral skills hub** — all your skills in one place, usable across agents.
 
-### What's different (and why)
+| Your Benefit | How It Works |
+|--------------|-------------|
+| **One skills folder** | All skills live in `~/.agents/skills/` |
+| **Cross-agent sharing** | Skills work with Claude, Gemini, Opencode, etc. |
+| **Version controlled** | Backed up in your private GitHub repo |
 
-| Aspect | DotAgents | agent-sync | Why |
-|--------|-----------|------------|-----|
-| Sub-agents | `~/.agents/agents/` (unified) | Per-vendor paths | Agents store profiles in vendor-specific formats; unifying would lose features |
-| MCP config | `~/.agents/mcp.json` (unified) | Per-vendor MCPs | Each vendor has unique MCP capabilities; merging would lose features |
-| Workspace override | `./.agents/` (overlay) | Not supported | Would require complex merge semantics; not a priority |
-| Config format | JSON | YAML | YAML is more readable for humans; JSON is optional in the spec |
-| Public bundles | hub.dotagentsprotocol.com | Not integrated | Would require separate publishing workflow |
+**Quick start:**
+```bash
+# Move scattered skills to hub
+agent-sync skills centralize
 
-### What we'd need to change for 100% compliance
+# Your skills are now in ~/.agents/skills/
+# Push to backup
+agent-sync push
+```
 
-These are **not planned** because they would reduce functionality:
+Learn more at [dotagentsprotocol.com](https://dotagentsprotocol.com/)
 
-1. **Unified `~/.agents/agents/`** — Would require converting Claude/Cursor/etc. agent formats to a standard format
-2. **Unified `~/.agents/mcp.json`** — Would lose vendor-specific MCP features
-3. **Workspace overrides** — Complex merge semantics for marginal benefit
+---
 
-The current approach (DotAgents for skills, vendor-specific for everything else) gives you the best of both: standard skills management + full vendor features.
+### GitAgent Protocol (opt-in)
+
+The GitAgent Protocol provides comprehensive agent definitions with identity, constraints, and compliance mapping.
+
+**Enable in your config:**
+```yaml
+protocols:
+  gitagent:
+    enabled: true
+    patterns:
+      - "agent.yaml"
+      - "SOUL.md"
+      - "RULES.md"
+      - "DUTIES.md"
+```
+
+Your agent definitions are backed up alongside your other configs.
+
+Learn more at [gitagent.sh](https://www.gitagent.sh/)
 
 ---
 

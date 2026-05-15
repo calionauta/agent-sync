@@ -258,10 +258,85 @@ class Config:
             "include_secrets": False,
             "include_mcp_secrets": False,
             # global_skills: sempre true (implícito)
+            # Protocol support (opt-in)
+            "protocols": {
+                "dotagents": {
+                    "enabled": True,  # Já funciona por padrão
+                    "skills_hub": "~/.agents/skills/"
+                },
+                "gitagent": {
+                    "enabled": False,  # Opt-in - não buscar por padrão
+                    "patterns": [  # Arquivos GitAgent a sincronizar
+                        "agent.yaml",
+                        "SOUL.md",
+                        "RULES.md",
+                        "DUTIES.md",
+                        "AGENTS.md",
+                        "skills/",
+                        "knowledge/",
+                        "memory/",
+                        "hooks/",
+                        "workflows/",
+                        "tools/",
+                        "compliance/"
+                    ]
+                }
+            }
         }
 
         self._config = default_config
         self.save()
         return self.config_path
+
+    def get_protocol_settings(self, protocol: str) -> dict:
+        """Get settings for a specific protocol.
+
+        Args:
+            protocol: Protocol name ("dotagents" or "gitagent")
+
+        Returns:
+            dict with protocol settings, or empty dict if not configured
+        """
+        protocols = self._config.get("protocols", {})
+        return protocols.get(protocol, {})
+
+    def is_protocol_enabled(self, protocol: str) -> bool:
+        """Check if a protocol is enabled.
+
+        Args:
+            protocol: Protocol name ("dotagents" or "gitagent")
+
+        Returns:
+            True if protocol is enabled, False otherwise
+        """
+        protocol_settings = self.get_protocol_settings(protocol)
+        return protocol_settings.get("enabled", False)
+
+    def enable_protocol(self, protocol: str) -> None:
+        """Enable a protocol for sync.
+
+        Args:
+            protocol: Protocol name ("dotagents" or "gitagent")
+        """
+        if "protocols" not in self._config:
+            self._config["protocols"] = {}
+
+        if protocol not in self._config["protocols"]:
+            self._config["protocols"][protocol] = {}
+
+        self._config["protocols"][protocol]["enabled"] = True
+        self.save()
+
+    def disable_protocol(self, protocol: str) -> None:
+        """Disable a protocol for sync.
+
+        Args:
+            protocol: Protocol name ("dotagents" or "gitagent")
+        """
+        protocol_settings = self.get_protocol_settings(protocol)
+        if protocol_settings:
+            protocol_settings["enabled"] = False
+            self._config["protocols"][protocol] = protocol_settings
+            self.save()
 
 
