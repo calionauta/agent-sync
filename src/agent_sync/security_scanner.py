@@ -52,11 +52,14 @@ def _is_valid_skill(skill_name: str) -> bool:
     skill_path = Path.home() / ".agents" / "skills" / skill_name
     return skill_path.exists()
 
+# DEPRECATED: /skill: commands are now treated as legitimate agent commands
+# Kept as noop for backward compatibility
+
 
 def _mask_false_positives(content: str) -> tuple[str, dict]:
     """
     Mask known false-positive patterns in content.
-    
+
     Returns:
         (masked_content, mask_info) where mask_info describes what was masked
     """
@@ -127,9 +130,10 @@ PATTERNS: list[tuple[str, str, re.Pattern, str]] = [
     ("INTERNAL_CMD_CTX", "high", re.compile(r"ctx_(batch_execute|ctx_execute|ctx_search)\s*\("),
      "Internal ctx command - reveals private tooling"),
 
-    # Server paths - specific private infrastructure (lowercase "server." alone is too common in docs)
-    ("SERVER_PATH", "medium", re.compile(r"(?i)\b(server\.|renatocaliari\.com|SSH)\b"),
-     "Private server path or domain detected"),
+    # Server paths - specific private infrastructure
+    # Only flag personal domains and clear path patterns
+    ("SERVER_PATH", "medium", re.compile(r"(?i)(renatocaliari\.com|\.internal|\.local|~\.ssh)"),
+     "Private domain or path detected"),
 
     # SSH keys - real key format
     ("SSH_KEY", "critical", re.compile(r"-----BEGIN (RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----"),
@@ -197,20 +201,16 @@ def scan_file(path: Path) -> ScanResult:
                         context = "code"
                     break
 
-            # Special handling for /skill: commands - check if skill exists
-            if rule == "INTERNAL_CMD_SKILL":
-                skill_name = snippet.replace("/skill:", "")
-                if not _is_valid_skill(skill_name):
-                    # Skill doesn't exist - likely deprecated reference in docs
-                    context = "deprecated"
-                    explanation = f"References non-existent skill '{skill_name}' (may be renamed)"
-                    effective_severity = "low"  # Downgrade
-                else:
-                    # Skill exists - real security concern
-                    effective_severity = severity
-            else:
-                effective_severity = severity
-
+            # Context-based severity adjustment
+            effective_severity = severity
+            if context in ("variable", "deprecated", "code"):
+                # Downgrade variable references and deprecated stuff
+                priority = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+                current_level = priority.get(severity, 2)
+                effective_severity = next((k for k, v in priority.items() if v == current_level - 1), severity)
+                if current_level <= 2:
+                    effective_severity = "low"
+            
             issues.append(Issue(
                 rule=rule,
                 severity=effective_severity,
