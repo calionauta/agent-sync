@@ -57,7 +57,22 @@ class SkillsReconcile(SkillsDiff):
                 console.print()
 
         return decisions
-
+    
+    def get_decisions_data(self) -> dict:
+        """Get reconciliation data for JSON output."""
+        diff_result = self.diff()
+        return {
+            "in_sync": not diff_result["local_only"] and not diff_result["remote_only"],
+            "local_only": diff_result["local_only"],
+            "remote_only": diff_result["remote_only"],
+            "auto_actions": {
+                "to_add_to_remote": diff_result["local_only"],
+                "to_download_to_local": diff_result["remote_only"],
+            },
+            "local_count": len(self.get_local_skills()),
+            "remote_count": len(self.get_remote_skills()),
+        }
+    
     def apply_decisions(self, decisions: dict[str, str], dry_run: bool = False) -> dict[str, int]:
         """Apply reconciliation decisions.
 
