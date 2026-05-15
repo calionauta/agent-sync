@@ -1852,12 +1852,12 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
 
     if do_skills:
         console.print("\n[bold cyan]📚 Publishing Skills...[/bold cyan]\n")
-        if not publish_skills(repo_url=repo_url, dry_run=False, interactive=False, skip_security_panel=True, skip_confirm=True):
+        if not publish_skills(repo_url=repo_url, dry_run=False, interactive=True, skip_security_panel=True, skip_confirm=True):
             success = False
 
     if do_agents:
         console.print("\n[bold cyan]🤖 Publishing Agent Instructions...[/bold cyan]\n")
-        if not publish_agents(repo_url=repo_url, dry_run=False, interactive=False):
+        if not publish_agents(repo_url=repo_url, dry_run=False, interactive=True, skip_confirm=True):
             success = False
 
     if success:
