@@ -1301,15 +1301,35 @@ def mcp(dry_run: bool, force: bool, conflicts: bool, source: tuple[str, ...], ou
 
 
 @main.command()
-def status():
+@click.option("--json", "json_output", is_flag=True, help="Output as JSON for programmatic use")
+def status(json_output: bool):
     """Show sync status and last sync times."""
-    console.print("\n📊 Sync Status\n")
-
+    import json
+    
     config = Config()
     sync_manager = SyncManager(config)
 
     try:
         status_info = sync_manager.get_status()
+
+        if json_output:
+            # JSON output mode
+            output = {
+                "repo_url": config.repo_url,
+                "agents": {}
+            }
+            for agent, info in status_info.items():
+                output["agents"][agent] = {
+                    "status": info["status"],
+                    "installed": info.get("installed", False),
+                    "last_sync": info["last_sync"],
+                    "changes": info["changes"]
+                }
+            console.print_json(json.dumps(output))
+            return
+
+        # Human-readable output
+        console.print("\n📊 Sync Status\n")
 
         table = Table(show_header=True, header_style="bold magenta")
         table.add_column("Agent", style="cyan")
