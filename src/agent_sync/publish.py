@@ -204,24 +204,31 @@ def _interactive_flagged_selection(
             
             icon = "[red]⚠️[/]" if not result.safe else "[green]✓[/]"
             
-            # Build issue type summary from result.issues
+            # Build issue type summary with severity colors
             if hasattr(result, "issues") and result.issues:
                 # Aggregate unique rules and severities
-                rules_seen: set = set()
+                rules_seen: list = []
                 severities: set = set()
                 for issue in result.issues:
-                    rules_seen.add(issue.get("rule", "UNKNOWN"))
+                    if issue.get("rule") not in rules_seen:
+                        rules_seen.append(issue.get("rule", "UNKNOWN"))
                     severities.add(issue.get("severity", "medium"))
                 
-                # Priority for severity
+                # Priority for severity - show highest
                 priority = {"critical": 4, "high": 3, "medium": 2, "low": 1}
                 highest = max((priority.get(s, 0) for s in severities), default=2)
                 sev_label = next((k for k, v in priority.items() if v == highest), "medium")
                 
-                rules_text = ", ".join(sorted(rules_seen)[:3])
+                # Color mapping for Rich
+                color_map = {"critical": "red", "high": "yellow", "medium": "magenta", "low": "cyan"}
+                color = color_map.get(sev_label, "white")
+                
+                # Show rules with color
+                rules_text = ", ".join(rules_seen[:3])
                 if len(rules_seen) > 3:
                     rules_text += f" +{len(rules_seen) - 3}"
-                issue_text = f"[{sev_label}]{rules_text}[/{sev_label}]"
+                
+                issue_text = f"[{color}]{sev_label.upper()}[/{color}]: {rules_text}"
             else:
                 issue_text = "[dim]none[/dim]"
             
