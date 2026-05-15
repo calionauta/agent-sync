@@ -600,8 +600,10 @@ def skills():
 
 
 @skills.command("list")
-def list_skills():
+@click.option("--json", "json_output", is_flag=True, help="Output as JSON for programmatic use")
+def list_skills(json_output: bool):
     """List all centralized skills."""
+    import json
     from rich import box
     from rich.table import Table
 
@@ -630,9 +632,12 @@ def list_skills():
     if not skills:
         console.print("\n[yellow]No skills found in ~/.agents/skills/[/yellow]\n")
         return
-
+    
+    if json_output:
+        console.print_json(json.dumps(skills, indent=2))
+        return
+    
     console.print(f"\n[bold]📚 Centralized Skills ({len(skills)})[/]\n")
-
     table = Table(box=box.SIMPLE)
     table.add_column("Status", style="green")
     table.add_column("Skill Name", style="cyan")
@@ -640,7 +645,6 @@ def list_skills():
 
     for skill in sorted(skills, key=lambda s: s["name"]):
         icon = "✓" if skill["valid"] else "⚠"
-        "Valid" if skill["valid"] else "File (no SKILL.md)"
         table.add_row(icon, skill["name"], skill["path"])
 
     console.print(table)
