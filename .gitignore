@@ -1,70 +1,10 @@
-# Python
+.DS_Store
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# Virtual environments
+*.pyc
+.pytest_cache/
+site/
 .venv/
 venv/
-ENV/
-env/
-.env
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-
-# Secrets - NEVER SYNC THESE
-.env
-*.pem
-*.key
-credentials.json
-secrets/
-private/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Test
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-.mypy_cache/
-.ruff_cache/
-
-# Development
-*.log
-tmp/
-temp/
-
-# Autoresearch (experiment artifacts)
-autoresearch.jsonl
-autoresearch.sh
-
-# Build artifacts
-*.whl
-*.tar.gz
+*.egg-info/
+dist/
+build/

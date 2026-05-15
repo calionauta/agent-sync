@@ -1,0 +1,91 @@
+# MkDocs configuration for agent-sync documentation
+# https://www.mkdocs.org
+# By cali (Renato Caliari)
+
+site_name: agent-sync
+site_description: Sync, Centralize, and Share AI Agent configurations and skills
+site_author: Cali (Renato Caliari)
+site_url: https://renatocaliari.github.io/agent-sync
+
+repo_name: renatocaliari/agent-sync
+repo_url: https://github.com/renatocaliari/agent-sync
+
+# Theme - Material for MkDocs (beautiful, modern)
+theme:
+  name: material
+  language: en
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: cyan
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+    - content.action.view
+
+# Plugins
+plugins:
+  - search:
+      separator: '[\s\-,:!=\[\]()"/]+|(?={)|^[^a-zA-Z]+(?=[a-zA-Z])|(?<=[a-zA-Z])[^a-zA-Z]+(?=[A-Z])'
+
+# Auto-generate CLI documentation from Click decorators
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - admonition
+  - pymdownx.details
+  - pymdownx.mark
+  - tables
+  - attr_list
+  - md_in_html
+  - mkdocs-click
+
+# Navigation structure
+nav:
+  - Home: index.md
+  - Quick Start: quickstart.md
+  - CLI Reference: cli.md
+  - Configuration: configuration.md
+  - Agents:
+      - agents/adding-agents.md
+      - agents/extensions.md
+  - Protocols:
+      - protocols/dotagents.md
+      - dotagents-comparison.md
+
+# Extra
+extra:
+  generator: false
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/renatocaliari/agent-sync
+
+# GitHub edit link
+edit_uri: edit/main/docs/
