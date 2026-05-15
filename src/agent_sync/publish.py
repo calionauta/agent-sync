@@ -28,6 +28,13 @@ console = Console()
 PUBLISH_CONFIG_PATH = Path.home() / ".config" / "agent-sync" / "publish.yaml"
 SKILLS_DIR = Path.home() / ".agents" / "skills"
 
+# Files to skip during publish (not meaningful to publish, machine-specific, or binary)
+SKIP_EXTENSIONS = {".pyc", ".pyo", ".pyd", ".so", ".dll", ".dylib", ".exe", ".bin",
+                   ".whl", ".zip", ".tar", ".gz", ".bz2", ".xz",
+                   ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico",
+                   ".pdf", ".doc", ".docx", ".xls", ".xlsx",
+                   ".pycache__", ".egg-info__"}
+
 # Templates path
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -882,16 +889,16 @@ def publish_skills(repo_url: str | None = None, dry_run: bool = False, interacti
     # 5. SECURITY SCAN (same as agents)
     console.print("\n[dim]🔍 Scanning skills for sensitive content...[/dim]")
 
-    # Collect all files from selected skills
+    # Collect all files from selected skills (skip binary/incompatible files)
     all_files: list[Path] = []
     file_to_skill: dict[Path, str] = {}
     for skill in selected_skills:
         if skill["path"].is_dir():
             for f in skill["path"].rglob("*"):
-                if f.is_file() and not f.name.startswith("."):
+                if f.is_file() and not f.name.startswith(".") and f.suffix not in SKIP_EXTENSIONS and "__pycache__" not in str(f):
                     all_files.append(f)
                     file_to_skill[f] = skill["name"]
-        elif skill["path"].is_file():
+        elif skill["path"].is_file() and skill["path"].suffix not in SKIP_EXTENSIONS:
             all_files.append(skill["path"])
             file_to_skill[skill["path"]] = skill["name"]
 
