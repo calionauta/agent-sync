@@ -1594,6 +1594,7 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
         publish_skills, publish_agents,
         get_available_skills, get_available_agents,
         scan_file, format_issues_for_display,
+        _interactive_flagged_selection,
     )
     from rich.panel import Panel
     from rich.table import Table
@@ -1711,7 +1712,59 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
         for f, skill_name, result in skills_flagged:
             console.print(f"\n[bold]{skill_name}/{f.name}[/bold]")
             console.print(f"[dim]{format_issues_for_display(result.issues)}[/dim]")
-        console.print("\n[dim]These files will still be published. Review before continuing.[/dim]")
+
+    # ============================================================================
+    # PHASE 3c: Interactive selection of flagged items
+    # ============================================================================
+    # Build combined flagged list for interactive selection
+    all_flagged = []
+    if do_agents:
+        for agent in available_agents:
+            result = scan_results.get(agent["path"])
+            if result and not result.safe:
+                all_flagged.append((agent, result, agent["agent"]))
+    
+    skills_flagged_items = []
+    if do_skills and skills_flagged:
+        for f, skill_name, result in skills_flagged:
+            skill_item = {"name": skill_name, "path": f, "filename": f.name}
+            skills_flagged_items.append((skill_item, result, skill_name))
+    
+    if all_flagged or skills_flagged_items:
+        console.print("\n")
+        
+        # Combine all flagged
+        flagged_combined = all_flagged + skills_flagged_items
+        
+        selected_flagged, confirmed = _interactive_flagged_selection(
+            flagged_combined,
+            title="Select flagged items to publish",
+        )
+        
+        if not confirmed:
+            console.print("\n[yellow]Publish cancelled[/yellow]\n")
+            return
+        
+        # Filter to only selected items
+        selected_names = set()
+        for item in selected_flagged:
+            if item.get("agent"):
+                selected_names.add(f"{item['agent']}:{item['filename']}")
+            elif item.get("name"):
+                selected_names.add(item["name"])
+        
+        # Update available agents to only selected
+        if do_agents and selected_names:
+            available_agents = [a for a in available_agents 
+                               if f"{a['agent']}:{a['filename']}" in selected_names]
+        elif do_agents:
+            available_agents = []
+        
+        # Update skills count based on selected
+        if do_skills:
+            selected_skill_count = sum(1 for s in available_skills 
+                                       if s["name"] in selected_names)
+            skills_count = selected_skill_count
 
     # ============================================================================
     # PHASE 4: Security Warning (Unified - same scan for skills AND agents)
@@ -1741,8 +1794,8 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
     warning_lines.append("  ✗ .env files")
     warning_lines.append("  ✗ Config files: settings.json, config.yaml, credentials.json")
     warning_lines.append("")
-    warning_lines.append("[yellow]⚠️  Flagged files are STILL published (with warning)[/yellow]")
-    warning_lines.append("[dim]Review flagged items after publishing[/dim]")
+    warning_lines.append("[yellow]⚠️  Flagged items were already selected interactively[/yellow]")
+    warning_lines.append("[dim]Only selected items will be published[/dim]")
 
     console.print(Panel(
         "\n".join(warning_lines),
@@ -1753,20 +1806,9 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
     # ============================================================================
     # PHASE 5: Confirm
     # ============================================================================
-    # Count total flagged
-    agents_flagged_count = sum(1 for r in scan_results.values() if not r.safe)
-    skills_flagged_count = len(skills_flagged)
-    total_flagged = agents_flagged_count + skills_flagged_count
-
     if dry_run:
-        console.print(f"\n[blue]🔍 DRY RUN: Would publish {skills_count} skills and {agents_count} agents[/blue]\n")
-        if total_flagged > 0:
-            console.print(f"[yellow]⚠️  {total_flagged} files flagged (will publish with warning)[/yellow]\n")
+        console.print(f"\n[blue]🔍 DRY RUN: Would publish {skills_count} skills and {len(available_agents)} agent instructions[/blue]\n")
         return
-
-    if total_flagged > 0:
-        console.print(f"\n[yellow]⚠️  {total_flagged} file(s) flagged (will publish with warning)[/yellow]")
-        console.print("[dim]Details shown above. Review before continuing.[/dim]\n")
 
     if not Confirm.ask("\n[bold]Continue with publishing?[/]", default=True):
         console.print("\n[yellow]Publish cancelled[/yellow]\n")
