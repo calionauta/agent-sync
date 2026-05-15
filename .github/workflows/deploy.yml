@@ -47,28 +47,15 @@ jobs:
 
       - name: Create deployment directory
         run: |
-          # Create root directory
+          # Create root and docs directories
           mkdir -p _site
-          
-          # Copy main site to root (this is the landing page)
-          cp index.html _site/
-          
-          # Create docs directory
           mkdir -p _site/docs
           
-          # Copy all site_docs content to /docs (except index.html which conflicts)
-          for item in site_docs/*; do
-            filename=$(basename "$item")
-            if [ "$filename" = "index.html" ]; then
-              # Rename docs index to home.html
-              cp "$item" _site/docs/home.html
-            elif [ "$filename" = "404.html" ]; then
-              # Copy 404.html for docs subfolder
-              cp "$item" _site/docs/404.html
-            else
-              cp -r "$item" _site/docs/
-            fi
-          done
+          # Copy main site to root
+          cp index.html _site/
+          
+          # Copy all site_docs content to /docs (everything including index.html)
+          cp -r site_docs/* _site/docs/
           
           # List structure for debug
           echo "=== Root structure ==="
