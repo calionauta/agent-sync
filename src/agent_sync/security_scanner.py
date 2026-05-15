@@ -122,13 +122,12 @@ PATTERNS: list[tuple[str, str, re.Pattern, str]] = [
     ("TOKEN_GITHUB_ALT", "critical", re.compile(r"\bgho_[A-Za-z0-9]{36}\b"),
      "GitHub OAuth token detected - NEVER publish this!"),
 
-    # Internal commands - these reveal private infrastructure
-    ("INTERNAL_CMD_SKILL", "high", re.compile(r"/skill:[a-z0-9-]+"),
-     "Internal /skill command - reveals private skill names not in public registry"),
-    ("INTERNAL_CMD_CTX", "high", re.compile(r"ctx_(batch_execute|search|execute)\s*\("),
+    # Internal commands - these reveal private tooling (NOT /skill: which are public agent commands)
+    # /skill: commands are legitimate - they are how agents call skills
+    ("INTERNAL_CMD_CTX", "high", re.compile(r"ctx_(batch_execute|ctx_execute|ctx_search)\s*\("),
      "Internal ctx command - reveals private tooling"),
 
-    # Server paths - specific private infrastructure
+    # Server paths - specific private infrastructure (lowercase "server." alone is too common in docs)
     ("SERVER_PATH", "medium", re.compile(r"(?i)\b(server\.|renatocaliari\.com|SSH)\b"),
      "Private server path or domain detected"),
 
