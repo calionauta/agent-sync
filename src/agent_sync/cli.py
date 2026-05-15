@@ -766,21 +766,21 @@ def reconcile(auto: bool, dry_run: bool, json_output: bool):
     """
     import json
     from .skills_reconcile import SkillsReconcile
-    
+
     reconcile_mgr = SkillsReconcile()
-    
+
     if not reconcile_mgr.repo_dir:
         console.print("[yellow]⚠ No repository configured yet.[/yellow]")
         console.print("Run [green]agent-sync init[/green] or [green]agent-sync link[/green] first.\n")
         return
-    
+
     if json_output:
         diff_data = reconcile_mgr.get_diff_data()
         console.print_json(json.dumps(diff_data, indent=2))
         return
-    
+
     from rich.prompt import Confirm
-    
+
     # Get decisions
     if auto:
         # Auto mode: keep local for everything
@@ -1404,11 +1404,32 @@ def secrets():
 
 
 @secrets.command("list")
-def list_secrets():
+@click.option("--json", "json_output", is_flag=True, help="Output as JSON for programmatic use")
+def list_secrets(json_output: bool):
     """List all secrets and environment variables."""
+    import json
     from .secrets import SecretsManager
-
+    
     secrets_mgr = SecretsManager()
+    
+    if json_output:
+        env_vars = {}
+        if secrets_mgr.env_file.exists():
+            content = secrets_mgr.env_file.read_text()
+            if content.strip():
+                for line in content.strip().split('\n'):
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, _, value = line.partition('=')
+                        env_vars[key.strip()] = value.strip()
+        result = {
+            "env_file": str(secrets_mgr.env_file),
+            "exists": secrets_mgr.env_file.exists(),
+            "variables": env_vars,
+        }
+        console.print_json(json.dumps(result, indent=2))
+        return
+    
     console.print("\n[bold]🔐 Secrets Manager[/]\n")
     console.print(f"[dim].env file: {secrets_mgr.env_file}[/dim]\n")
 
