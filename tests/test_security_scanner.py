@@ -105,18 +105,6 @@ class TestScanFile:
         finally:
             os.unlink(temp_path)
 
-    def test_detects_skill_command(self):
-        """Test detection of /skill: commands."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
-            f.write("Use /skill:cali-product-planner for planning")
-            temp_path = f.name
-
-        try:
-            result = scan_file(Path(temp_path))
-            assert any(i["rule"] == "INTERNAL_CMD_SKILL" for i in result.issues)
-        finally:
-            os.unlink(temp_path)
-
     def test_detects_ctx_commands(self):
         """Test detection of ctx_* function calls."""
         with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
@@ -280,7 +268,6 @@ class TestPatterns:
             "TOKEN_OPENAI",
             "TOKEN_GITHUB",
             "TOKEN_GITHUB_ALT",
-            "INTERNAL_CMD_SKILL",
             "INTERNAL_CMD_CTX",
             "SERVER_PATH",
             "SSH_KEY",
