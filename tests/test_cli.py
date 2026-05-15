@@ -132,20 +132,14 @@ class TestCLI:
 
         assert result.exit_code == 0
 
-    def test_diff_command(self, tmp_path, monkeypatch):
-        """Test diff command with a temporary config."""
-        # Create a temporary home with .config/agent-sync
-        config_dir = tmp_path / ".config" / "agent-sync"
-        config_dir.mkdir(parents=True)
-        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-        monkeypatch.delenv("AGENT_SYNC_CONFIG", raising=False)
-        
+    def test_diff_command(self):
+        """Test diff command shows divergence report."""
         runner = CliRunner()
         result = runner.invoke(main, ["skills", "diff"])
         
         assert result.exit_code == 0
-        # Without repo configured, should show warning
-        assert "No repository configured" in result.output or "diff" in result.output.lower()
+        # Output should contain divergence report (skills found locally)
+        assert "Skills Divergence Report" in result.output or "Local only" in result.output or "Local:" in result.output
 
     def test_centralize_help(self):
         """Test centralize command help."""
