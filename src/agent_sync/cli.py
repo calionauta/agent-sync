@@ -1895,14 +1895,27 @@ def version():
 
 
 @main.command()
-def agents():
+@click.option("--json", "json_output", is_flag=True, help="Output as JSON for programmatic use")
+def agents(json_output: bool):
     """List supported agents and their status."""
-    console.print("\n🤖 Supported Agents\n")
-
+    import json
     from .agents import get_agents
-
-    agents = get_agents()
-
+    agents_list = get_agents()
+    config = Config()
+    
+    if json_output:
+        output = {}
+        for agent in agents_list:
+            output[agent.name] = {
+                "available": agent.is_available(),
+                "enabled": config.is_agent_enabled(agent.name),
+                "method": config.get_skills_method(agent.name) or agent.method,
+                "config_path": str(agent.config_path) if agent.config_path else None
+            }
+        console.print_json(json.dumps(output, indent=2))
+        return
+    
+    console.print("\n🤖 Supported Agents\n")
     table = Table(show_header=True, header_style="bold magenta")
     table.add_column("Agent", style="cyan")
     table.add_column("Status", style="yellow")
@@ -1912,7 +1925,7 @@ def agents():
 
     config = Config()
 
-    for agent in agents:
+    for agent in agents_list:
         enabled = config.is_agent_enabled(agent.name)
         status = "✓" if agent.is_available() else "✗"
         sync_status = "🟢 ON" if enabled else "🔴 OFF"
