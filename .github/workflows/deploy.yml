@@ -47,29 +47,21 @@ jobs:
 
       - name: Create deployment directory
         run: |
-          # Step 1: Create _site directory
+          # Create root directory
           mkdir -p _site
           
-          # Step 2: Copy main site (index.html) to root
+          # Copy main site to root
           cp index.html _site/
           
-          # Step 3: Create docs directory
-          mkdir -p _site/docs
+          # Copy entire site_docs to /docs
+          cp -R site_docs _site/docs_temp
+          mv _site/docs_temp _site/docs
           
-          # Step 4: Copy MkDocs output to /docs (excluding index.html to avoid overwrite)
-          for item in site_docs/*; do
-            filename=$(basename "$item")
-            if [ "$filename" != "index.html" ]; then
-              cp -r "$item" _site/docs/
-            fi
-          done
+          # Remove the docs index.html (will conflict with root index)
+          rm -f _site/docs/index.html
           
-          # Step 5: Rename docs index to avoid conflict
-          mv site_docs/index.html _site/docs/home.html 2>/dev/null || true
-          
-          # Verify structure
-          ls -la _site/
-          ls -la _site/docs/
+          # List structure for debug
+          find _site -type f | head -20
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
