@@ -265,15 +265,29 @@ def _interactive_flagged_selection(
 
         console.print(table)
 
+        # Show current selection count
+        if selected:
+            console.print(f"\n[dim]Selected: {len(selected)} of {len(item_names)}[/dim]")
+        else:
+            console.print(f"\n[dim]None selected[/dim]")
+
         console.print("\n[bold]Controls:[/bold]")
         console.print("  • Enter numbers to toggle (e.g. [green]'1,3,5'[/green])")
         console.print("  • Type [cyan]'all'[/cyan] or [cyan]'none'[/cyan]")
-        console.print("  • Press [bold white]Enter[/] when done")
+        console.print("  • Press [bold white]Enter[/] to confirm")
 
         choice = Prompt.ask("\nSelection", default="done")
+        
+        # Parse input
         result = parse_multiselect_input(choice, item_names, selected)
-        if result is None:
+        
+        # If user typed 'done' or pressed Enter with empty input and has selection, confirm and exit
+        if result is None or choice.strip() == "":
+            if selected:
+                console.print(f"\n[green]✓ Selected {len(selected)} items[/green]")
             break
+        
+        # Update selection and loop to show updated table
         selected = result
 
     # Build selected items list
@@ -406,15 +420,29 @@ def interactive_agents_selection(agents: list, initial_selected: set) -> set:
         table = render_agents_table(agents, selected)
         console.print(table)
 
+        # Show current selection count
+        if selected:
+            console.print(f"\n[dim]Selected: {len(selected)} of {len(agents)}[/dim]")
+        else:
+            console.print(f"\n[dim]None selected[/dim]")
+
         console.print("\n[bold]Controls:[/bold]")
         console.print("  • Enter numbers to toggle (e.g. [green]'1,3,5'[/green])")
         console.print("  • Type [cyan]'all'[/cyan] or [cyan]'none'[/cyan]")
-        console.print("  • Press [bold white]Enter[/] when done")
+        console.print("  • Press [bold white]Enter[/] to confirm")
 
         choice = Prompt.ask("\nSelection", default="done")
+        
+        # Parse input
         result = parse_multiselect_input(choice, item_names, selected)
-        if result is None:
+        
+        # If user typed 'done' or pressed Enter with empty input and has selection, confirm and exit
+        if result is None or choice.strip() == "":
+            if selected:
+                console.print(f"\n[green]✓ Selected {len(selected)} items[/green]")
             break
+        
+        # Update selection and loop to show updated table
         selected = result
 
     return selected
@@ -645,15 +673,29 @@ def interactive_selection(skills: list, initial_selected: set) -> set:
         table = render_selection_table(skills, selected)
         console.print(table)
 
+        # Show current selection count
+        if selected:
+            console.print(f"\n[dim]Selected: {len(selected)} of {len(skills)}[/dim]")
+        else:
+            console.print(f"\n[dim]None selected[/dim]")
+
         console.print("\n[bold]Controls:[/bold]")
         console.print("  • Enter numbers to toggle (e.g. [green]'1,3,5'[/green])")
         console.print("  • Type [cyan]'all'[/cyan] or [cyan]'none'[/cyan]")
-        console.print("  • Press [bold white]Enter[/] when done")
+        console.print("  • Press [bold white]Enter[/] to confirm")
 
         choice = Prompt.ask("\nSelection", default="done")
+        
+        # Parse input
         result = parse_multiselect_input(choice, item_names, selected)
-        if result is None:
+        
+        # If user typed 'done' or pressed Enter with empty input and has selection, confirm and exit
+        if result is None or choice.strip() == "":
+            if selected:
+                console.print(f"\n[green]✓ Selected {len(selected)} items[/green]")
             break
+        
+        # Update selection and loop to show updated table
         selected = result
 
     return selected
