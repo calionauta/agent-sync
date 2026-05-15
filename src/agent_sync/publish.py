@@ -429,7 +429,7 @@ def show_selection_summary(selected_names: set) -> bool:
     return Confirm.ask("\n[bold]Confirm this selection?[/]", default=True)
 
 
-def publish_skills(repo_url: str | None = None, dry_run: bool = False, interactive: bool = False) -> bool:
+def publish_skills(repo_url: str | None = None, dry_run: bool = False, interactive: bool = False, skip_security_panel: bool = False, skip_confirm: bool = False) -> bool:
     """Publish selected skills to a public GitHub repository."""
     if repo_url and not validate_github_url(repo_url):
         console.print(f"\n[red]✗ Invalid repository URL: {repo_url}[/red]\n")
@@ -522,23 +522,24 @@ def publish_skills(repo_url: str | None = None, dry_run: bool = False, interacti
         console.print("\n[yellow]⚠ No skills selected for publishing[/yellow]\n")
         return False
 
-    # 4. SECURITY WARNING & REPO SETTINGS (Only after selection is confirmed)
-    console.print("\n")
-    console.print(Panel(
-        "[bold yellow]⚠️  SECURITY WARNING[/bold yellow]\n\n"
-        "You are about to publish skills to a [bold]PUBLIC[/] repository.\n\n"
-        "What WILL be published:\n"
-        "  ✓ SKILL.md files (skill definitions)\n"
-        "  ✓ .md, .py, .sh files (skill scripts)\n"
-        "  ✓ references/, templates/, scripts/ directories\n\n"
-        "What will [bold red]NEVER[/bold red] be published:\n"
-        "  ✗ Any config files (settings.json, config.yaml, etc.)\n"
-        "  ✗ Any files containing 'auth', 'token', 'key', 'secret' in name\n"
-        "  ✗ .env files\n"
-        "  ✗ Your private agent-sync-configs repository",
-        border_style="yellow",
-        title="[bold yellow]Public Disclosure[/]",
-    ))
+    # 4. SECURITY WARNING & REPO SETTINGS (Skip if already shown by caller)
+    if not skip_security_panel:
+        console.print("\n")
+        console.print(Panel(
+            "[bold yellow]⚠️  SECURITY WARNING[/bold yellow]\n\n"
+            "You are about to publish skills to a [bold]PUBLIC[/] repository.\n\n"
+            "What WILL be published:\n"
+            "  ✓ SKILL.md files (skill definitions)\n"
+            "  ✓ .md, .py, .sh files (skill scripts)\n"
+            "  ✓ references/, templates/, scripts/ directories\n\n"
+            "What will [bold red]NEVER[/bold red] be published:\n"
+            "  ✗ Any config files (settings.json, config.yaml, etc.)\n"
+            "  ✗ Any files containing 'auth', 'token', 'key', 'secret' in name\n"
+            "  ✗ .env files\n"
+            "  ✗ Your private agent-sync-configs repository",
+            border_style="yellow",
+            title="[bold yellow]Public Disclosure[/]",
+        ))
 
     # Repo logic...
     publish_config = {}
@@ -589,7 +590,7 @@ def publish_skills(repo_url: str | None = None, dry_run: bool = False, interacti
         console.print(f"\n[blue]🔍 DRY RUN: Would publish {len(selected_skills)} skills to {repo_url}[/blue]\n")
         return True
 
-    if not Confirm.ask("\n[bold red]Confirm publishing to GitHub?[/]", default=True):
+    if not skip_confirm and not Confirm.ask("\n[bold red]Confirm publishing to GitHub?[/]", default=True):
         console.print("\n[yellow]Publish cancelled[/yellow]\n")
         return False
 

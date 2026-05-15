@@ -1238,7 +1238,7 @@ def mcp(dry_run: bool, force: bool, conflicts: bool, source: tuple[str, ...], ou
     """Export unified MCP configuration.
 
     Scans vendor MCP configs and merges them into ~/.agents/mcp.json.
-    Does NOT modify vendor configs — creates a unified DotAgents-compatible file.
+    Does NOT modify vendor configs - creates a unified DotAgents-compatible file.
 
     \b
     Examples:
@@ -1384,7 +1384,7 @@ def list_secrets():
     secrets_mgr = SecretsManager()
     console.print("\n[bold]🔐 Secrets Manager[/]\n")
     console.print(f"[dim].env file: {secrets_mgr.env_file}[/dim]\n")
-    
+
     # Show .env content
     if secrets_mgr.env_file.exists():
         content = secrets_mgr.env_file.read_text()
@@ -1404,12 +1404,12 @@ def edit():
     from .secrets import SecretsManager
 
     secrets_mgr = SecretsManager()
-    
+
     # Create empty .env if not exists
     if not secrets_mgr.env_file.exists():
         secrets_mgr.env_file.parent.mkdir(parents=True, exist_ok=True)
         secrets_mgr.env_file.write_text("# agent-sync environment variables\n")
-    
+
     # Open in editor
     editor = os.environ.get("EDITOR", "nano")
     try:
@@ -1621,7 +1621,7 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
     if do_agents:
         available_agents = get_available_agents()
         agents_count = len(available_agents)
-        
+
         # Scan agents for security
         for agent in available_agents:
             scan_results[agent["path"]] = scan_file(agent["path"])
@@ -1637,18 +1637,18 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
     # PHASE 2: Show Summary
     # ============================================================================
     console.print("\n[bold]📋 Publishing Summary[/]\n")
-    
+
     if do_skills:
         if skills_count > 0:
             console.print(f"[cyan]📚 Skills:[/cyan] {skills_count} found in ~/.agents/skills/")
         else:
             console.print("[cyan]📚 Skills:[/cyan] None found")
-    
+
     if do_agents:
         if agents_count > 0:
             unsafe_count = sum(1 for r in scan_results.values() if not r.safe)
             safe_count = agents_count - unsafe_count
-            
+
             console.print(f"[cyan]🤖 Agents:[/cyan] {agents_count} found")
             console.print(f"  [dim]├── Security: {safe_count} safe[/dim]")
             if unsafe_count > 0:
@@ -1663,21 +1663,21 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
     # ============================================================================
     if do_agents and agents_count > 0:
         console.print("\n[bold]🤖 Agent Instructions Details[/]\n")
-        
+
         table = Table(box=box.ROUNDED, show_header=True, header_style="bold cyan")
         table.add_column("Agent", style="green")
         table.add_column("File", style="cyan")
         table.add_column("Security", justify="center", width=10)
-        
+
         for agent in available_agents:
             result = scan_results[agent["path"]]
             icon = "[red]⚠️ Warning[/red]" if not result.safe else "[green]✓ Safe[/green]"
             table.add_row(agent["agent"], agent["filename"], icon)
-        
+
         console.print(table)
-        
+
         # Show details for flagged files
-        flagged = [(a, scan_results[a["path"]]) for a in available_agents 
+        flagged = [(a, scan_results[a["path"]]) for a in available_agents
                    if not scan_results[a["path"]].safe]
         if flagged:
             console.print("\n[yellow]⚠️  Files with warnings:[/]")
@@ -1690,40 +1690,40 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
     # PHASE 4: Security Warning (Contextual)
     # ============================================================================
     warning_lines = []
-    
+
     if do_skills and do_agents:
         warning_lines.append("[bold]You are about to publish BOTH skills AND agent instructions.[/bold]")
     elif do_skills:
         warning_lines.append("[bold]You are about to publish skills.[/bold]")
     elif do_agents:
         warning_lines.append("[bold]You are about to publish agent instructions.[/bold]")
-    
+
     warning_lines.append("")
     warning_lines.append("[bold yellow]⚠️  SECURITY WARNING - PUBLIC REPOSITORY[/bold yellow]")
     warning_lines.append("")
     warning_lines.append("This repository will be PUBLIC and visible to everyone.")
     warning_lines.append("Only publish content you want to share openly.")
-    
+
     if do_skills:
         warning_lines.append("")
         warning_lines.append("📚 Skills:")
         warning_lines.append("  • Published as-is (no scanning performed)")
         warning_lines.append("  • Files matching 'auth', 'token', 'key', 'secret' are skipped")
-    
+
     if do_agents:
         warning_lines.append("")
         warning_lines.append("🤖 Agent Instructions:")
         warning_lines.append("  • Scanned for sensitive patterns before publishing")
         warning_lines.append("  • Patterns detected: API keys, tokens, private URLs, email addresses")
         warning_lines.append("  • ⚠️ Warning means patterns detected - review and confirm")
-    
+
     warning_lines.append("")
     warning_lines.append("[bold red]What will NEVER be published:[/]")
     warning_lines.append("  ✗ Config files (settings.json, config.yaml, credentials.json)")
     warning_lines.append("  ✗ Files containing 'auth', 'token', 'key', 'secret' in name")
     warning_lines.append("  ✗ .env files")
     warning_lines.append("  ✗ Your private agent-sync-configs repository")
-    
+
     console.print(Panel(
         "\n".join(warning_lines),
         border_style="yellow",
@@ -1736,7 +1736,7 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
     if dry_run:
         console.print(f"\n[blue]🔍 DRY RUN: Would publish {skills_count} skills and {agents_count} agents[/blue]\n")
         return
-    
+
     if not Confirm.ask("\n[bold]Continue with publishing?[/]", default=True):
         console.print("\n[yellow]Publish cancelled[/yellow]\n")
         return
@@ -1745,12 +1745,12 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
     # PHASE 6: Execute (non-interactive, no re-confirmation)
     # ============================================================================
     success = True
-    
+
     if do_skills:
         console.print("\n[bold cyan]📚 Publishing Skills...[/bold cyan]\n")
-        if not publish_skills(repo_url=repo_url, dry_run=False, interactive=False):
+        if not publish_skills(repo_url=repo_url, dry_run=False, interactive=False, skip_security_panel=True, skip_confirm=True):
             success = False
-    
+
     if do_agents:
         console.print("\n[bold cyan]🤖 Publishing Agent Instructions...[/bold cyan]\n")
         if not publish_agents(repo_url=repo_url, dry_run=False, interactive=False):
