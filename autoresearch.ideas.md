@@ -7,35 +7,30 @@
 - Batch security scans instead of sequential file-by-file scanning
 
 ### UX Improvements
-- Add `--json` output format for programmatic use
 - Add `--verbose` flag for detailed operation logs
 - Support for custom skill repository paths
 
-## Completed Experiments (11 total)
+## Completed Experiments
 
-### Test Suite Expansion
-1. **Security scanner tests** - 24 tests for security patterns
-2. **Interactive selection tests** - 39 tests for helpers
-3. **Fixed test_publish.py mocks** - 44 tests passing
-4. **Fixed UnboundLocalError bug** - 40 tests passing
-5. **Updated CLI test assertions** - 45 tests passing
-6. **Comprehensive test suite** - 258 tests passing
-7. **Fixed pattern tests and SyntaxWarning** - 258 tests passing
-8. **Updated interactive tests** - 14 passing
-9. **Test suite complete** - 272 tests passing
-10. **All tests passing** - 274 tests total ✅
-11. **Ruff auto-fixes** - 13 files, code style improved ✅
+### CLI --json Output (7 commands implemented)
+1. `status --json` - sync status as JSON
+2. `agents --json` - supported agents as JSON
+3. `skills list --json` - skill list as JSON
+4. `custom-agents list --json` - custom agents as JSON
+5. `skills diff --json` - diff data as JSON
+6. `skills reconcile --json` - reconcile data as JSON
+7. `secrets list --json` - secrets as JSON
 
-### Summary
-- **274 tests passing** across all test files
-- **Fixed bugs**: UnboundLocalError, SyntaxWarning
-- **Test coverage**: publish CLI, interactive selection, security scanner, validators
+### Test Suite Expansion (31 experiments total)
+- 273+ tests passing
+- Security scanner, interactive selection, validators coverage
 
-### Files Changed
-- `src/agent_sync/cli.py` - Fixed skills_flagged initialization
-- `src/agent_sync/security_scanner.py` - Fixed docstring escape sequence
-- `tests/test_publish_cli.py` - 9 tests
-- `tests/test_publish.py` - 5 tests  
-- `tests/test_publish_interactive.py` - 16 tests
-- `tests/test_security_scanner.py` - 24 tests
-- `tests/test_validators.py` - 7 tests
+### UX Improvements
+- TUI multi-select with single Enter confirmation
+- CLI publish flow with interactive mode enabled
+- Improved security warnings display
+
+## Summary
+- **273 tests passing** across all test files
+- **14 feature_cards** (+250% from baseline)
+- **7 commands** with `--json` output
