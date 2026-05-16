@@ -1933,18 +1933,32 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
         return
 
     # ============================================================================
-    # PHASE 6: Execute (non-interactive)
+    # PHASE 6: Execute (non-interactive, using pre-selected items)
     # ============================================================================
     success = True
 
     if do_skills and skills_count > 0:
         console.print("\n[bold cyan]📤 Publishing Skills...[/bold cyan]\n")
-        if not publish_skills(repo_url=repo_url, dry_run=False, interactive=False, skip_security_panel=True, skip_confirm=True):
+        if not publish_skills(
+            repo_url=repo_url,
+            dry_run=False,
+            interactive=False,
+            skip_security_panel=True,
+            skip_confirm=True,
+            available_skills=available_skills,
+        ):
             success = False
 
     if do_agents and agents_count > 0:
         console.print("\n[bold cyan]📤 Publishing Agent Instructions...[/bold cyan]\n")
-        if not publish_agents(repo_url=repo_url, dry_run=False, interactive=False, skip_confirm=True):
+        selected_agent_keys = {f"{a['agent']}:{a['filename']}" for a in available_agents}
+        if not publish_agents(
+            repo_url=repo_url,
+            dry_run=False,
+            interactive=False,
+            skip_confirm=True,
+            selected_override=selected_agent_keys,
+        ):
             success = False
 
     if success:

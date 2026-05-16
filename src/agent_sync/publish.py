@@ -755,34 +755,39 @@ def show_selection_summary(selected_names: set) -> bool:
     return Confirm.ask("\n[bold]Confirm this selection?[/]", default=True)
 
 
-def publish_skills(repo_url: str | None = None, dry_run: bool = False, interactive: bool = False, skip_security_panel: bool = False, skip_confirm: bool = False) -> bool:
-    """Publish selected skills to a public GitHub repository."""
+def publish_skills(
+    repo_url: str | None = None,
+    dry_run: bool = False,
+    interactive: bool = False,
+    skip_security_panel: bool = False,
+    skip_confirm: bool = False,
+    available_skills: list | None = None,
+) -> bool:
+    """Publish selected skills to a public GitHub repository.
+    
+    Args:
+        available_skills: Optional list to override default skill discovery.
+            When provided, uses this list instead of scanning disk.
+    """
     if repo_url and not validate_github_url(repo_url):
         console.print(f"\n[red]✗ Invalid repository URL: {repo_url}[/red]\n")
         return False
 
     config = Config()
 
-    # 1. Scan for skills on disk
-    available_skills = get_available_skills()
-    if not available_skills:
-        console.print("\n[yellow]⚠ No skills found in ~/.agents/skills/[/yellow]")
-        console.print("Run [green]agent-sync skills centralize[/green] first.\n")
+    # 1. Scan for skills on disk (unless override provided)
+    if available_skills is not None:
+        # Use pre-filtered skills from caller
+        skill_list = available_skills
+    else:
+        skill_list = get_available_skills()
+    
+    if not skill_list:
+        console.print("\n[yellow]⚠ No skills found to publish[/yellow]\n")
         return False
 
-    available_names = {s["name"] for s in available_skills}
-
-    # 2. Determine initial selection and handle missing skills
-    saved_selection = config.published_skills
-    valid_saved = [name for name in saved_selection if name in available_names]
-    missing = set(saved_selection) - set(valid_saved)
-    if missing:
-        console.print("\n[yellow]⚠ The following previously published skills no longer exist locally [/yellow][red](removed from selection)[/red]:")
-        for name in sorted(missing):
-            console.print(f"  [red]• {name}[/red]")
-        console.print()
-        config.published_skills = valid_saved
-        saved_selection = valid_saved
+    available_names = {s["name"] for s in skill_list}
+    saved_selection = config.published_skills if available_skills is None else []  # Only use saved if not override
 
     # 3. Interactive flow
     selected_names = set()
@@ -814,7 +819,7 @@ def publish_skills(repo_url: str | None = None, dry_run: bool = False, interacti
                     confirmed = show_selection_summary(selected_names)
                 else: # e (edit)
                     selected_names = set(saved_selection)
-                    selected_names = interactive_selection(available_skills, selected_names)
+                    selected_names = interactive_selection(skill_list, selected_names)
                     confirmed = show_selection_summary(selected_names)
             else:
                 # No saved config OR selection changed but not confirmed
@@ -827,9 +832,9 @@ def publish_skills(repo_url: str | None = None, dry_run: bool = False, interacti
                     if mode == "a":
                         selected_names = available_names
                     else:
-                        selected_names = interactive_selection(available_skills, selected_names)
+                        selected_names = interactive_selection(skill_list, selected_names)
                 else:
-                    selected_names = interactive_selection(available_skills, selected_names)
+                    selected_names = interactive_selection(skill_list, selected_names)
 
                 confirmed = show_selection_summary(selected_names)
 
@@ -839,11 +844,11 @@ def publish_skills(repo_url: str | None = None, dry_run: bool = False, interacti
             else:
                 config.published_skills = list(selected_names)
     else:
-        # Non-interactive: use saved selection or all available
-        selected_names = set(saved_selection) if saved_selection else available_names
+        # Non-interactive: use all available (caller pre-selected)
+        selected_names = available_names
 
     # Final skill objects
-    selected_skills = [s for s in available_skills if s["name"] in selected_names]
+    selected_skills = [s for s in skill_list if s["name"] in selected_names]
     if not selected_skills:
         console.print("\n[yellow]⚠ No skills selected for publishing[/yellow]\n")
         return False
