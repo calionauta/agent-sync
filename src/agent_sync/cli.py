@@ -1847,24 +1847,42 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
 
         # Filter to only selected items
         selected_names = set()
+        agent_selected = set()  # Track agent-specific selections separately
         for item in selected_flagged:
-            if item.get("agent"):
-                selected_names.add(f"{item['agent']}:{item['filename']}")
-            elif item.get("name"):
-                selected_names.add(item["name"])
+            # Handle tuple structure: (item_dict, result, prefix) for flagged items
+            if isinstance(item, tuple):
+                item_dict = item[0] if len(item) > 0 else item
+            else:
+                item_dict = item
+            if item_dict.get("agent"):
+                agent_key = f"{item_dict['agent']}:{item_dict['filename']}"
+                selected_names.add(agent_key)
+                agent_selected.add(agent_key)
+            elif item_dict.get("name"):
+                selected_names.add(item_dict["name"])
 
-        # Update available agents to only selected
-        if do_agents and selected_names:
-            available_agents = [a for a in available_agents
-                               if f"{a['agent']}:{a['filename']}" in selected_names]
-        elif do_agents:
-            available_agents = []
+        # Update available agents to only selected (only those in flagged selection)
+        if do_agents:
+            if agent_selected:
+                available_agents = [a for a in available_agents
+                                   if f"{a['agent']}:{a['filename']}" in agent_selected]
+            else:
+                # No agents flagged, keep all available agents
+                pass
 
-        # Update skills count based on selected
+        # Update skills count based on selected flagged skills
         if do_skills:
-            selected_skill_count = sum(1 for s in available_skills
-                                       if s["name"] in selected_names)
-            skills_count = selected_skill_count
+            # Only filter skills that were flagged and deselected
+            flagged_skill_names = set()
+            for item in skills_flagged_items:
+                if isinstance(item, tuple) and len(item) > 0:
+                    skill_item = item[0]
+                    if skill_item.get("name"):
+                        flagged_skill_names.add(skill_item["name"])
+            deselected = flagged_skill_names - selected_names
+            if deselected:
+                available_skills = [s for s in available_skills if s["name"] not in deselected]
+            skills_count = len(available_skills)
 
     # ============================================================================
     # PHASE 4: Security Warning (Unified - same scan for skills AND agents)
