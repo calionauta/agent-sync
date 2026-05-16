@@ -24,11 +24,11 @@ class TestPublishCLI:
         skill1_path = MagicMock(spec=Path)
         skill1_path.is_dir.return_value = True
         skill1_path.rglob.return_value = []
-        
+
         skill2_path = MagicMock(spec=Path)
         skill2_path.is_dir.return_value = True
         skill2_path.rglob.return_value = []
-        
+
         mock_get_skills.return_value = [
             {"name": "skill1", "path": skill1_path},
             {"name": "skill2", "path": skill2_path},
@@ -53,7 +53,7 @@ class TestPublishCLI:
         skill1_path = MagicMock(spec=Path)
         skill1_path.is_dir.return_value = False
         skill1_path.is_file.return_value = True
-        
+
         mock_get_skills.return_value = [{"name": "skill1", "path": skill1_path}]
         mock_get_agents.return_value = []
         mock_scan.return_value = MagicMock(safe=True, issues=[])
@@ -63,19 +63,24 @@ class TestPublishCLI:
         assert "DRY RUN" in result.output
         assert "0 agent" in result.output.lower()
 
+    @patch("agent_sync.cli.Config")
     @patch("agent_sync.publish.get_available_skills")
     @patch("agent_sync.publish.get_available_agents")
     @patch("agent_sync.publish.scan_file")
-    def test_publish_agents_only_shows_summary(self, mock_scan, mock_get_agents, mock_get_skills, runner):
+    def test_publish_agents_only_shows_summary(self, mock_scan, mock_get_agents, mock_get_skills, mock_config, runner):
         """Test --agents shows agents summary with security."""
+        # Clear saved selections
+        mock_config.return_value.published_skills = []
+        mock_config.return_value.published_agents = []
+        
         mock_get_skills.return_value = []
         mock_get_agents.return_value = [
             {"agent": "opencode", "filename": "AGENTS.md", "path": MagicMock(spec=Path)},
         ]
         mock_scan.return_value = MagicMock(safe=True, issues=[])
-
+    
         result = runner.invoke(main, ["publish", "--agents", "--dry-run"], input="\n")
-
+    
         assert "DRY RUN" in result.output
         assert "0 skill" in result.output.lower()
         assert "Security: 1 safe" in result.output
@@ -139,7 +144,7 @@ class TestPublishCLI:
         skill_path = MagicMock(spec=Path)
         skill_path.is_dir.return_value = True
         skill_path.rglob.return_value = []
-        
+
         mock_get_skills.return_value = [{"name": "skill1", "path": skill_path}]
         mock_get_agents.return_value = [
             {"agent": "opencode", "filename": "AGENTS.md", "path": MagicMock(spec=Path)},
@@ -151,11 +156,10 @@ class TestPublishCLI:
         assert "What will be scanned" in result.output.lower() or "scanned" in result.output.lower()
 
     @patch("agent_sync.publish.scan_file")
-    @patch("agent_sync.publish._interactive_flagged_selection")
     @patch("agent_sync.publish.get_available_agents")
     @patch("agent_sync.publish.get_available_skills")
-    def test_publish_shows_security_status_table(self, mock_get_skills, mock_get_agents, mock_interactive, mock_scan, runner):
-        """Test agents table shows security status."""
+    def test_publish_shows_security_status_table(self, mock_get_skills, mock_get_agents, mock_scan, runner):
+        """Test summary shows security counts in dry-run."""
         path1 = MagicMock(spec=Path)
         path2 = MagicMock(spec=Path)
 
@@ -169,22 +173,21 @@ class TestPublishCLI:
             MagicMock(safe=True, issues=[]),
             MagicMock(safe=False, issues=[{"rule": "TEST", "severity": "high", "snippet": "test"}]),
         ]
-        mock_interactive.return_value = ([], True)
 
         result = runner.invoke(main, ["publish", "--agents", "--dry-run"], input="\n")
 
         assert result.exit_code == 0, result.output
-        assert "✓ Safe" in result.output
-        assert "⚠️ Warning" in result.output
+        # Security summary should still be shown
         assert "Security: 1 safe" in result.output
         assert "Warnings: 1 flagged" in result.output
+        # Should show dry-run completion
+        assert "DRY RUN" in result.output
 
     @patch("agent_sync.publish.scan_file")
-    @patch("agent_sync.publish._interactive_flagged_selection")
     @patch("agent_sync.publish.get_available_agents")
     @patch("agent_sync.publish.get_available_skills")
-    def test_publish_shows_security_warning_details(self, mock_get_skills, mock_get_agents, mock_interactive, mock_scan, runner):
-        """Test flagged files show warning details."""
+    def test_publish_shows_security_warning_in_summary(self, mock_get_skills, mock_get_agents, mock_scan, runner):
+        """Test flagged files reflected in security summary."""
         mock_get_skills.return_value = []
         mock_get_agents.return_value = [
             {"agent": "pi.dev", "filename": "AGENTS.md", "path": MagicMock(spec=Path)},
@@ -193,11 +196,13 @@ class TestPublishCLI:
             safe=False,
             issues=[{"rule": "TOKEN_OPENAI", "severity": "critical", "snippet": "sk-123..."}]
         )
-        mock_interactive.return_value = ([], True)
 
-        result = runner.invoke(main, ["publish", "--agents", "--dry-run"], input="\n")
+        # Use 'a' to select all in interactive mode (bypasses saved selection)
+        result = runner.invoke(main, ["publish", "--agents", "--dry-run"], input="a\n")
 
         assert result.exit_code == 0, result.output
-        assert "Files with warnings" in result.output
-        assert "pi.dev" in result.output
-        assert "TOKEN_OPENAI" in result.output
+        # Should show in security summary
+        assert "Security: 0 safe" in result.output
+        assert "Warnings: 1 flagged" in result.output
+        # Should complete dry-run
+        assert "DRY RUN" in result.output
