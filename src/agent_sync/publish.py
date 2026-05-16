@@ -312,10 +312,13 @@ def _interactive_flagged_selection(
         # Parse input
         result = parse_multiselect_input(choice, item_names, selected)
         
+        # If 'none' was selected, exit immediately (don't show confirmation)
+        if result is not None and len(result) == 0:
+            break
+        
         # If user typed 'done' or pressed Enter with empty input and has selection, confirm and exit
-        if result is None or choice.strip() == "":
-            if selected:
-                console.print(f"\n[green]✓ Selected {len(selected)} items[/green]")
+        if result is None or (choice.strip() == "" and selected):
+            console.print(f"\n[green]✓ Selected {len(selected)} items[/green]")
             break
         
         # Update selection and loop to show updated table
@@ -324,17 +327,18 @@ def _interactive_flagged_selection(
     # Build selected items list
     selected_items = [item_map[k][0] for k in selected if k in item_map]
 
-    # Confirmation
-    console.print("\n[bold green]📋 Selection Summary[/]\n")
-    summary = Table(box=box.SIMPLE, show_header=False)
-    summary.add_column("Item", style="cyan")
-    for item, _, _ in [item_map[k] for k in sorted(selected)]:
-        name = item.get("name") or item.get("filename") or str(item)
-        summary.add_row(f"  • {name}")
-    console.print(summary)
+    # Show summary (skip confirmation for flagged items - they can always skip)
+    if selected:
+        console.print("\n[bold green]📋 Selection Summary[/]\n")
+        summary = Table(box=box.SIMPLE, show_header=False)
+        summary.add_column("Item", style="cyan")
+        for item, _, _ in [item_map[k] for k in sorted(selected)]:
+            name = item.get("name") or item.get("filename") or str(item)
+            summary.add_row(f"  • {name}")
+        console.print(summary)
 
-    confirmed = Confirm.ask("\n[bold]Confirm this selection?[/]", default=True)
-    return selected_items, confirmed
+    # Always return True for flagged selection - user can skip items by typing 'none'
+    return selected_items, True
 
 
 
@@ -467,10 +471,13 @@ def interactive_agents_selection(agents: list, initial_selected: set) -> set:
         # Parse input
         result = parse_multiselect_input(choice, item_names, selected)
         
+        # If 'none' was selected, exit immediately (don't show confirmation)
+        if result is not None and len(result) == 0:
+            break
+        
         # If user typed 'done' or pressed Enter with empty input and has selection, confirm and exit
-        if result is None or choice.strip() == "":
-            if selected:
-                console.print(f"\n[green]✓ Selected {len(selected)} items[/green]")
+        if result is None or (choice.strip() == "" and selected):
+            console.print(f"\n[green]✓ Selected {len(selected)} items[/green]")
             break
         
         # Update selection and loop to show updated table
@@ -721,10 +728,13 @@ def interactive_selection(skills: list, initial_selected: set) -> set:
         # Parse input
         result = parse_multiselect_input(choice, item_names, selected)
         
+        # If 'none' was selected, exit immediately (don't show confirmation)
+        if result is not None and len(result) == 0:
+            break
+        
         # If user typed 'done' or pressed Enter with empty input and has selection, confirm and exit
-        if result is None or choice.strip() == "":
-            if selected:
-                console.print(f"\n[green]✓ Selected {len(selected)} items[/green]")
+        if result is None or (choice.strip() == "" and selected):
+            console.print(f"\n[green]✓ Selected {len(selected)} items[/green]")
             break
         
         # Update selection and loop to show updated table
