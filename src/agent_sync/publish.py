@@ -62,7 +62,7 @@ def _resolve_repo_url(repo_url: str | None = None) -> str | None:
         except Exception:
             username = "YOUR_USERNAME"
 
-        default_repo = f"{username}/agent-sync-public-skills"
+        default_repo = f"{username}/agent-sync-public"
         resolved = Prompt.ask(
             "\n[bold]Enter GitHub repository URL[/]",
             default=f"https://github.com/{default_repo}",
@@ -883,7 +883,7 @@ def publish_skills(repo_url: str | None = None, dry_run: bool = False, interacti
         except Exception:
             username = "YOUR_USERNAME"
 
-        default_repo = f"{username}/agent-sync-public-skills"
+        default_repo = f"{username}/agent-sync-public"
         repo_url = Prompt.ask(
             "\n[bold]Enter GitHub repository URL for publishing[/]",
             default=f"https://github.com/{default_repo}",
