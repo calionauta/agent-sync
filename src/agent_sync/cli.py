@@ -1730,162 +1730,285 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
             console.print("[cyan]🤖 Agents:[/cyan] None found")
 
     # ============================================================================
-    # PHASE 3: Show detailed table for agents (with security)
     # ============================================================================
+    # PHASE 3: Interactive Selection for Skills and Agents (with saved state)
+    # ============================================================================
+    config = Config()
+    
+    # Get saved states
+    saved_skills = set(config.published_skills or [])
+    saved_agents = set(config.published_agents or [])
+    
+    # Track final selections
+    final_skills = []
+    final_agents = []
+    
+    # ----- DRY RUN: Use all available, skip interactive selection -----
+    if dry_run:
+        # In dry-run mode, use all available items
+        final_skills = available_skills
+        final_agents = available_agents
+        skills_count = len(final_skills)
+        agents_count = len(final_agents)
+    else:
+        # ----- Skills Selection -----
+        if do_skills and skills_count > 0:
+            from ._selection import parse_multiselect_input
+        from rich.prompt import Prompt
+        
+        # Build items for selection
+        skill_items = []
+        for skill in available_skills:
+            is_saved = skill["name"] in saved_skills
+            skill_items.append({
+                "name": skill["name"],
+                "saved": is_saved,
+                "flagged": any(s[1] == skill["name"] for s in skills_flagged),
+            })
+        
+        console.print("\n[bold magenta]📤 Select Skills to Publish[/bold magenta]\n")
+        console.print(f"[dim]Found {skills_count} skills in ~/.agents/skills/[/dim]\n")
+        
+        # Show current saved state if exists
+        if saved_skills:
+            console.print("[dim]📋 Previously saved selection:[/dim]")
+            for name in sorted(saved_skills)[:5]:
+                console.print(f"  [dim]• {name}[/dim]")
+            if len(saved_skills) > 5:
+                console.print(f"  [dim]  ...and {len(saved_skills) - 5} more[/dim]")
+            console.print()
+        
+        console.print("[bold]What would you like to do?[/bold]")
+        console.print("  [[bold green]u[/]] Use saved selection" + (" (recommended)" if saved_skills else ""))
+        console.print("  [[bold cyan]e[/]] Edit selection (show all skills with toggles)")
+        console.print("  [[bold yellow]a[/]] Select ALL skills")
+        console.print("  [[bold magenta]n[/]] Select NONE")
+        
+        choice = Prompt.ask("\nChoice", choices=["u", "e", "a", "n"], default="u" if saved_skills else "a")
+        
+        selected_skill_names = set()
+        
+        if choice == "u":
+            selected_skill_names = saved_skills
+            # Verify saved skills still exist
+            available_names = {s["name"] for s in available_skills}
+            missing = selected_skill_names - available_names
+            if missing:
+                console.print(f"\n[yellow]⚠️ {len(missing)} saved skills no longer exist and will be skipped[/yellow]")
+                selected_skill_names = selected_skill_names & available_names
+            console.print(f"\n[green]✓ Using saved selection ({len(selected_skill_names)} skills)[/green]")
+            
+        elif choice == "e":
+            # Show all skills with toggles
+            from rich.table import Table
+            selected = set()
+            item_names = [s["name"] for s in available_skills]
+            
+            # Pre-select saved ones
+            if saved_skills:
+                selected = {n for n in item_names if n in saved_skills}
+            
+            while True:
+                console.clear()
+                console.print("\n[bold magenta]📤 Toggle Skills to Publish[/bold magenta]\n")
+                
+                table = Table(box=box.ROUNDED, show_header=True, header_style="bold cyan")
+                table.add_column("ID", justify="right", style="dim", width=4)
+                table.add_column("Pub", justify="center", width=5)
+                table.add_column("Skill Name", style="cyan")
+                table.add_column("Status", width=12)
+                
+                for i, item in enumerate(skill_items, 1):
+                    key = item["name"]
+                    is_selected = key in selected
+                    status_icon = "[bold green]✓[/]" if is_selected else "[dim]○[/]"
+                    
+                    # Status indicators
+                    status_parts = []
+                    if item["saved"]:
+                        status_parts.append("[blue]saved[/]")
+                    if item["flagged"]:
+                        status_parts.append("[yellow]⚠️[/]")
+                    status_text = " ".join(status_parts) if status_parts else ""
+                    
+                    table.add_row(str(i), status_icon, key, status_text)
+                
+                console.print(table)
+                
+                if selected:
+                    console.print(f"\n[dim]Selected: {len(selected)} of {len(skill_items)}[/dim]")
+                else:
+                    console.print(f"\n[dim]None selected[/dim]")
+                
+                console.print("\n[bold]Controls:[/bold]")
+                console.print("  • Enter numbers to toggle (e.g. [green]'1,3,5'[/green])")
+                console.print("  • Type [cyan]'all'[/cyan] or [cyan]'none'[/cyan]")
+                console.print("  • Press [bold white]Enter[/] to confirm")
+                
+                input_choice = Prompt.ask("\nSelection", default="done")
+                result = parse_multiselect_input(input_choice, item_names, selected)
+                
+                if result is None:
+                    break
+                if len(result) == 0 and input_choice.strip() == "none":
+                    selected = set()
+                    break
+                selected = result
+            
+            selected_skill_names = selected
+            console.print(f"\n[green]✓ Selected {len(selected_skill_names)} skills[/green]")
+            
+        elif choice == "a":
+            selected_skill_names = {s["name"] for s in available_skills}
+            console.print(f"\n[green]✓ Selecting ALL skills ({len(selected_skill_names)})[/green]")
+            
+        else:  # n = none
+            selected_skill_names = set()
+            console.print("\n[yellow]⚠ No skills selected[/yellow]")
+        
+        # Save selection
+        config.published_skills = list(selected_skill_names)
+        
+        # Build final skills list
+        final_skills = [s for s in available_skills if s["name"] in selected_skill_names]
+        skills_count = len(final_skills)
+    
+    # ----- Agents Selection -----
     if do_agents and agents_count > 0:
-        console.print("\n[bold]🤖 Agent Instructions Details[/]\n")
-
-        table = Table(box=box.ROUNDED, show_header=True, header_style="bold cyan")
-        table.add_column("Agent", style="green")
-        table.add_column("File", style="cyan")
-        table.add_column("Security", justify="center", width=10)
-
-        for agent in available_agents:
-            result = scan_results[agent["path"]]
-            icon = "[red]⚠️ Warning[/red]" if not result.safe else "[green]✓ Safe[/green]"
-            table.add_row(agent["agent"], agent["filename"], icon)
-
-        console.print(table)
-
-        # Show details for flagged files
-        flagged = [(a, scan_results[a["path"]]) for a in available_agents
-                   if not scan_results[a["path"]].safe]
-        if flagged:
-            console.print("\n[yellow]⚠️  Files with warnings:[/]")
-            for agent, result in flagged:
-                console.print(f"\n[bold]{agent['filename']}[/bold] ([dim]{agent['agent']}[/dim])")
-                console.print(f"[dim]{format_issues_for_display(result.issues)}[/dim]")
-            console.print("\n[dim]These files will still be published. Review before continuing.[/dim]")
-
+        from ._selection import parse_multiselect_input
+        from rich.prompt import Prompt
+        
+        console.print("\n[bold cyan]🤖 Select Agent Instructions to Publish[/bold cyan]\n")
+        console.print(f"[dim]Found {agents_count} agent instructions[/dim]\n")
+        
+        # Show current saved state if exists
+        if saved_agents:
+            console.print("[dim]📋 Previously saved selection:[/dim]")
+            for key in sorted(saved_agents)[:5]:
+                console.print(f"  [dim]• {key}[/dim]")
+            if len(saved_agents) > 5:
+                console.print(f"  [dim]  ...and {len(saved_agents) - 5} more[/dim]")
+            console.print()
+        
+        console.print("[bold]What would you like to do?[/bold]")
+        console.print("  [[bold green]u[/]] Use saved selection" + (" (recommended)" if saved_agents else ""))
+        console.print("  [[bold cyan]e[/]] Edit selection (show all agents with toggles)")
+        console.print("  [[bold yellow]a[/]] Select ALL agents")
+        console.print("  [[bold magenta]n[/]] Select NONE")
+        
+        choice = Prompt.ask("\nChoice", choices=["u", "e", "a", "n"], default="u" if saved_agents else "a")
+        
+        selected_agent_keys = set()
+        
+        if choice == "u":
+            selected_agent_keys = saved_agents
+            # Verify saved agents still exist
+            available_keys = {f"{a['agent']}:{a['filename']}" for a in available_agents}
+            missing = selected_agent_keys - available_keys
+            if missing:
+                console.print(f"\n[yellow]⚠️ {len(missing)} saved agents no longer exist and will be skipped[/yellow]")
+                selected_agent_keys = selected_agent_keys & available_keys
+            console.print(f"\n[green]✓ Using saved selection ({len(selected_agent_keys)} agents)[/green]")
+            
+        elif choice == "e":
+            # Show all agents with toggles
+            from rich.table import Table
+            selected = set()
+            item_names = [f"{a['agent']}:{a['filename']}" for a in available_agents]
+            
+            # Pre-select saved ones
+            if saved_agents:
+                selected = {k for k in item_names if k in saved_agents}
+            
+            while True:
+                console.clear()
+                console.print("\n[bold cyan]🤖 Toggle Agent Instructions to Publish[/bold cyan]\n")
+                
+                table = Table(box=box.ROUNDED, show_header=True, header_style="bold green")
+                table.add_column("ID", justify="right", style="dim", width=4)
+                table.add_column("Pub", justify="center", width=5)
+                table.add_column("Agent", style="green")
+                table.add_column("File", style="cyan")
+                table.add_column("Security", justify="center", width=10)
+                table.add_column("Status", width=10)
+                
+                for i, agent in enumerate(available_agents, 1):
+                    key = f"{agent['agent']}:{agent['filename']}"
+                    is_selected = key in selected
+                    status_icon = "[bold green]✓[/]" if is_selected else "[dim]○[/]"
+                    
+                    result = scan_results.get(agent["path"])
+                    security_icon = "[red]⚠️[/]" if result and not result.safe else "[green]✓[/]"
+                    
+                    # Status indicators
+                    status_parts = []
+                    if key in saved_agents:
+                        status_parts.append("[blue]saved[/]")
+                    if result and not result.safe:
+                        status_parts.append("[yellow]⚠️[/]")
+                    status_text = " ".join(status_parts) if status_parts else ""
+                    
+                    table.add_row(str(i), status_icon, agent["agent"], agent["filename"], security_icon, status_text)
+                
+                console.print(table)
+                
+                if selected:
+                    console.print(f"\n[dim]Selected: {len(selected)} of {len(available_agents)}[/dim]")
+                else:
+                    console.print(f"\n[dim]None selected[/dim]")
+                
+                console.print("\n[bold]Controls:[/bold]")
+                console.print("  • Enter numbers to toggle (e.g. [green]'1,3,5'[/green])")
+                console.print("  • Type [cyan]'all'[/cyan] or [cyan]'none'[/cyan]")
+                console.print("  • Press [bold white]Enter[/] to confirm")
+                
+                input_choice = Prompt.ask("\nSelection", default="done")
+                result = parse_multiselect_input(input_choice, item_names, selected)
+                
+                if result is None:
+                    break
+                if len(result) == 0 and input_choice.strip() == "none":
+                    selected = set()
+                    break
+                selected = result
+            
+            selected_agent_keys = selected
+            console.print(f"\n[green]✓ Selected {len(selected_agent_keys)} agents[/green]")
+            
+        elif choice == "a":
+            selected_agent_keys = {f"{a['agent']}:{a['filename']}" for a in available_agents}
+            console.print(f"\n[green]✓ Selecting ALL agents ({len(selected_agent_keys)})[/green]")
+            
+        else:  # n = none
+            selected_agent_keys = set()
+            console.print("\n[yellow]⚠ No agents selected[/yellow]")
+        
+        # Save selection
+        config.published_agents = list(selected_agent_keys)
+        
+        # Build final agents list
+        final_agents = [a for a in available_agents if f"{a['agent']}:{a['filename']}" in selected_agent_keys]
+        agents_count = len(final_agents)
+    
+    # Update available lists for publishing
+    available_skills = final_skills
+    available_agents = final_agents
+    
+    # Check if anything to publish after selection
+    if skills_count == 0 and agents_count == 0:
+        console.print("\n[yellow]⚠ Nothing selected to publish.[/yellow]\n")
+        return
+    
+    # Show selection summary
+    console.print("\n[bold green]📋 Selection Summary[/]\n")
+    if do_skills and skills_count > 0:
+        console.print(f"[cyan]📚 Skills:[/cyan] {skills_count} selected")
+    if do_agents and agents_count > 0:
+        console.print(f"[cyan]🤖 Agents:[/cyan] {agents_count} selected")
+    console.print()
+    
     # ============================================================================
-    # PHASE 3b: Show flagged skills details
-    # ============================================================================
-    if do_skills and skills_flagged:
-        console.print("\n[yellow]⚠️  Skills with warnings:[/]")
-        for f, skill_name, result in skills_flagged:
-            console.print(f"\n[bold]{skill_name}/{f.name}[/bold]")
-            console.print(f"[dim]{format_issues_for_display(result.issues)}[/dim]")
-
-    # ============================================================================
-    # PHASE 3c: Interactive selection of flagged items
-    # ============================================================================
-    # Build combined flagged list for interactive selection
-    all_flagged = []
-    if do_agents:
-        for agent in available_agents:
-            result = scan_results.get(agent["path"])
-            if result and not result.safe:
-                all_flagged.append((agent, result, agent["agent"]))
-
-    # Group by skill to avoid duplicates in table display
-    # Each skill may have multiple files with issues, but we show one row per skill
-    skills_by_name: dict[str, list[tuple]] = {}
-    for f, skill_name, result in skills_flagged:
-        if skill_name not in skills_by_name:
-            skills_by_name[skill_name] = []
-        skills_by_name[skill_name].append((f, result))
-
-    skills_flagged_items = []
-    if do_skills and skills_flagged:
-        from .security_scanner import ScanResult, Issue  # noqa
-        for skill_name, files_results in skills_by_name.items():
-            # Aggregate all issues across files in this skill
-            all_issues: list[Issue] = []
-            for f, result in files_results:
-                all_issues.extend(result.issues)
-
-            # Create aggregated result for display
-            aggregated_result = ScanResult(
-                safe=False,
-                issues=all_issues,
-                summary=f"{len(files_results)} files flagged"
-            )
-
-            skill_item = {
-                "name": skill_name,
-                "files": files_results,  # Keep for reference
-            }
-            skills_flagged_items.append((skill_item, aggregated_result, skill_name))
-
-    if all_flagged or skills_flagged_items:
-        console.print("\n")
-
-        # Combine all flagged
-        flagged_combined = all_flagged + skills_flagged_items
-
-        # Show introduction panel
-        from rich.panel import Panel
-        intro_lines = [
-            "[bold]Some items have security concerns that need your attention.[/bold]",
-            "",
-            "This command will publish to a [bold]PUBLIC GitHub repository[/bold].",
-            "",
-            "[bold yellow]Security issues detected:[/bold yellow]",
-            "  • Hardcoded paths (/Users/, /root/)",
-            "  • Absolute paths (D:\\, C:\\)",
-            "  • API tokens or hardcoded secrets",
-            "",
-            "These items can still be published after you review them.",
-            "",
-            "[bold cyan]Use 'none' to skip all flagged, or press Enter to review.[/bold cyan]",
-        ]
-        console.print(Panel(
-            "\n".join(intro_lines),
-            title="[bold yellow]⚠️ Security Review[/]",
-            border_style="yellow",
-        ))
-        console.print("\n")
-
-        selected_flagged, confirmed = _interactive_flagged_selection(
-            flagged_combined,
-            title="Select flagged items to publish",
-        )
-
-        if not confirmed:
-            console.print("\n[yellow]Publish cancelled[/yellow]\n")
-            return
-
-        # Filter to only selected items
-        selected_names = set()
-        agent_selected = set()  # Track agent-specific selections separately
-        for item in selected_flagged:
-            # Handle tuple structure: (item_dict, result, prefix) for flagged items
-            if isinstance(item, tuple):
-                item_dict = item[0] if len(item) > 0 else item
-            else:
-                item_dict = item
-            if item_dict.get("agent"):
-                agent_key = f"{item_dict['agent']}:{item_dict['filename']}"
-                selected_names.add(agent_key)
-                agent_selected.add(agent_key)
-            elif item_dict.get("name"):
-                selected_names.add(item_dict["name"])
-
-        # Update available agents to only selected (only those in flagged selection)
-        if do_agents:
-            if agent_selected:
-                available_agents = [a for a in available_agents
-                                   if f"{a['agent']}:{a['filename']}" in agent_selected]
-            else:
-                # No agents flagged, keep all available agents
-                pass
-
-        # Update skills count based on selected flagged skills
-        if do_skills:
-            # Only filter skills that were flagged and deselected
-            flagged_skill_names = set()
-            for item in skills_flagged_items:
-                if isinstance(item, tuple) and len(item) > 0:
-                    skill_item = item[0]
-                    if skill_item.get("name"):
-                        flagged_skill_names.add(skill_item["name"])
-            deselected = flagged_skill_names - selected_names
-            if deselected:
-                available_skills = [s for s in available_skills if s["name"] not in deselected]
-            skills_count = len(available_skills)
-
-    # ============================================================================
-    # PHASE 4: Security Warning (Unified - same scan for skills AND agents)
+    # PHASE 4: Security Warning Panel
     # ============================================================================
     # Update counts after flagged selection
     if do_agents:
@@ -1921,6 +2044,9 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
         title="[bold yellow]⚠️ Public Disclosure[/]",
     ))
 
+    # Show repository visibility
+    console.print(f"\n[green]✓ Repository renatocaliari/agent-sync-public is PUBLIC.[/green]")
+
     # ============================================================================
     # PHASE 5: Confirm
     # ============================================================================
@@ -1938,31 +2064,36 @@ def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, r
     success = True
 
     if do_skills and skills_count > 0:
-        console.print("\n[bold cyan]📤 Publishing Skills...[/bold cyan]\n")
-        if not publish_skills(
+        publish_skills(
             repo_url=repo_url,
             dry_run=False,
             interactive=False,
             skip_security_panel=True,
             skip_confirm=True,
             available_skills=available_skills,
-        ):
-            success = False
+        )
 
     if do_agents and agents_count > 0:
-        console.print("\n[bold cyan]📤 Publishing Agent Instructions...[/bold cyan]\n")
+        # Build selected keys from final_agents
         selected_agent_keys = {f"{a['agent']}:{a['filename']}" for a in available_agents}
-        if not publish_agents(
+        publish_agents(
             repo_url=repo_url,
             dry_run=False,
             interactive=False,
             skip_confirm=True,
             selected_override=selected_agent_keys,
-        ):
-            success = False
+        )
 
     if success:
-        console.print("\n[bold]✅ Publishing complete![/bold]\n")
+        console.print("\n[bold green]✅ Publishing complete![/bold green]\n")
+        
+        # Final summary
+        console.print("[bold]📋 Final Summary[/]\n")
+        if do_skills and skills_count > 0:
+            console.print(f"  [green]✓[/green] [cyan]Skills:[/cyan] {skills_count} published")
+        if do_agents and agents_count > 0:
+            console.print(f"  [green]✓[/green] [cyan]Agents:[/cyan] {agents_count} published")
+        console.print()
     else:
         console.print("\n[red]✗ Some items failed to publish[/red]\n")
         raise click.Abort()

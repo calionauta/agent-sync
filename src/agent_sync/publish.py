@@ -140,9 +140,9 @@ def _render_flagged_table(
     title: str = "⚠️  Flagged Items",
 ) -> Table:
     """Render a table showing flagged items with their security issues.
-    
+
     DRY helper for both skills and agents.
-    
+
     Args:
         flagged_items: List of (item, result, prefix) tuples
         title: Table title
@@ -169,15 +169,15 @@ def _interactive_flagged_selection(
     include_safe: bool = False,
 ) -> tuple[list, bool]:
     """Interactive selection for flagged items.
-    
+
     Shows items with HIGH or CRITICAL issues and lets user select
     which ones to publish. Skips low/deprecated issues automatically.
-    
+
     Args:
         flagged_items: List of (item, result, prefix) tuples
         title: Selection title
         include_safe: If True, also shows safe items
-    
+
     Returns:
         Tuple of (selected_items, confirmed)
     """
@@ -308,19 +308,19 @@ def _interactive_flagged_selection(
         console.print("  • Press [bold white]Enter[/] to confirm")
 
         choice = Prompt.ask("\nSelection", default="done")
-        
+
         # Parse input
         result = parse_multiselect_input(choice, item_names, selected)
-        
+
         # If 'none' was selected, exit immediately (don't show confirmation)
         if result is not None and len(result) == 0:
             break
-        
+
         # If user typed 'done' or pressed Enter with empty input and has selection, confirm and exit
         if result is None or (choice.strip() == "" and selected):
             console.print(f"\n[green]✓ Selected {len(selected)} items[/green]")
             break
-        
+
         # Update selection and loop to show updated table
         selected = result
 
@@ -467,19 +467,19 @@ def interactive_agents_selection(agents: list, initial_selected: set) -> set:
         console.print("  • Press [bold white]Enter[/] to confirm")
 
         choice = Prompt.ask("\nSelection", default="done")
-        
+
         # Parse input
         result = parse_multiselect_input(choice, item_names, selected)
-        
+
         # If 'none' was selected, exit immediately (don't show confirmation)
         if result is not None and len(result) == 0:
             break
-        
+
         # If user typed 'done' or pressed Enter with empty input and has selection, confirm and exit
         if result is None or (choice.strip() == "" and selected):
             console.print(f"\n[green]✓ Selected {len(selected)} items[/green]")
             break
-        
+
         # Update selection and loop to show updated table
         selected = result
 
@@ -488,7 +488,7 @@ def interactive_agents_selection(agents: list, initial_selected: set) -> set:
 
 def show_security_panel(results: dict[Path, ScanResult]) -> str | list[Path]:
     """Show security panel for files with issues.
-    
+
     Returns: 'cancel', list of Path to skip, or empty list to continue.
     """
     unsafe_files = {path: result for path, result in results.items() if not result.safe}
@@ -545,6 +545,7 @@ def publish_agents(
         return False
 
     scan_results = {item["path"]: scan_file(item["path"]) for item in available_agents}
+    console.print("\n[dim]🔍 Scanning agents for sensitive content...[/dim]")
 
     selected = selected_override if selected_override is not None else set()
 
@@ -592,13 +593,12 @@ def publish_agents(
         summary.add_row(item["agent"], item["filename"], icon)
     console.print(summary)
 
-    console.print("\n[dim]💡 Want to publish also skills? Use [bold]agent-sync publish --skills[/bold][/dim]")
+    # Note: No hint here - this function is called from unified publish command
+    # Note: Visibility check is done in CLI before calling this function
 
     repo_url = _resolve_repo_url(repo_url)
     if not repo_url:
         return False
-
-    _check_repo_visibility(repo_url)
 
     if dry_run:
         console.print(f"\n[blue]🔍 DRY RUN: Would publish {len(selected_items)} agent instructions to {repo_url}[/blue]\n")
@@ -724,19 +724,19 @@ def interactive_selection(skills: list, initial_selected: set) -> set:
         console.print("  • Press [bold white]Enter[/] to confirm")
 
         choice = Prompt.ask("\nSelection", default="done")
-        
+
         # Parse input
         result = parse_multiselect_input(choice, item_names, selected)
-        
+
         # If 'none' was selected, exit immediately (don't show confirmation)
         if result is not None and len(result) == 0:
             break
-        
+
         # If user typed 'done' or pressed Enter with empty input and has selection, confirm and exit
         if result is None or (choice.strip() == "" and selected):
             console.print(f"\n[green]✓ Selected {len(selected)} items[/green]")
             break
-        
+
         # Update selection and loop to show updated table
         selected = result
 
@@ -764,7 +764,7 @@ def publish_skills(
     available_skills: list | None = None,
 ) -> bool:
     """Publish selected skills to a public GitHub repository.
-    
+
     Args:
         available_skills: Optional list to override default skill discovery.
             When provided, uses this list instead of scanning disk.
@@ -781,7 +781,7 @@ def publish_skills(
         skill_list = available_skills
     else:
         skill_list = get_available_skills()
-    
+
     if not skill_list:
         console.print("\n[yellow]⚠ No skills found to publish[/yellow]\n")
         return False
@@ -872,60 +872,12 @@ def publish_skills(
             title="[bold yellow]Public Disclosure[/]",
         ))
 
-    # Repo logic...
-    publish_config = {}
-    if PUBLISH_CONFIG_PATH.exists():
-        try:
-            publish_config = yaml.safe_load(PUBLISH_CONFIG_PATH.read_text()) or {}
-        except Exception: pass
-
-    repo_url = repo_url or publish_config.get("repo_url")
-    if not repo_url:
-        # Suggest new standard naming convention
-        try:
-            result = subprocess.run(["gh", "api", "user", "--jq", ".login"], capture_output=True, text=True, timeout=5)
-            username = result.stdout.strip() if result.returncode == 0 else "YOUR_USERNAME"
-        except Exception:
-            username = "YOUR_USERNAME"
-
-        default_repo = f"{username}/agent-sync-public"
-        repo_url = Prompt.ask(
-            "\n[bold]Enter GitHub repository URL for publishing[/]",
-            default=f"https://github.com/{default_repo}",
-        )
-        if not repo_url or not validate_github_url(repo_url):
-            console.print("\n[red]✗ Invalid repository URL[/red]\n")
-            return False
-
-        PUBLISH_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        publish_config["repo_url"] = repo_url
-        PUBLISH_CONFIG_PATH.write_text(yaml.dump(publish_config))
-
-    # Visibility check
+    # Use agent-sync-public for public publishing
+    repo_url = "https://github.com/renatocaliari/agent-sync-public"
     repo_name = repo_url.replace("https://github.com/", "").replace(".git", "")
-    if not validate_github_url(repo_url) or not repo_name or "/" not in repo_name:
-        console.print(f"\n[red]✗ Invalid repository URL or name: {repo_url}[/red]\n")
-        return False
-
-    try:
-        res = subprocess.run(["gh", "api", f"repos/{repo_name}"], capture_output=True, text=True, timeout=5)
-        if res.returncode == 0:
-            is_private = json.loads(res.stdout).get("private", False)
-            if is_private:
-                console.print(f"\n[yellow]⚠️  Warning: Repository {repo_name} is PRIVATE.[/yellow]")
-            else:
-                console.print(f"\n[green]✓ Repository {repo_name} is PUBLIC.[/green]")
-    except Exception: pass
-
-    if dry_run:
-        console.print(f"\n[blue]🔍 DRY RUN: Would publish {len(selected_skills)} skills to {repo_url}[/blue]\n")
-        return True
-
-    if not skip_confirm and not Confirm.ask("\n[bold red]Confirm publishing to GitHub?[/]", default=True):
-        console.print("\n[yellow]Publish cancelled[/yellow]\n")
-        return False
-
-    # 5. SECURITY SCAN (same as agents)
+    console.print()
+    
+    # 5. SECURITY SCAN
     console.print("\n[dim]🔍 Scanning skills for sensitive content...[/dim]")
 
     # Collect all files from selected skills (skip binary/incompatible files)
@@ -941,29 +893,18 @@ def publish_skills(
             all_files.append(skill["path"])
             file_to_skill[skill["path"]] = skill["name"]
 
-    # Scan all files
+    # Scan all files (security scanner handles sensitive content detection)
     scan_results = {f: scan_file(f) for f in all_files}
 
-    # Identify files to skip (dangerous names)
-    SKIP_NAMES = {"auth", "token", "key", "secret", "credentials", "password"}
-    skip_files = set()
-    for f in all_files:
-        if any(skip in f.name.lower() for skip in SKIP_NAMES):
-            skip_files.add(f)
-
-    # Identify flagged files (scanner detected issues but not critical block)
+    # Identify flagged files (scanner detected issues - warning only, still published)
     flagged_files = {
         f: r for f, r in scan_results.items()
-        if f not in skip_files and not r.safe
+        if not r.safe
     }
 
-    # Show skip summary
-    if skip_files:
-        console.print(f"[yellow]  ⏭ {len(skip_files)} files skipped (dangerous name)[/yellow]")
-
-    # Show flagged (warning only, still published)
+    # Show flagged files summary
     if flagged_files:
-        console.print(f"[yellow]  ⚠️ {len(flagged_files)} files flagged (review after publish)[/yellow]")
+        console.print(f"[yellow]  ⚠️ {len(flagged_files)} files with security warnings (will be scanned before publish)[/yellow]")
         for f, result in flagged_files.items():
             skill_name = file_to_skill[f]
             console.print(f"    [dim]• {skill_name}/{f.name}[/dim]")
@@ -1000,8 +941,7 @@ def publish_skills(
             subprocess.run(["git", "remote", "add", "origin", repo_url], cwd=tmp_path, capture_output=True, check=True, timeout=15)
             subprocess.run(["git", "push", "-u", "origin", "main", "--force"], cwd=tmp_path, capture_output=True, check=True, timeout=120)
 
-            console.print(f"\n[green]✓ Successfully published to {repo_url}![/green]")
-            console.print(f"💡 Others can install with: [bold]npx skills add {repo_name}[/]\n")
+            console.print(f"[green]✓ Successfully published to {repo_url}![/green]")
             return True
         except Exception as e:
             console.print(f"\n[red]✗ Failed to publish: {e}[/red]\n")

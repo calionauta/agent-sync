@@ -46,6 +46,44 @@ agents/
 
 ---
 
+## [0.21.0] - 2026-05-16
+
+### ✨ New Features
+
+#### Publish Command — Interactive Multi-Select with Saved State
+
+Full interactive selection for skills and agents with toggle controls and persistent saved state.
+
+**Skills Selection:**
+- Options: `u` (use saved), `e` (edit with toggles), `a` (all), `n` (none)
+- Shows previously saved selection with status indicators (saved, flagged)
+- Toggle interface with real-time selection updates
+- Saves selection to `config.published_skills`
+
+**Agents Selection:**
+- Same interface as skills with `u/e/a/n` options
+- Shows security status per agent
+- Saves selection to `config.published_agents`
+
+**Output Improvements:**
+- Removed duplicate "Publishing Skills..." messages
+- Fixed repository visibility check placement (before confirmation)
+- Removed misleading "Want to publish also skills?" hint
+- Added consistent "Scanning X for sensitive content..." messages
+- Removed redundant "Published to GitHub!" messages
+- Added unified Final Summary showing both skills and agents counts
+
+**Repository Enforcement:**
+- Skills publishing now forced to `agent-sync-public` repository
+- Removed custom repo URL support for public publishing
+- Centralized visibility check in CLI before calling publish functions
+
+**Bug Fixes:**
+- Removed dangerous name skip check (no more "12 files skipped")
+- Fixed `repo_name` undefined error in publish_skills
+
+---
+
 ## [Unreleased]
 
 ### ✨ New Features
@@ -72,7 +110,9 @@ Unified the publish command into a single cohesive flow with contextual security
 
 ---
 
-## [0.20.0] - 2026-05-14### ✨ New Features
+## [0.20.0] - 2026-05-14
+
+### ✨ New Features
 
 #### Safe Centralize — Protection against unintentional skill import
 
