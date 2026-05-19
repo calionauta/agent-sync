@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 """Source discovery for publish feature.
 
 DRY: Unified discovery of skills and agents from multiple sources.

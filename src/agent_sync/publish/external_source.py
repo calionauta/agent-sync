@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 """External GitHub repository skill discovery."""
 
 import shutil

@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 """Publish runner - thin wrapper that delegates to specialized modules.
 
 SoC: This module only orchestrates. Real logic is in:

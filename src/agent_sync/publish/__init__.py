@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 """Publish module for agent-sync skills publishing.
 
 This module handles publishing skills from multiple sources to a central
