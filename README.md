@@ -140,7 +140,16 @@ agent-sync skills publish --repo https://github.com/YOUR_USERNAME/agent-sync-pub
   - `publish --skills` — Publish only skills
   - `publish --agents` — Publish only agent instructions (AGENTS.md, GEMINI.md, etc.)
   - `--dry-run` — Preview without publishing
-  - `--repo <url>` — Specify target repository
+  - `--repo <url>` — Specify or set target repository
+
+  **Source Management:**
+  - `publish --list-sources` — List configured external skill sources
+  - `publish --add-source <url>` — Add external GitHub repository as skill source
+  - `publish --remove-source <url>` — Remove external skill source
+
+  **Cache:**
+  - `publish --clear-cache` — Clear cached repositories
+  - `publish --reset-selection` — Reset saved selections
 
   **Security Scanner:** Scans for sensitive content before publishing:
   - Absolute paths (`/Users/`, `/home/`, `/root/`)

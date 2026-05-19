@@ -1,312 +1,315 @@
-"""Tests for the DRY helpers and interactive flagged selection."""
+"""Tests for the new TUI-based interactive selection system."""
 
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
-from click.testing import CliRunner
-from rich.prompt import Confirm
-
-from agent_sync.cli import main
-from agent_sync.publish import (
-    _render_flagged_table,
-    _generate_public_repo_readme,
-    _generate_skills_readme,
-    _interactive_flagged_selection,
+from agent_sync.publish.models import (
+    SelectionState,
+    SourceInfo,
+    SourcePickerItem,
+    build_picker_items,
+    parse_number_input,
+    handle_number_input_for_state,
 )
-from agent_sync._selection import parse_multiselect_input
 
 
-class TestRenderFlaggedTable:
-    """Tests for _render_flagged_table()."""
+class TestSelectionState:
+    """Tests for SelectionState core logic."""
 
-    def test_renders_table_with_items(self):
-        """Table renders with correct columns."""
-        item = {"name": "test-skill", "filename": "test.txt"}
-        result = MagicMock(safe=False, issues=[
-            {"rule": "TOKEN_OPENAI", "severity": "critical", "snippet": "sk-123"}
-        ])
-        flagged = [(item, result, "skill-prefix")]
+    def test_creates_empty_state(self):
+        """Empty state has no selections."""
+        state = SelectionState()
+        assert state.get_total_count() == 0
+        assert state.get_selected_count() == 0
+
+    def test_adds_items(self):
+        """State tracks items from sources."""
+        state = SelectionState()
+        state.items = {"local": ["a", "b", "c"]}
+        assert state.get_total_count() == 3
+
+    def test_toggle_selects_item(self):
+        """Toggle adds item to selection."""
+        state = SelectionState()
+        state.items = {"local": ["a", "b"]}
+        state.selected = {"local": set()}
         
-        table = _render_flagged_table(flagged)
+        state.toggle("local", "a")
+        assert state.is_selected("local", "a")
+        assert state.get_selected_count() == 1
+
+    def test_toggle_deselects_item(self):
+        """Toggle removes item from selection."""
+        state = SelectionState()
+        state.items = {"local": ["a"]}
+        state.selected = {"local": {"a"}}
         
-        # Table should be created
-        assert table is not None
-        # Check that it's a Rich Table
-        assert hasattr(table, 'columns')
+        state.toggle("local", "a")
+        assert not state.is_selected("local", "a")
+        assert state.get_selected_count() == 0
 
-    def test_renders_empty_table(self):
-        """Empty flagged list returns empty table."""
-        table = _render_flagged_table([])
-        assert table is not None
-
-    def test_uses_prefix_for_name(self):
-        """Prefix is used in item display."""
-        item = {"name": "my-skill", "filename": "SKILL.md"}
-        result = MagicMock(safe=False, issues=[])
-        flagged = [(item, result, "prefix")]
+    def test_select_all(self):
+        """Select all selects everything."""
+        state = SelectionState()
+        state.items = {"local": ["a", "b"], "ext": ["c"]}
+        state.selected = {"local": set(), "ext": set()}
         
-        table = _render_flagged_table(flagged)
-        assert table is not None
+        state.select_all()
+        assert state.get_selected_count() == 3
 
-
-class TestInteractiveFlaggedSelection:
-    """Tests for _interactive_flagged_selection()."""
-
-    def test_empty_flagged_returns_true(self):
-        """Empty flagged list returns True without interaction."""
-        selected, confirmed = _interactive_flagged_selection([])
+    def test_select_none(self):
+        """Select none clears everything."""
+        state = SelectionState()
+        state.items = {"local": ["a", "b"]}
+        state.selected = {"local": {"a", "b"}}
         
-        assert selected == []
-        assert confirmed is True
+        state.select_none()
+        assert state.get_selected_count() == 0
 
-    def test_handles_single_item(self):
-        """Test with single item (edge case)."""
-        selected, confirmed = _interactive_flagged_selection([])
-        assert confirmed is True
-
-
-class TestReadmeGeneration:
-    """Tests for README template generation."""
-
-    def test_generate_public_repo_readme(self):
-        """Public repo README is generated correctly."""
-        result = _generate_public_repo_readme("https://github.com/user/my-repo.git")
+    def test_select_all_in_source(self):
+        """Select all in specific source."""
+        state = SelectionState()
+        state.items = {"local": ["a", "b"], "ext": ["c"]}
+        state.selected = {"local": set(), "ext": set()}
         
-        assert "# my-repo" in result
-        assert "npx skills add user/my-repo" in result
-        assert "agent-sync" in result
+        state.select_all_in_source("local")
+        assert state.get_selected_count() == 2
+        assert state.is_selected("local", "a")
+        assert state.is_selected("local", "b")
+        assert not state.is_selected("ext", "c")
 
-    def test_generate_skills_readme(self):
-        """Skills README is generated correctly."""
-        result = _generate_skills_readme("https://github.com/user/agent-sync-public.git")
+    def test_select_none_in_source(self):
+        """Select none in specific source."""
+        state = SelectionState()
+        state.items = {"local": ["a", "b"]}
+        state.selected = {"local": {"a", "b"}}
         
-        assert "# Skills" in result
-        assert "npx skills add user/agent-sync-public" in result
-        assert "agent-sync" in result
+        state.select_none_in_source("local")
+        assert state.get_selected_count() == 0
 
-    def test_readme_handles_invalid_url(self):
-        """Invalid URLs produce fallback content."""
-        result = _generate_public_repo_readme("invalid-url")
+    def test_build_index(self):
+        """Index maps numbers to items."""
+        state = SelectionState()
+        state.items = {"local": ["a", "b"], "ext": ["c"]}
+        state.build_index()
         
-        # Should not crash, may return empty or basic content
-        assert result is not None
+        assert state.item_index[1] == ("local", "a")
+        assert state.item_index[2] == ("local", "b")
+        assert state.item_index[3] == ("ext", "c")
 
-    def test_readme_uses_correct_username(self):
-        """README uses correct username from URL."""
-        result = _generate_skills_readme("https://github.com/renatocaliari/agent-sync-public.git")
+    def test_toggle_by_index(self):
+        """Toggle by index works."""
+        state = SelectionState()
+        state.items = {"local": ["a", "b"]}
+        state.selected = {"local": set()}
+        state.build_index()
         
-        assert "renatocaliari" in result
-
-
-class TestPublishCLIIntegration:
-    """Integration tests for publish CLI with flagged items."""
-
-    @pytest.fixture
-    def runner(self):
-        return CliRunner()
-
-    @patch("agent_sync.publish._interactive_flagged_selection")
-    @patch("agent_sync.publish.get_available_skills")
-    @patch("agent_sync.publish.get_available_agents")
-    @patch("agent_sync.publish.scan_file")
-    def test_publish_with_flagged_selection(
-        self, mock_scan, mock_get_agents, mock_get_skills, mock_interactive, runner
-    ):
-        """Test publish flow with interactive flagged selection."""
-        skill_path = MagicMock(spec=Path)
-        skill_path.is_dir.return_value = True
-        skill_path.rglob.return_value = []
-        mock_get_skills.return_value = [
-            {"name": "skill1", "path": skill_path},
-        ]
+        state.toggle_by_index(1)
+        assert state.is_selected("local", "a")
         
-        agent_path = MagicMock(spec=Path)
-        mock_get_agents.return_value = [
-            {"agent": "opencode", "filename": "AGENTS.md", "path": agent_path},
-        ]
+        state.toggle_by_index(1)
+        assert not state.is_selected("local", "a")
+
+    def test_get_selected_names_sorted(self):
+        """Selected names are returned sorted."""
+        state = SelectionState()
+        state.items = {"local": ["c", "a", "b"]}
+        state.selected = {"local": {"c", "a"}}
         
-        mock_scan.side_effect = [
-            MagicMock(safe=False, issues=[{"rule": "TEST", "severity": "high", "snippet": "test"}]),
-            MagicMock(safe=True, issues=[]),
-        ]
+        names = state.get_selected_names()
+        assert names == ["a", "c"]
+
+    def test_get_selection_dict(self):
+        """Returns selection as dict."""
+        state = SelectionState()
+        state.items = {"local": ["a", "b"]}
+        state.selected = {"local": {"b"}}
         
-        mock_interactive.return_value = (
-            [{"agent": "opencode", "filename": "AGENTS.md", "path": agent_path}],
-            True
+        result = state.get_selection_dict()
+        assert result == {"local": ["b"]}
+
+    def test_get_source_range(self):
+        """Gets index range for a source."""
+        state = SelectionState()
+        state.items = {"local": ["a", "b", "c"], "ext": ["x", "y"]}
+        state.build_index()
+        
+        local_range = state.get_source_range("local")
+        assert local_range == (1, 3)
+        
+        ext_range = state.get_source_range("ext")
+        assert ext_range == (4, 5)
+
+    def test_get_all_source_ranges(self):
+        """Gets ranges for all sources."""
+        state = SelectionState()
+        state.items = {"local": ["a", "b"], "ext": ["x", "y", "z"]}
+        state.build_index()
+        
+        ranges = state.get_all_source_ranges()
+        assert ranges == {"local": (1, 2), "ext": (3, 5)}
+
+
+class TestSourceInfo:
+    """Tests for SourceInfo dataclass."""
+
+    def test_creates_source_info(self):
+        """SourceInfo stores source metadata."""
+        info = SourceInfo(
+            source_id="local",
+            label="LOCAL",
+            subtitle="~/.agents/skills/",
+            items=["skill1", "skill2"],
+            status="active",
         )
         
-        result = runner.invoke(main, ["publish", "--dry-run"], input="\n")
-        
-        assert result.exit_code == 0
-        assert "DRY RUN" in result.output
-
-    @patch("agent_sync.publish.get_available_skills")
-    @patch("agent_sync.publish.get_available_agents")
-    @patch("agent_sync.publish.scan_file")
-    def test_publish_no_flagged_skips_selection(
-        self, mock_scan, mock_get_agents, mock_get_skills, runner
-    ):
-        """Test publish without flagged items skips interactive selection."""
-        mock_get_skills.return_value = []
-        mock_get_agents.return_value = [
-            {"agent": "opencode", "filename": "AGENTS.md", "path": MagicMock(spec=Path)},
-        ]
-        mock_scan.return_value = MagicMock(safe=True, issues=[])
-        
-        result = runner.invoke(main, ["publish", "--agents", "--dry-run"], input="\n")
-        
-        assert result.exit_code == 0
-        assert "All cleared" in result.output
-
-    @patch("agent_sync.publish.publish_skills")
-    @patch("agent_sync.publish._interactive_flagged_selection")
-    @patch("agent_sync.publish.get_available_skills")
-    @patch("agent_sync.publish.get_available_agents")
-    @patch("agent_sync.publish.scan_file")
-    def test_publish_cancelled_after_flagged_selection(
-        self, mock_scan, mock_get_agents, mock_get_skills, mock_interactive, mock_publish, runner
-    ):
-        """Test user can cancel after flagged selection."""
-        skill_path = MagicMock(spec=Path)
-        skill_path.is_dir.return_value = False
-        skill_path.is_file.return_value = True
-        mock_get_skills.return_value = [{"name": "skill1", "path": skill_path}]
-        mock_get_agents.return_value = []
-        
-        mock_scan.return_value = MagicMock(safe=False, issues=[])
-        mock_interactive.return_value = ([], False)
-        
-        result = runner.invoke(main, ["publish", "--skills"], input="\n")
-        
-        # Should cancel without attempting publish
-        assert "cancelled" in result.output.lower() or "aborted" in result.output.lower()
-        mock_publish.assert_not_called()
+        assert info.source_id == "local"
+        assert info.label == "LOCAL"
+        assert len(info.items) == 2
 
 
-class TestPublishSkillsOnly:
-    """Tests for agent-sync publish --skills."""
+class TestParseNumberInput:
+    """Tests for parse_number_input function."""
 
-    @pytest.fixture
-    def runner(self):
-        return CliRunner()
+    def test_single_number(self):
+        """Parses single number."""
+        indices = parse_number_input("1")
+        assert indices == [1]
 
-    @patch("agent_sync.publish._interactive_flagged_selection")
-    @patch("agent_sync.publish.get_available_skills")
-    @patch("agent_sync.publish.scan_file")
-    def test_publish_skills_with_flagged(
-        self, mock_scan, mock_get_skills, mock_interactive, runner
-    ):
-        """Test --skills handles flagged items."""
-        skill_path = MagicMock(spec=Path)
-        skill_path.is_dir.return_value = False
-        skill_path.is_file.return_value = True
+    def test_comma_separated(self):
+        """Parses comma separated."""
+        indices = parse_number_input("1,3,5")
+        assert indices == [1, 3, 5]
+
+    def test_range(self):
+        """Parses range."""
+        indices = parse_number_input("1-5")
+        assert indices == [1, 2, 3, 4, 5]
+
+    def test_mixed(self):
+        """Parses mixed input."""
+        indices = parse_number_input("1,3-5,7")
+        assert indices == [1, 3, 4, 5, 7]
+
+    def test_with_spaces(self):
+        """Handles spaces."""
+        indices = parse_number_input("1, 3, 5")
+        assert indices == [1, 3, 5]
+
+    def test_empty_parts_ignored(self):
+        """Empty parts are ignored."""
+        indices = parse_number_input("1,,3")
+        assert indices == [1, 3]
+
+
+class TestHandleNumberInputForState:
+    """Tests for handle_number_input_for_state function."""
+
+    def test_selects_items(self):
+        """Selects items by index."""
+        state = SelectionState()
+        state.items = {"local": ["a", "b", "c"]}
+        state.selected = {"local": set()}
+        state.build_index()
         
-        mock_get_skills.return_value = [
-            {"name": "flagged-skill", "path": skill_path},
-        ]
+        handle_number_input_for_state(state, "local", "1,3")
         
-        mock_scan.return_value = MagicMock(safe=False, issues=[
-            {"rule": "ABS_PATH_UNIX", "severity": "high", "snippet": "/Users/test/"}
-        ])
+        assert state.is_selected("local", "a")
+        assert not state.is_selected("local", "b")
+        assert state.is_selected("local", "c")
+
+    def test_replaces_selection(self):
+        """Replaces existing selection."""
+        state = SelectionState()
+        state.items = {"local": ["a", "b", "c"]}
+        state.selected = {"local": {"a", "b"}}
+        state.build_index()
         
-        mock_interactive.return_value = (
-            [{"name": "flagged-skill", "path": skill_path}],
-            True
+        handle_number_input_for_state(state, "local", "3")
+        
+        # a and b should be removed, only c selected
+        assert not state.is_selected("local", "a")
+        assert not state.is_selected("local", "b")
+        assert state.is_selected("local", "c")
+
+    def test_invalid_input_ignored(self):
+        """Invalid input is ignored."""
+        state = SelectionState()
+        state.items = {"local": ["a", "b"]}
+        state.selected = {"local": {"a"}}
+        state.build_index()
+        
+        handle_number_input_for_state(state, "local", "invalid")
+        
+        # Selection unchanged
+        assert state.is_selected("local", "a")
+        assert not state.is_selected("local", "b")
+
+
+class TestSourcePickerItem:
+    """Tests for SourcePickerItem."""
+
+    def test_creates_picker_item(self):
+        """PickerItem stores data correctly."""
+        item = SourcePickerItem(
+            source_id="local",
+            label="LOCAL",
+            item_count=24,
+            selected_count=5,
+            subtitle="~/.agents/skills/",
         )
         
-        result = runner.invoke(main, ["publish", "--skills", "--dry-run"], input="\n")
-        
-        assert result.exit_code == 0
+        assert item.source_id == "local"
+        assert item.label == "LOCAL"
+        assert item.item_count == 24
+        assert item.selected_count == 5
+        assert not item.is_empty
 
-
-class TestPublishAgentsOnly:
-    """Tests for agent-sync publish --agents."""
-
-    @pytest.fixture
-    def runner(self):
-        return CliRunner()
-
-    @patch("agent_sync.publish._interactive_flagged_selection")
-    @patch("agent_sync.publish.get_available_agents")
-    @patch("agent_sync.publish.scan_file")
-    def test_publish_agents_with_flagged(
-        self, mock_scan, mock_get_agents, mock_interactive, runner
-    ):
-        """Test --agents handles flagged items."""
-        agent_path = MagicMock(spec=Path)
-        mock_get_agents.return_value = [
-            {"agent": "pi.dev", "filename": "AGENTS.md", "path": agent_path},
-        ]
-        
-        mock_scan.return_value = MagicMock(safe=False, issues=[
-            {"rule": "TOKEN_GITHUB", "severity": "critical", "snippet": "ghp_1234567890abcdef"}
-        ])
-        
-        mock_interactive.return_value = (
-            [{"agent": "pi.dev", "filename": "AGENTS.md", "path": agent_path}],
-            True
+    def test_is_empty_flag(self):
+        """is_empty flag is set when empty."""
+        item = SourcePickerItem(
+            source_id="empty",
+            label="EMPTY",
+            item_count=0,
+            selected_count=0,
+            is_empty=True,
         )
         
-        result = runner.invoke(main, ["publish", "--agents", "--dry-run"], input="\n")
-        
-        assert result.exit_code == 0
+        assert item.is_empty
 
 
-class TestUnifiedSecurityScan:
-    """Tests for unified security scanner (same for skills and agents)."""
+class TestBuildPickerItems:
+    """Tests for build_picker_items function."""
 
-    @pytest.fixture
-    def runner(self):
-        return CliRunner()
-
-    @patch("agent_sync.publish._interactive_flagged_selection")
-    @patch("agent_sync.publish.get_available_skills")
-    @patch("agent_sync.publish.get_available_agents")
-    @patch("agent_sync.publish.scan_file")
-    def test_unified_scan_applies_to_both(
-        self, mock_scan, mock_get_agents, mock_get_skills, mock_interactive, runner
-    ):
-        """Test unified security message shows for both skills and agents."""
-        skill_path = MagicMock(spec=Path)
-        skill_path.is_dir.return_value = True
-        skill_path.rglob.return_value = []
-        
-        agent_path = MagicMock(spec=Path)
-        
-        mock_get_skills.return_value = [{"name": "s1", "path": skill_path}]
-        mock_get_agents.return_value = [
-            {"agent": "a1", "filename": "AGENTS.md", "path": agent_path},
+    def test_builds_items_from_source_infos(self):
+        """Builds picker items from source infos."""
+        sources = [
+            SourceInfo(source_id="local", label="LOCAL", items=["a", "b"]),
+            SourceInfo(source_id="ext", label="EXTERNAL", items=["x"]),
         ]
+        selection = {
+            "local": {"a"},
+            "ext": set(),
+        }
         
-        mock_scan.return_value = MagicMock(safe=True, issues=[])
-        mock_interactive.return_value = ([], True)
+        items = build_picker_items(sources, selection)
         
-        result = runner.invoke(main, ["publish", "--dry-run"], input="\n")
-        
-        assert "What will be scanned:" in result.output or "what will be scanned" in result.output.lower()
-        assert "API keys" in result.output or "tokens" in result.output.lower()
+        assert len(items) == 2
+        assert items[0].source_id == "local"
+        assert items[0].item_count == 2
+        assert items[0].selected_count == 1
+        assert items[1].source_id == "ext"
+        assert items[1].item_count == 1
+        assert items[1].selected_count == 0
 
-    @patch("agent_sync.publish._interactive_flagged_selection")
-    @patch("agent_sync.publish.get_available_skills")
-    @patch("agent_sync.publish.get_available_agents")
-    @patch("agent_sync.publish.scan_file")
-    def test_skipped_files_mentioned(
-        self, mock_scan, mock_get_agents, mock_get_skills, mock_interactive, runner
-    ):
-        """Test skipped file types are mentioned."""
-        # Need at least one skill or agent to go through full flow
-        skill_path = MagicMock(spec=Path)
-        skill_path.is_dir.return_value = True
-        skill_path.rglob.return_value = []
+    def test_marks_empty_sources(self):
+        """Empty sources are marked as is_empty."""
+        sources = [
+            SourceInfo(source_id="local", label="LOCAL", items=[]),
+            SourceInfo(source_id="ext", label="EXTERNAL", items=["x"]),
+        ]
+        selection = {"local": set(), "ext": {"x"}}
         
-        mock_get_skills.return_value = [{"name": "empty-skill", "path": skill_path}]
-        mock_get_agents.return_value = []
+        items = build_picker_items(sources, selection)
         
-        mock_scan.return_value = MagicMock(safe=True, issues=[])
-        mock_interactive.return_value = ([], True)
-        
-        result = runner.invoke(main, ["publish", "--skills", "--dry-run"], input="\n")
-        
-        assert "What will NEVER be published:" in result.output or "never" in result.output.lower()
-        assert "auth, token, key, secret" in result.output.lower() or "credentials" in result.output.lower()
+        assert items[0].is_empty
+        assert not items[1].is_empty
