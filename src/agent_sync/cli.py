@@ -51,7 +51,7 @@ def main():
 @click.option("--force", is_flag=True, help="Force overwrite existing config")
 def init(name: Optional[str], agents: tuple[str, ...], no_wizard: bool, force: bool):
     """Initialize agent-sync in the current directory."""
-    config = load_sync_config()
+    config = Config()
     sync_manager = SyncManager(config)
     
     # Check if already initialized
@@ -109,7 +109,7 @@ def init(name: Optional[str], agents: tuple[str, ...], no_wizard: bool, force: b
 @click.option("--agents-only", is_flag=True, help="Only sync agent configs")
 def sync(force: bool, skills_only: bool, configs_only: bool, agents_only: bool):
     """Sync skills and configs with the remote repository."""
-    config = load_sync_config()
+    config = Config()
     sync_manager = SyncManager(config)
     
     if not sync_manager.is_initialized():
@@ -149,10 +149,8 @@ def sync(force: bool, skills_only: bool, configs_only: bool, agents_only: bool):
 @click.option("--configs-only", is_flag=True, help="Only push configs")
 def push(message: Optional[str], skills_only: bool, configs_only: bool):
     """Push local changes to the remote repository."""
-    from .sync import SyncManager
-    from .config_exporter import load_config as load_sync_config
     
-    config = load_sync_config()
+    config = Config()
     sync_manager = SyncManager(config)
     
     if not sync_manager.is_initialized():
@@ -182,7 +180,7 @@ def push(message: Optional[str], skills_only: bool, configs_only: bool):
 @click.option("--configs-only", is_flag=True, help="Only pull configs")
 def pull(force: bool, skills_only: bool, configs_only: bool):
     """Pull changes from the remote repository."""
-    config = load_sync_config()
+    config = Config()
     sync_manager = SyncManager(config)
     
     if not sync_manager.is_initialized():
@@ -485,7 +483,7 @@ def publish(
 @click.option("--configs", is_flag=True, help="Show configs diff")
 def diff(skills: bool, configs: bool):
     """Show differences between local and remote."""
-    config = load_sync_config()
+    config = Config()
     sync_manager = SyncManager(config)
     
     if not sync_manager.is_initialized():
@@ -511,7 +509,7 @@ def diff(skills: bool, configs: bool):
 @main.command()
 def status():
     """Show sync status."""
-    config = load_sync_config()
+    config = Config()
     sync_manager = SyncManager(config)
     config = Config()
     
