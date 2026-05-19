@@ -1,2231 +1,589 @@
-"""Main CLI entry point for agent-sync."""
+"""CLI commands for agent-sync."""
 
-import os
+import shutil
 import subprocess
-import threading
-from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Optional
 
 import click
+import yaml
 from rich.console import Console
+from rich.panel import Panel
+from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from . import __version__
-from .config import DEFAULT_STATE_DIR, Config
+from .agents import load_registry
+from .config import Config
+from .publish import (
+    add_source,
+    clear_cache as clear_publish_cache,
+    get_published_repo,
+    list_sources,
+    load_config as load_publish_config,
+    remove_source,
+    run_publish_flow,
+    run_agents_publish_flow,
+    run_publish_setup,
+    save_selected_skills,
+    set_published_repo,
+)
 from .sync import SyncManager
-from .validators import validate_github_url, validate_repo_name
+from .validators import validate_github_url
+
 
 console = Console()
 
-# Update check configuration
-UPDATE_CHECK_FILE = DEFAULT_STATE_DIR / ".last_update_check"
-UPDATE_PENDING_FILE = DEFAULT_STATE_DIR / ".pending_update"
 
-
-def check_for_updates_async():
-    """Check for updates once per week, asynchronously."""
-    if not _should_check_for_updates():
-        return
-
-    # Run in background thread (doesn't block command)
-    thread = threading.Thread(target=_check_and_notify, daemon=True)
-    thread.start()
-
-
-def _should_check_for_updates() -> bool:
-    """Check if we should check for updates (once per week)."""
-    if not UPDATE_CHECK_FILE.exists():
-        return True
-
-    try:
-        last_check = datetime.fromisoformat(UPDATE_CHECK_FILE.read_text())
-        return datetime.now() - last_check > timedelta(days=7)
-    except Exception:
-        return True
-
-
-def _check_and_notify():
-    """Check for updates and notify if available."""
-    try:
-        # Try with GITHUB_TOKEN if available (for private repos)
-        import os
-
-        import requests
-        headers = {}
-        token = os.environ.get("GITHUB_TOKEN")
-        if token:
-            headers["Authorization"] = f"token {token}"
-
-        response = requests.get(
-            "https://api.github.com/repos/renatocaliari/agent-sync/releases/latest",
-            headers=headers,
-            timeout=3,  # Fast timeout
-        )
-
-        # If 404, repo might be private or no releases yet
-        if response.status_code == 404:
-            return
-
-        response.raise_for_status()
-
-        latest = response.json()["tag_name"].lstrip("v")
-
-        if latest > __version__:
-            # Save notification so we can show it after command completes
-            UPDATE_PENDING_FILE.parent.mkdir(parents=True, exist_ok=True)
-            UPDATE_PENDING_FILE.write_text(f"{latest}|{datetime.now().isoformat()}")
-
-        # Save last check time
-        UPDATE_CHECK_FILE.parent.mkdir(parents=True, exist_ok=True)
-        UPDATE_CHECK_FILE.write_text(datetime.now().isoformat())
-
-    except Exception:
-        pass  # Silently fail (don't annoy user)
-
-
-def push_to_github(message: str = "chore: sync updates") -> bool:
-    """Push tracked files to GitHub repository.
-
-    Args:
-        message: Commit message for the push
-
-    Returns:
-        True if push succeeded or nothing to push, False on error
-    """
-    config = Config()
-
-    if not config.repo_url:
-        console.print("[yellow]⚠ No repository configured yet.[/yellow]")
-        console.print("Run [green]agent-sync init[/green] to create a repository first.\n")
-        return False
-
-    try:
-        sync_manager = SyncManager(config)
-        pushed = sync_manager.push(message=message)
-        _render_push_output(pushed)
-        if pushed:
-            console.print("💡 On other machines, run [green]agent-sync pull[/green]\n")
-        return True
-    except Exception as e:
-        console.print(f"\n[red]✗ Push failed: {e}[/red]\n")
-        console.print("[dim]You can run [green]agent-sync push[/green] manually later.[/dim]\n")
-        return False
-
-
-# ---------------------------------------------------------------------------
-# Push output rendering helpers
-# ---------------------------------------------------------------------------
-
-_STATUS_ICONS = {
-    'added': '🆕',
-    'deleted': '🗑️',
-    'modified': '📝',
-}
-
-
-def _status_icon(label: str) -> str:
-    return _STATUS_ICONS.get(label, '📝')
-
-
-def _render_group(category: str, group_name: str, items: list[dict]) -> None:
-    """Render a sub-group (skill/agent) within a category."""
-    labels = set(item['label'] for item in items)
-
-    if len(labels) == 1:
-        # All files in this group have the same status → collapse with *
-        label = labels.pop()
-        icon = _status_icon(label)
-        total = sum(item.get('directory_count') or 1 for item in items)
-        console.print(
-            f"    └── {group_name + '/*':<46} {icon} {label}"
-            f" ({total} file{'s' if total != 1 else ''})"
-        )
-    else:
-        # Mixed statuses → show individual files
-        for item in items:
-            rel = item['path'].rsplit('/', 1)[-1]
-            icon = _status_icon(item['label'])
-            console.print(f"    └── {rel:<46} {icon} {item['label']}")
-
-
-def _render_push_output(pushed: list[dict]) -> None:
-    """Render pushed files with directory grouping and status indicators."""
-    from collections import defaultdict
-
-    if not pushed:
-        console.print('\n✓ Nothing to push', style="yellow")
-        return
-
-    # Categorize by top-level directory
-    top_level = []
-    categories: dict[str, dict[str, list[dict]]] = defaultdict(lambda: defaultdict(list))
-
-    for item in pushed:
-        p = item['path']
-        parts = p.split('/', 2)
-        if len(parts) >= 2 and parts[0] in ('skills', 'configs', 'agents'):
-            categories[parts[0]][parts[1]].append(item)
-        else:
-            top_level.append(item)
-
-    # Count total
-    cat_total = sum(len(v) for cat in categories.values() for v in cat.values())
-    total = len(top_level) + cat_total
-    console.print(f'\n✅ Pushed {total} file{"s" if total != 1 else ""}:')
-
-    # Top-level files (manifest, etc.)
-    for item in top_level:
-        icon = _status_icon(item['label'])
-        console.print(f'  • {item["path"]:<50} {icon} {item["label"]}')
-
-    # Grouped categories
-    for cat_name in ('skills', 'configs', 'agents'):
-        if cat_name not in categories:
-            continue
-        groups = categories[cat_name]
-        group_count = sum(len(v) for v in groups.values())
-        console.print(f'  📂 {cat_name}/ ({group_count} file{"s" if group_count != 1 else ""})')
-        for group_name, items in sorted(groups.items()):
-            _render_group(cat_name, group_name, items)
-
-    console.print()
-
-
-def show_pending_update_notification():
-    """Show update notification if one is pending."""
-    if not UPDATE_PENDING_FILE.exists():
-        return
-
-    try:
-        latest, timestamp = UPDATE_PENDING_FILE.read_text().split("|")
-        console.print(f"\n[dim]✨ Update available: v{latest} (Run 'agent-sync update' to install)[/dim]\n")
-
-        # Clear notification
-        UPDATE_PENDING_FILE.unlink()
-    except Exception:
-        pass  # Silently fail
-
-
-class ExtendedHelpGroup(click.Group):
-    """Custom Click group to show categorization and vertical tree structure in help."""
-
-    def format_commands(self, ctx, formatter):
-        # 1. Define Categories
-        categories = {
-            "🔄 Sync Commands": ["push", "pull", "status"],
-            "🤖 Agent Management": ["agents", "enable", "disable"],
-            "⚙️  Configuration": ["setup", "init", "link", "config", "generate-config"],
-            "📚 Skills & Agents": ["skills", "custom-agents"],
-            "🛠️  System": ["update", "version", "secrets"]
-        }
-
-        # Get all commands available in this group
-        all_commands = {name: self.get_command(ctx, name) for name in self.list_commands(ctx)}
-
-        for category, cmd_names in categories.items():
-            category_commands = []
-
-            for name in cmd_names:
-                cmd = all_commands.get(name)
-                if not cmd or cmd.hidden:
-                    continue
-
-                # Main Command Description
-                help_text = cmd.get_short_help_str()
-
-                # If it's NOT a group, show its options
-                if not isinstance(cmd, click.Group):
-                    opts = [p.opts[0] for p in cmd.params if isinstance(p, click.Option)]
-                    if opts:
-                        help_text += f" [{', '.join(opts)}]"
-
-                category_commands.append((name, help_text))
-
-                # If it IS a group, list its subcommands vertically
-                if isinstance(cmd, click.Group):
-                    sub_names = cmd.list_commands(ctx)
-                    for i, sub_name in enumerate(sub_names):
-                        sub_cmd = cmd.get_command(ctx, sub_name)
-                        if sub_cmd:
-                            is_last = (i == len(sub_names) - 1)
-                            tree_char = "└──" if is_last else "├──"
-
-                            sub_help = sub_cmd.get_short_help_str()
-                            sub_opts = [p.opts[0] for p in sub_cmd.params if isinstance(p, click.Option)]
-                            if sub_opts:
-                                sub_help += f" [{', '.join(sub_opts)}]"
-
-                            # Indented with tree structure
-                            category_commands.append((f"  {tree_char} {sub_name}", sub_help))
-
-            if category_commands:
-                with formatter.section(category):
-                    formatter.write_dl(category_commands)
-
-
-@click.group(cls=ExtendedHelpGroup)
-@click.version_option(version=__version__, prog_name="agent-sync")
+@click.group()
+@click.version_option(version=__version__)
 def main():
-    """
-    🔄 agent-sync - Sync configs and skills across multiple AI agents.
-
-    Supported agents: opencode, claude-code, gemini-cli, pi.dev, qwen-code
-    """
+    """agent-sync - Sync configs and skills across multiple AI agents."""
     pass
 
 
-@main.command()
-@click.option("--name", help="Repository name (skips wizard if provided)")
-@click.option("--agents", multiple=True, help="Agents to sync (skips wizard if provided)")
-@click.option("--no-wizard", is_flag=True, help="Skip interactive wizard")
-@click.option("--force", is_flag=True, help="Force initialization even if already configured")
-def init(name: str | None, agents: tuple[str, ...], no_wizard: bool, force: bool):
-    """Initialize a new sync repository (first machine).
-
-    Runs the setup wizard and creates a new GitHub repository.
-
-    \b
-    Examples:
-      # Interactive wizard (creates new repo)
-      agent-sync init
-
-      # Create specific repo name (non-interactive)
-      agent-sync init --name agent-sync-private-configs
-
-      # Force re-initialize (overwrites existing config)
-      agent-sync init --name new-configs --force
-
-    \b
-    ⚠️ SECURITY:
-      - Repositories are ALWAYS PRIVATE for configs
-      - Configs may contain API keys and tokens
-      - GitHub private repos are FREE for personal use
-    """
-    from .setup import run_setup_wizard
-
-    # Check if config already exists
-    config = Config()
-    if config.repo_url and not force:
-        console.print("\n[yellow]⚠ Already configured![/yellow]")
-        console.print(f"   Repository: {config.repo_url}")
-        console.print("\n💡 Options:")
-        console.print("   - Use [green]agent-sync config repo[/green] to view/change repository")
-        console.print("   - Use [green]agent-sync setup[/green] to reconfigure agents")
-        console.print("   - Use [green]agent-sync init --force[/green] to overwrite existing config\n")
-        return
-
-    if config.repo_url and force:
-        console.print("\n[yellow]⚠ Forcing re-initialization![/yellow]")
-        console.print(f"   Existing repository: {config.repo_url}")
-        console.print("   This will overwrite your local configuration.\n")
-
-    # Run wizard if not provided via CLI args
-    if not name and not no_wizard:
-        console.print("\n[bold]Running setup wizard...[/]\n")
-        repo_config = run_setup_wizard()
-
-        if not repo_config:
-            console.print("\n[yellow]Setup cancelled[/yellow]")
-            raise click.Abort()
-
-        name = repo_config["name"]
-        # Always private for security
-        private = True
-        agents = repo_config["agents"]
-    else:
-        # Non-interactive: always private
-        private = True
-
-    if not name:
-        console.print("[red]✗ Repository name is required[/red]")
-        console.print("\n💡 Provide a name with --name or use the wizard")
-        console.print("   Example: [green]agent-sync init --name agent-sync-private-configs[/green]\n")
-        raise click.Abort()
-
-    if not validate_repo_name(name):
-        console.print(f"\n[red]✗ Invalid repository name: {name}[/red]")
-        console.print("   Only alphanumeric characters, hyphens, underscores, and periods are allowed.")
-        console.print("   Cannot start with a hyphen.\n")
-        raise click.Abort()
-
-    console.print(f"\n🚀 Initializing sync repository: {name}")
-    console.print("[dim]Repository will be PRIVATE (for security)[/dim]\n")
-
-    sync_manager = SyncManager(config)
-
-    try:
-        repo_url = sync_manager.init_repo(name=name, private=private, agents=agents)
-        console.print(f"\n✅ Repository created: {repo_url}")
-        console.print("\n📝 Next steps:")
-        console.print("  1. Run 'agent-sync push' to upload your configs")
-        console.print("  2. On other machines, run 'agent-sync link <repo-url>'")
-    except Exception as e:
-        console.print(f"\n❌ Error: {e}", style="red")
-        raise click.Abort()
-
+# =============================================================================
+# INIT COMMAND
+# =============================================================================
 
 @main.command()
-def setup():
-    """Run the interactive setup wizard to configure or reconfigure.
-
-    This can be used:
-    - On first time setup
-    - To add/remove agents
-    - To change sync options
-    - To reconfigure repository settings
-    """
-    from .setup import run_setup_wizard
-
-    config = Config()
-
-    if config.repo_url:
-        console.print("\n[yellow]⚠ You already have an existing configuration![/yellow]")
-        console.print(f"   Repository: {config.repo_url}")
-        console.print("\nThis will [bold]overwrite[/] your current configuration.")
-        console.print()
-
-        if not Confirm.ask("Continue?", default=False):
-            console.print("\n[yellow]Setup cancelled[/yellow]")
-            return
-
-        console.print("\n[bold]🔄 Reconfiguring Agent Sync[/]\n")
-    else:
-        console.print("\n[bold]🔄 Agent Sync Setup Wizard[/]\n")
-
-    repo_config = run_setup_wizard()
-
-    if repo_config:
-        console.print("\n[green]✓ Setup complete![/green]")
-
-        if config.repo_url:
-            console.print("\n💡 Your repository URL is still the same.")
-            console.print("   Run 'agent-sync push' to sync new configuration")
-        else:
-            console.print("\n💡 Run 'agent-sync init' to create a new repository")
-            console.print("   Or 'agent-sync link <url>' to connect to existing one")
-    else:
-        console.print("\n[yellow]Setup cancelled[/yellow]")
-
-
-@main.group(cls=ExtendedHelpGroup)
-def config():
-    """Manage configuration (view, edit, reset)."""
-    pass
-
-
-@config.command()
-def show():
-    """Show current configuration."""
-    from rich.panel import Panel
-
-    config = Config()
-
-    console.print("\n[bold]📋 Current Configuration[/]\n")
-
-    if not config.repo_url:
-        console.print("[yellow]⚠ Not configured yet. Run 'agent-sync setup'[/yellow]\n")
+@click.option("--name", "name", help="Repository name")
+@click.option("--agents", multiple=True, help="Agents to sync")
+@click.option("--no-wizard", is_flag=True, help="Skip interactive prompts")
+@click.option("--force", is_flag=True, help="Force overwrite existing config")
+def init(name: Optional[str], agents: tuple[str, ...], no_wizard: bool, force: bool):
+    """Initialize agent-sync in the current directory."""
+    sync_manager = SyncManager()
+    
+    # Check if already initialized
+    if sync_manager.is_initialized() and not force:
+        console.print("[yellow]⚠ Already initialized. Use --force to reinitialize.[/yellow]")
         return
-
-    # Show repo info
-    console.print(Panel(f"[cyan]Repository:[/cyan] {config.repo_url}", border_style="blue"))
-    console.print()
-
-    # Show agents
-    console.print("[bold]Enabled Agents:[/]")
-    for agent_name in config.agents:
-        if config.is_agent_enabled(agent_name):
-            sync_opts = config.get_sync_options(agent_name)
-            configs = "configs" if sync_opts.get("configs") else ""
-            sync_str = ", ".join(filter(None, [configs])) or "skills only"
-            console.print(f"  ✓ {agent_name}: {sync_str}")
-        else:
-            console.print(f"  ✗ {agent_name} [dim](disabled)[/dim]")
-    console.print()
-
-    # Show config file path
-    console.print(f"[dim]Config file: {config.config_path}[/dim]\n")
-
-
-@config.command()
-@click.option("--dry-run", is_flag=True, help="Show what would be exported without creating a file")
-@click.option("--output", type=click.Path(), default=None, help="Output path (default: ~/.agents/config.json)")
-def export(dry_run: bool, output: str | None):
-    """Export configuration to DotAgents JSON format.
-
-    Creates a ~/.agents/config.json file compatible with the DotAgents Protocol.
-
-    \b
-    Examples:
-      # Export to default location (~/.agents/config.json)
-      agent-sync config export
-
-      # Preview without creating file
-      agent-sync config export --dry-run
-
-      # Export to custom location
-      agent-sync config export --output /custom/path/config.json
-    """
-    from pathlib import Path
-
-    from rich.console import Console
-
-    from agent_sync.agents import GLOBAL_SKILLS_DIR
-
-    from .config_exporter import ConfigExporter
-
-    console = Console()
-    output_path = Path(output) if output else Path.home() / ".agents" / "config.json"
-
-    exporter = ConfigExporter()
-
-    if dry_run:
-        console.print("\n[bold]📋 DotAgents Config Preview[/bold]\n")
-        console.print(f"[dim]Would export to: {output_path}[/dim]\n")
-        data = exporter.export()
-        console.print_json(data=exporter.export())
-        console.print()
-    else:
-        exporter.save(output_path)
-        console.print(f"\n[green]✓[/green] Config exported to {output_path}")
-        console.print(f"[dim]Skills hub: {GLOBAL_SKILLS_DIR}[/dim]\n")
-
-
-@config.command()
-@click.argument("repo_url", required=False)
-@click.option("--remove", is_flag=True, help="Remove repository configuration")
-def repo(repo_url: str | None, remove: bool):
-    """View or set the GitHub repository URL.
-
-    \b
-    Examples:
-      # View current repository
-      agent-sync config repo
-
-      # Set repository URL
-      agent-sync config repo https://github.com/user/repo.git
-
-      # Remove repository configuration
-      agent-sync config repo --remove
-    """
-    config = Config()
-
-    if remove:
-        if not config.repo_url:
-            console.print("\n[yellow]No repository configured[/yellow]\n")
-            return
-
-        old_url = config.repo_url
-        config.repo_url = None
-        console.print("\n[green]✓ Repository configuration removed[/green]")
-        console.print(f"  Was: {old_url}")
-        console.print("\n[dim]Your local files are still intact.[/dim]")
-        console.print("[dim]Run 'agent-sync config repo <url>' to configure again.[/dim]\n")
-        return
-
-    if repo_url:
-        # Set repository URL
-        if not validate_github_url(repo_url):
-            console.print("\n[red]✗ Invalid repository URL[/red]")
-            console.print("   Expected: https://github.com/user/repo.git")
-            console.print(f"   Got: {repo_url}\n")
-            return
-
-        config.repo_url = repo_url
-        console.print("\n[green]✓ Repository configured[/green]")
-        console.print(f"  URL: {repo_url}")
-        console.print("\n💡 Run 'agent-sync pull' to download configs")
-        console.print("   Run 'agent-sync push' to upload configs\n")
-        return
-
-    # View current repository
-    if not config.repo_url:
-        console.print("\n[yellow]⚠ Not configured yet[/yellow]\n")
-        console.print("Configure a repository with:")
-        console.print("  [green]agent-sync config repo https://github.com/user/repo.git[/green]\n")
-        console.print("Or create a new one with:")
-        console.print("  [green]agent-sync init --name my-configs[/green]\n")
-        return
-
-    console.print(f"\n[cyan]📦 Repository:[/cyan] {config.repo_url}\n")
-    console.print("[dim]Use 'agent-sync config repo --remove' to disconnect.[/dim]\n")
-
-
-@config.command()
-def edit():
-    """Open configuration file in editor."""
-    import subprocess
-
-    config = Config()
-
-    if not config.config_path.exists():
-        config.generate_default()
-
-    # Try to open with default editor
-    editor = os.environ.get("EDITOR", "nano")
-
-    try:
-        subprocess.run([editor, str(config.config_path)])
-        console.print("\n[green]✓ Configuration saved[/green]\n")
-    except FileNotFoundError:
-        console.print(f"\n[yellow]Editor '{editor}' not found[/yellow]")
-        console.print(f"Edit manually: {config.config_path}\n")
-
-
-@config.command()
-@click.confirmation_option(prompt="Are you sure you want to reset configuration?")
-def reset():
-    """Reset configuration to defaults (keeps repo linked)."""
-
-    config = Config()
-
-    if not config.repo_url:
-        console.print("\n[yellow]No configuration to reset[/yellow]\n")
-        return
-
-    repo_url = config.repo_url
-
-    # Generate fresh default config
-    config.generate_default()
-    config.repo_url = repo_url
-
-    console.print("\n[green]✓ Configuration reset to defaults[/green]")
-    console.print(f"  Repository: {repo_url}")
-    console.print("\n💡 Run 'agent-sync setup' to reconfigure\n")
-
-
-@main.group(cls=ExtendedHelpGroup)
-def skills():
-    """Manage global skills."""
-    pass
-
-
-@skills.command("list")
-@click.option("--json", "json_output", is_flag=True, help="Output as JSON for programmatic use")
-def list_skills(json_output: bool):
-    """List all centralized skills."""
-    import json
-    from rich import box
-    from rich.table import Table
-
-    skills_dir = Path.home() / ".agents" / "skills"
-
-    if not skills_dir.exists():
-        console.print("\n[yellow]No skills directory found.[/yellow]")
-        console.print("Run [green]`agent-sync skills centralize`[/green] to centralize skills.\n")
-        return
-
-    skills = []
-    for item in skills_dir.iterdir():
-        if item.is_dir() and (item / "SKILL.md").exists():
-            skills.append({
-                "name": item.name,
-                "path": str(item),
-                "valid": True
-            })
-        elif item.is_file() and item.suffix in [".md", ".py", ".sh"]:
-            skills.append({
-                "name": item.name,
-                "path": str(item),
-                "valid": False
-            })
-
-    if not skills:
-        console.print("\n[yellow]No skills found in ~/.agents/skills/[/yellow]\n")
-        return
-
-    if json_output:
-        console.print_json(json.dumps(skills, indent=2))
-        return
-
-    console.print(f"\n[bold]📚 Centralized Skills ({len(skills)})[/]\n")
-    table = Table(box=box.SIMPLE)
-    table.add_column("Status", style="green")
-    table.add_column("Skill Name", style="cyan")
-    table.add_column("Path", style="dim")
-
-    for skill in sorted(skills, key=lambda s: s["name"]):
-        icon = "✓" if skill["valid"] else "⚠"
-        table.add_row(icon, skill["name"], skill["path"])
-
-    console.print(table)
-    console.print()
-
-
-@main.group(cls=ExtendedHelpGroup)
-def custom_agents():
-    """Manage custom agents (.claude/agents/, .opencode/agents/)."""
-    pass
-
-
-@custom_agents.command("list")
-@click.option("--json", "json_output", is_flag=True, help="Output as JSON for programmatic use")
-def list_custom_agents(json_output: bool):
-    """List custom agents for all supported agents."""
-    import json
-    from rich import box
-    from rich.table import Table
-
-    from .agents import get_all_agents
-
-    result = []
-    for agent in get_all_agents():
-        if not agent.supports_custom_agents():
-            continue
-        entry = {"agent": agent.name, "types": []}
-        if agent.agents_path and agent.agents_path.exists():
-            files = list(agent.agents_path.rglob("*.md"))
-            if files:
-                entry["types"].append({"type": "project", "path": str(agent.agents_path), "files": len(files)})
-        if agent.agents_path_global and agent.agents_path_global.exists():
-            files = list(agent.agents_path_global.rglob("*.md"))
-            if files:
-                entry["types"].append({"type": "global", "path": str(agent.agents_path_global), "files": len(files)})
-        if entry["types"]:
-            result.append(entry)
-
-    if json_output:
-        console.print_json(json.dumps(result, indent=2))
-        return
-
-    console.print("\n[bold]🤖 Custom Agents\n[/]\n")
-    table = Table(box=box.SIMPLE)
-    table.add_column("Agent", style="cyan")
-    table.add_column("Type", style="yellow")
-    table.add_column("Path", style="dim")
-    table.add_column("Files", style="green")
-
-    for entry in result:
-        for t in entry["types"]:
-            table.add_row(
-                entry["agent"],
-                t["type"].capitalize(),
-                t["path"],
-                str(t["files"])
-            )
-
-    if not result:
-        console.print("[yellow]No custom agents found.[/yellow]\n")
-        console.print("Custom agents are stored in:")
-        console.print("  • [dim]~/.claude/agents/[/dim] - Claude Code global agents")
-        console.print("  • [dim].claude/agents/[/dim] - Claude Code project agents")
-        console.print("  • [dim]~/.config/opencode/agents/[/dim] - OpenCode global agents")
-        console.print("  • [dim].opencode/agents/[/dim] - OpenCode project agents\n")
-        return
-
-    console.print(table)
-    console.print()
-
-
-@skills.command()
-@click.option("--json", "json_output", is_flag=True, help="Output as JSON for programmatic use")
-def diff(json_output: bool):
-    """Show differences between local and remote skills."""
-    import json
-    from .skills_diff import SkillsDiff
-
-    diff_mgr = SkillsDiff()
-
-    if not diff_mgr.repo_dir:
-        console.print("[yellow]⚠ No repository configured yet.[/yellow]")
-        console.print("Run [green]agent-sync init[/green] or [green]agent-sync link[/green] first.\n")
-        return
-
-    diff_data = diff_mgr.get_diff_data()
-    if json_output:
-        console.print_json(json.dumps(diff_data, indent=2))
-        return
-
-    diff_mgr.show_diff()
-
-
-@skills.command()
-@click.option("--auto", is_flag=True, help="Auto-resolve: keep local for all divergences")
-@click.option("--dry-run", is_flag=True, help="Show what would be done without applying")
-@click.option("--json", "json_output", is_flag=True, help="Output diff as JSON for programmatic use")
-def reconcile(auto: bool, dry_run: bool, json_output: bool):
-    """Reconcile differences between local and remote skills.
-
-    \b
-    Resolves divergences where skills exist only locally or only remotely.
-
-    \b
-    Examples:
-      # Interactive reconciliation
-      agent-sync skills reconcile
-
-      # Auto-resolve (keep local for all)
-      agent-sync skills reconcile --auto
-
-      # Dry run (preview)
-      agent-sync skills reconcile --dry-run
-
-    \b
-    Actions:
-      - Local-only skills: Will be added to remote on next push
-      - Remote-only skills: Choose to download or delete from remote
-    """
-    import json
-    from .skills_reconcile import SkillsReconcile
-
-    reconcile_mgr = SkillsReconcile()
-
-    if not reconcile_mgr.repo_dir:
-        console.print("[yellow]⚠ No repository configured yet.[/yellow]")
-        console.print("Run [green]agent-sync init[/green] or [green]agent-sync link[/green] first.\n")
-        return
-
-    if json_output:
-        diff_data = reconcile_mgr.get_diff_data()
-        console.print_json(json.dumps(diff_data, indent=2))
-        return
-
-    from rich.prompt import Confirm
-
-    # Get decisions
-    if auto:
-        # Auto mode: keep local for everything
-        from .skills_diff import SkillsDiff
-        diff_mgr = SkillsDiff()
-        diff_result = diff_mgr.diff()
-
-        decisions = {}
-        for skill in diff_result["local_only"]:
-            decisions[skill] = "local"
-        for skill in diff_result["remote_only"]:
-            decisions[skill] = "remote"  # Download to local
-
-        if not decisions:
-            console.print("[green]✓ No divergences to reconcile[/green]\n")
-            return
-
-        console.print(f"[bold]Auto mode: {len(decisions)} skills will be reconciled[/]\n")
-    else:
-        # Interactive mode
-        decisions = reconcile_mgr.reconcile_interactive()
-
-        if not decisions:
-            return
-
-        if not dry_run:
-            if not Confirm.ask("Apply these changes?", default=True):
-                console.print("\n[yellow]Reconciliation cancelled.[/yellow]\n")
-                return
-
-    # Apply decisions
-    stats = reconcile_mgr.apply_decisions(decisions, dry_run=dry_run)
-    reconcile_mgr.show_summary(stats)
-
-    # Ask if user wants to push
-    if not dry_run and (stats["added_to_remote"] > 0 or stats["downloaded_to_local"] > 0):
-        from rich.prompt import Confirm
-
-        should_push = Confirm.ask(
-            "\n[bold]Would you like to push these changes to GitHub now?[/]",
-            default=True,
+    
+    if not no_wizard:
+        console.print("\n[bold cyan]agent-sync Initializer[/bold cyan]\n")
+        console.print("This will create a .sync/ directory with your agent configurations.\n")
+    
+    # Get agents to sync
+    if not agents:
+        console.print("[cyan]Available agents:[/cyan]")
+        console.print("  • opencode - RooCode extension")
+        console.print("  • claude-code - Claude Code")
+        console.print("  • gemini-cli - Gemini CLI")
+        console.print("  • pi.dev - Pi.dev")
+        console.print("  • qwen-code - Qwen Code\n")
+        
+        agents_input = Prompt.ask(
+            "\n[cyan]Which agents?[/cyan] (comma-separated)",
+            default="all",
         )
-
-        if should_push:
-            console.print("\n[bold]📤 Pushing to GitHub...[/]\n")
-            push_to_github(message="chore: reconcile skills")
-
-
-@skills.command()
-@click.argument("skill_names", nargs=-1, required=False)
-@click.option("--dry-run", is_flag=True, help="Show what would be deleted without actually deleting")
-@click.option("--push", is_flag=True, help="Automatically push to GitHub after deleting")
-@click.option("--interactive/--no-interactive", default=True, help="Toggle interactive TUI selection")
-def delete(skill_names: tuple[str, ...], dry_run: bool, push: bool, interactive: bool):
-    """Delete skills from hub and all agent directories.
-
-    \b
-    Examples:
-      # Interactive selection (default)
-      agent-sync skills delete
-
-      # Delete specific skills
-      agent-sync skills delete my-skill another-skill
-
-      # Dry run (see what would be deleted)
-      agent-sync skills delete my-skill --dry-run
-
-      # Delete and push to GitHub
-      agent-sync skills delete my-skill --push
-
-    \b
-    What happens:
-      1. Deletes skills from ~/.agents/skills/ (hub)
-      2. Deletes copies from all agent directories
-      3. Optionally pushes changes to GitHub
-
-    \b
-    Note: To delete ALL skills, use interactive mode and type 'all'.
-    """
-    from rich import box
-    from rich.prompt import Confirm, Prompt
-    from rich.table import Table
-
-    from ._selection import parse_multiselect_input
-    from .skills_delete import SkillsDeleter
-
-    deleter = SkillsDeleter()
-
-    # Get list of all available skills
-    all_skills = deleter.list_skills()
-
-    if not all_skills:
-        console.print("[yellow]No skills found in ~/.agents/skills/[/yellow]\n")
-        return
-
-    # Determine which skills to delete
-    skills_to_delete = set()
-
-    if skill_names:
-        # Validate provided skill names
-        from .validators import validate_skill_name
-        for name in skill_names:
-            if not validate_skill_name(name):
-                console.print(f"[red]✗ Invalid skill name: {name}[/red]")
-                console.print("[dim]Skill names must be alphanumeric and can contain hyphens, underscores, and periods.[/dim]")
-                raise click.Abort()
-        skills_to_delete = set(skill_names)
-    elif interactive:
-        # Interactive TUI selection
-        console.print("\n[bold red]🗑 Select Skills to Delete[/bold red]\n")
-
-        selected = set()
-
-        while True:
-            table = Table(box=box.SIMPLE)
-            table.add_column("#", style="dim", width=4)
-            table.add_column("Status", style="green", width=8)
-            table.add_column("Skill Name", style="cyan")
-
-            for idx, name in enumerate(sorted(all_skills), 1):
-                status = "[red]✓ DEL[/]" if name in selected else ""
-                table.add_row(f"{idx}.", status, name)
-
-            console.print(table)
-            console.print(f"\n[dim]Selected: {len(selected)} / {len(all_skills)} skills[/dim]\n")
-            console.print("[bold]Controls:[/bold]")
-            console.print("  • Enter numbers to toggle (e.g. [green]'1,3,5'[/green])")
-            console.print("  • Type [cyan]'all'[/cyan] or [cyan]'none'[/cyan]")
-            console.print("  • Press [bold white]Enter[/] when done")
-
-            choice = Prompt.ask("\nSelection", default="done")
-            result = parse_multiselect_input(choice, all_skills, selected)
-            if result is None:
-                break
-            selected = result
-
-        skills_to_delete = selected
-    else:
-        console.print("[yellow]No skills specified.[/yellow]\n")
-        console.print("Usage: [green]agent-sync skills delete <skill-name> [skill-name...][/green]\n")
-        console.print("Or run interactively: [green]agent-sync skills delete[/green]\n")
-        return
-
-    if not skills_to_delete:
-        console.print("[yellow]No skills selected for deletion.[/yellow]\n")
-        return
-
-    # Show confirmation
-    console.print(f"\n[bold red]⚠ Skills to be deleted ({len(skills_to_delete)}):[/]\n")
-
-    for name in sorted(skills_to_delete):
-        console.print(f"  • {name}")
-
-    console.print()
-
-    if not dry_run:
-        if not Confirm.ask("Continue with deletion?", default=True):
-            console.print("\n[yellow]Deletion cancelled.[/yellow]\n")
-            return
-
-    # Delete skills
-    stats = deleter.delete_skills(list(skills_to_delete), dry_run=dry_run)
-
-    # Show summary
-    console.print("\n[bold]📊 Summary:[/]\n")
-
-    if dry_run:
-        console.print(f"  [yellow]Would delete {stats['deleted_from_hub']} skills ({stats['hub_files']} files) from hub[/yellow]")
-        console.print(f"  [yellow]Would delete {stats['deleted_from_agents']} agent copies ({stats['agent_files']} files)[/yellow]")
-    else:
-        total_files = stats['hub_files'] + stats['agent_files']
-        console.print(f"  [green]✓ Deleted {stats['deleted_from_hub']} skills[/green] ({stats['hub_files']} files from hub)")
-        console.print(f"  [green]✓ Deleted {stats['deleted_from_agents']} agent copies[/green] ({stats['agent_files']} files)")
-        console.print(f"\n  [dim]Total: {total_files} files removed[/dim]")
-
-    if stats["not_found"] > 0:
-        console.print(f"  [yellow]⚠ {stats['not_found']} skills not found[/yellow]")
-    if stats["errors"] > 0:
-        console.print(f"  [red]✗ {stats['errors']} errors[/red]")
-
-    console.print()
-
-    # Ask if user wants to push
-    should_push = push
-
-    if not should_push and not dry_run:
-        should_push = Confirm.ask(
-            "[bold]Would you like to push these changes to GitHub now?[/]",
-            default=True,
-        )
-
-    if should_push and not dry_run:
-        console.print("\n[bold]📤 Pushing to GitHub...[/]\n")
-        push_to_github(message="chore: delete skills")
-    elif not dry_run:
-        console.print("💡 Run [green]agent-sync push[/green] to sync to GitHub\n")
-
-
-@skills.command()
-@click.option("--copy", is_flag=True, help="Copy instead of moving skills")
-@click.option("--push", is_flag=True, help="Automatically push to GitHub after centralizing")
-@click.option("--distribute", is_flag=True, help="After centralizing, copy all skills to all agent directories (for backup or testing)")
-@click.option("--yes", is_flag=True, help="Non-interactive: skip all orphans, auto-keep")
-@click.option("--import-all", is_flag=True, help="Import all orphans without TUI (old behavior)")
-@click.option("--dry-run", is_flag=True, help="Show what would be done without changing anything")
-def centralize(copy: bool, push: bool, distribute: bool,
-               yes: bool, import_all: bool, dry_run: bool):
-    """Centralize skills from all agents to ~/.agents/skills/.
-
-    This command scans all agent directories for existing skills and centralizes
-    them to the global ~/.agents/skills/ directory (single source of truth).
-
-    \b
-    Examples:
-      # Move skills (default - removes from agent directories)
-      agent-sync skills centralize
-
-      # Copy skills (keeps originals in agent directories)
-      agent-sync skills centralize --copy
-
-      # Move skills and push to GitHub automatically
-      agent-sync skills centralize --push
-
-      # Copy skills and push to GitHub
-      agent-sync skills centralize --copy --push
-
-      # Centralize AND copy to all agent directories (backup/testing)
-      agent-sync skills centralize --distribute
-
-    \b
-    What happens:
-      1. Scans all agent directories for skills
-      2. Detects conflicts (same skill name in multiple agents)
-      3. Resolves conflicts by renaming with agent prefix
-      4. Moves/copies skills to ~/.agents/skills/
-      5. Optionally pushes to GitHub
-      6. With --distribute: copies all skills to all agent directories
-
-    \b
-    After centralizing:
-      - Skills live in ~/.agents/skills/ (source of truth)
-      - Agents use symlinks or config to access global skills
-      - Original skill directories may be removed (if --copy not used)
-      - With --distribute: all agents have local copies for backup/testing
-    """
-    from rich.prompt import Confirm
-
-    # Ensure DotAgents structure (.agents/ directory)
-    from .centralize.handlers.dot_agents_handler import DotAgentsHandler
-    from .skills import SkillsManager
-    handler = DotAgentsHandler()
-    handler.ensure_structure(dry_run=dry_run)
-    console.print()
-
-    move = not copy
-    action = "Copying" if copy else "Moving"
-
-    console.print(f"\n[bold]📁 {action} Skills[/]\n")
-
-    skills_mgr = SkillsManager()
-    stats = skills_mgr.centralize(move=move, skip_orphans=yes,
-                                 import_all=import_all, dry_run=dry_run)
-
-    # Show final reassurance
-    console.print("[bold green]🎉 Centralization Complete![/bold green]\n")
-    console.print("What happened:\n")
-
-    if move:
-        console.print(f"  ✓ [green]{stats['moved']} skills moved[/green] to ~/.agents/skills/")
-        console.print("    [dim]Original files removed from agent directories[/dim]\n")
-    else:
-        console.print(f"  ✓ [green]{stats['copied']} skills copied[/green] to ~/.agents/skills/")
-        console.print("    [dim]Original files kept in agent directories[/dim]\n")
-
-    if stats['symlinks_removed'] > 0:
-        console.print(f"  ✓ [yellow]{stats['symlinks_removed']} user symlinks removed[/yellow]")
-        console.print("    [dim]Cleaning up manual symlinks from agent directories[/dim]\n")
-
-    if stats['conflicts_resolved'] > 0:
-        console.print(f"  ✓ [yellow]{stats['conflicts_resolved']} conflicts resolved[/yellow]")
-        console.print("    [dim]Duplicate skill names renamed with agent prefix[/dim]\n")
-
-    console.print("Where are my skills now?\n")
-    console.print("  [bold cyan]~/.agents/skills/[/bold cyan] [dim]← Single source of truth[/dim]\n")
-    console.print("All your skills are now in one place and will be synced to GitHub.\n")
-
-    if move:
-        console.print("[dim]Note: Agent directories now use symlinks or config to read from ~/.agents/skills/[/dim]\n")
-
-    # Optional: distribute skills to all agent directories
-    if distribute:
-        console.print("\n[bold]📤 Distributing Skills to All Agents[/]\n")
-        console.print("[yellow]⚠ This will copy ALL skills to ALL agent directories.[/yellow]\n")
-        console.print("Use this for:")
-        console.print("  • Backup: local copies in each agent directory")
-        console.print("  • Testing: verify agents read from local vs global")
-        console.print("  • Debug: troubleshoot symlink/config issues\n")
-
-        if Confirm.ask("Continue with distribution?", default=True):
-            dist_stats = skills_mgr.distribute_to_all_agents()
-            console.print(f"\n[green]✓ Distributed {dist_stats['distributed']} skills to {dist_stats['agents_configured']} agents[/green]\n")
-            console.print("[dim]Note: Native agents (pi.dev, qwen-code) will still prefer ~/.agents/skills/[/dim]\n")
+        
+        if agents_input.lower() == "all":
+            agents = ("opencode", "claude-code", "gemini-cli", "pi.dev", "qwen-code")
         else:
-            console.print("\n[yellow]⚠ Distribution skipped[/yellow]\n")
-
-    # Ask if user wants to push
-    should_push = push
-
-    if not should_push:
-        should_push = Confirm.ask(
-            "\n[bold]Would you like to push these changes to GitHub now?[/]",
-            default=True,
-        )
-
-    if should_push:
-        console.print("\n[bold]📤 Pushing to GitHub...[/]\n")
-        push_to_github(message="chore: centralize skills")
+            agents = tuple(a.strip() for a in agents_input.split(","))
+    
+    private = not no_wizard and Confirm.ask("Create private repository?", default=False)
+    
+    if no_wizard:
+        repo_name = name or "agent-sync"
     else:
-        console.print("💡 Run [green]agent-sync push[/green] to sync to GitHub\n")
-
-
-@skills.command()
-@click.option("--repo", "repo_url", help="GitHub repository URL for publishing skills")
-@click.option("--dry-run", is_flag=True, help="Show what would be published without actually publishing")
-@click.option("--interactive/--no-interactive", default=True, help="Toggle interactive TUI selection")
-def publish(repo_url: str | None, dry_run: bool, interactive: bool):
-    """[DEPRECATED] Use 'agent-sync publish --skills' instead."""
-    console.print("[yellow]⚠️  Warning: 'agent-sync skills publish' is deprecated.[/yellow]")
-    console.print("[yellow]Use 'agent-sync publish --skills' instead.[/yellow]\n")
-    from .publish import publish_skills
-    success = publish_skills(repo_url=repo_url, dry_run=dry_run, interactive=interactive)
-    if not success:
-        raise click.Abort()
-
-
-@main.command()
-@click.argument("repo_url")
-def link(repo_url: str):
-    """Link to an existing sync repository (additional machines)."""
-    if not validate_github_url(repo_url):
-        console.print("\n[red]✗ Invalid repository URL[/red]")
-        console.print("   Expected: https://github.com/user/repo.git")
-        console.print(f"   Got: {repo_url}\n")
-        raise click.Abort()
-
-    console.print(f"\n🔗 Linking to repository: {repo_url}")
-
-    config = Config()
-    sync_manager = SyncManager(config)
-
-    try:
-        sync_manager.link_repo(repo_url)
-        console.print("\n✅ Successfully linked to repository")
-        console.print("\n📥 Run 'agent-sync pull' to download configs")
-    except Exception as e:
-        console.print(f"\n❌ Error: {e}", style="red")
-        raise click.Abort()
-
-
-@main.command()
-@click.option("--force", is_flag=True, help="Force pull even with local changes")
-@click.option("--skills-only", is_flag=True, help="Pull only skills (not configs)")
-@click.option("--configs-only", is_flag=True, help="Pull only configs (not skills)")
-@click.option("--agents-only", is_flag=True, help="Pull only custom agents (not configs or skills)")
-def pull(force: bool, skills_only: bool, configs_only: bool, agents_only: bool):
-    """Fetch and apply remote configuration.
-
-    Restores global skills, extension skills, symlinks, and custom agents automatically.
-
-    Examples:
-      # Pull everything (default)
-      agent-sync pull
-
-      # Pull only skills
-      agent-sync pull --skills-only
-
-      # Pull only configs
-      agent-sync pull --configs-only
-
-      # Pull only custom agents
-      agent-sync pull --agents-only
-
-      # Force pull (overwrite local changes)
-      agent-sync pull --force
-    """
-    console.print("\n📥 Pulling remote configuration...")
-
-    # Check for updates asynchronously (once per week)
-    check_for_updates_async()
-
-    config = Config()
-    sync_manager = SyncManager(config)
-
-    try:
-        changes = sync_manager.pull(force=force, skills_only=skills_only, configs_only=configs_only, agents_only=agents_only)
-        if changes:
-            console.print(f"\n✅ Applied {len(changes)} changes:")
-            for change in changes:
-                console.print(f"  • {change}", style="green")
-        else:
-            console.print("\n✓ Already up to date", style="yellow")
-    except Exception as e:
-        console.print(f"\n❌ Error: {e}", style="red")
-        raise click.Abort()
-
-    # Show update notification if available
-    show_pending_update_notification()
-
-
-@main.command()
-@click.option("-m", "--message", default="chore: sync config updates", help="Commit message")
-@click.option("--skills-only", is_flag=True, help="Push only skills (not configs)")
-@click.option("--configs-only", is_flag=True, help="Push only configs (not skills)")
-@click.option("--agents-only", is_flag=True, help="Push only custom agents (not configs or skills)")
-def push(message: str, skills_only: bool, configs_only: bool, agents_only: bool):
-    """Commit and push local changes.
-
-    Backs up global skills, extension skills, symlinks, and custom agents automatically.
-
-    Examples:
-      # Push everything (default)
-      agent-sync push
-
-      # Push only skills
-      agent-sync push --skills-only
-
-      # Push only configs
-      agent-sync push --configs-only
-
-      # Push only custom agents
-      agent-sync push --agents-only
-
-      # Push with custom message
-      agent-sync push -m "feat: add new skill"
-    """
-    console.print("\n📤 Pushing local changes...")
-
-    # Check for updates asynchronously (once per week)
-    check_for_updates_async()
-
-    config = Config()
-    sync_manager = SyncManager(config)
-
-    try:
-        pushed = sync_manager.push(message=message, skills_only=skills_only, configs_only=configs_only, agents_only=agents_only)
-        _render_push_output(pushed)
-    except Exception as e:
-        console.print(f"\n❌ Error: {e}", style="red")
-        raise click.Abort()
-
-    # Show update notification if available
-    show_pending_update_notification()
-
-
-@main.command()
-@click.option("--dry-run", is_flag=True, help="Show merge preview without creating file")
-@click.option("--force", is_flag=True, help="Overwrite existing ~/.agents/mcp.json")
-@click.option("--conflicts", is_flag=True, help="Show only conflict report")
-@click.option("--source", "-s", multiple=True, type=click.Path(exists=True), help="Additional MCP config sources")
-@click.option("--output", type=click.Path(), default=None, help="Output path")
-def mcp(dry_run: bool, force: bool, conflicts: bool, source: tuple[str, ...], output: str | None):
-    """Export unified MCP configuration.
-
-    Scans vendor MCP configs and merges them into ~/.agents/mcp.json.
-    Does NOT modify vendor configs - creates a unified DotAgents-compatible file.
-
-    \b
-    Examples:
-      # Scan and preview merge
-      agent-sync mcp --dry-run
-
-      # Export unified MCP config
-      agent-sync mcp --force
-
-      # Show only conflicts
-      agent-sync mcp --conflicts
-
-      # Add custom sources
-      agent-sync mcp --force -s ~/.custom/mcp.json
-    """
-    from pathlib import Path
-
-    from .mcp_merger import MCPMerger
-
-    sources = [Path(s) for s in source]
-    merger = MCPMerger(sources=sources if sources else None)
-
-    # Find MCP configs
-    found = merger.find_mcp_configs()
-    if not found and not sources:
-        console.print("[yellow]⚠ No MCP configs found in known locations.[/yellow]")
-        console.print("[dim]Known locations: ~/.claude/mcp.json, ~/.cursor/mcp.json[/dim]")
-        console.print("[dim]Use --source to specify custom locations.[/dim]\n")
-        return
-
-    console.print("\n[bold]📋 MCP Config Sources[/bold]\n")
-    for src in (found + sources):
-        console.print(f"  • {src}")
-    console.print()
-
-    # Merge
-    merger.merge()
-
-    # Show conflicts
-    if merger.conflicts:
-        console.print(merger.get_conflict_report())
-
-    if conflicts:
-        return
-
-    output_path = Path(output) if output else MCPMerger.DEFAULT_OUTPUT
-
-    if dry_run:
-        console.print(f"[dim]Would export to: {output_path}[/dim]\n")
-        console.print_json(data=merger.merge())
-        console.print()
-    elif output_path.exists() and not force:
-        console.print(f"[yellow]⚠ {output_path} exists. Use --force to overwrite.[/yellow]\n")
-    else:
-        merger.save(output_path)
-        console.print(f"[green]✓[/green] Unified MCP config exported to {output_path}")
-        console.print(f"[dim]Servers: {len(merger.servers)}, Conflicts: {len(merger.conflicts)}[/dim]\n")
-
-
-@main.command()
-@click.option("--json", "json_output", is_flag=True, help="Output as JSON for programmatic use")
-def status(json_output: bool):
-    """Show sync status and last sync times."""
-    import json
-
-    config = Config()
-    sync_manager = SyncManager(config)
-
-    try:
-        status_info = sync_manager.get_status()
-
-        if json_output:
-            # JSON output mode
-            output = {
-                "repo_url": config.repo_url,
-                "agents": {}
-            }
-            for agent, info in status_info.items():
-                output["agents"][agent] = {
-                    "status": info["status"],
-                    "installed": info.get("installed", False),
-                    "last_sync": info["last_sync"],
-                    "changes": info["changes"]
-                }
-            console.print_json(json.dumps(output))
-            return
-
-        # Human-readable output
-        console.print("\n📊 Sync Status\n")
-
-        table = Table(show_header=True, header_style="bold magenta")
-        table.add_column("Agent", style="cyan")
-        table.add_column("Status", style="green")
-        table.add_column("Installed", style="yellow")
-        table.add_column("Last Sync", style="blue")
-        table.add_column("Changes", style="red")
-
-        for agent, info in status_info.items():
-            # Status with color coding
-            status = info["status"]
-            if status == "active":
-                status_display = "✅ active"
-            elif status == "not_installed":
-                status_display = "⚠️ not_installed"
-            elif status == "disabled":
-                status_display = "❌ disabled"
-            else:
-                status_display = status
-
-            # Installed indicator
-            installed = info.get("installed", False)
-            if installed:
-                installed_display = "✓"
-            elif status == "disabled":
-                installed_display = "-"  # Don't care if disabled
-            else:
-                installed_display = "✗"
-
-            table.add_row(
-                agent,
-                status_display,
-                installed_display,
-                info["last_sync"],
-                info["changes"] or "-",
-            )
-
-        console.print(table)
-
-        # Legend
-        console.print("\n[dim]Legend:[/]")
-        console.print("  [green]✅ active[/] = Enabled in config + Installed")
-        console.print("  [yellow]⚠️ not_installed[/] = Enabled in config but not installed")
-        console.print("  [dim]❌ disabled[/] = Disabled in config\n")
-
-        if config.repo_url:
-            console.print(f"🔗 Repository: {config.repo_url}")
-    except Exception as e:
-        console.print(f"\n❌ Error: {e}", style="red")
-        raise click.Abort()
-
-
-@main.group(cls=ExtendedHelpGroup)
-def secrets():
-    """Manage secrets and environment variables.
-
-    Subcommands:
-      list     List all secrets/environment variables
-      edit     Edit secrets in your $EDITOR
-      enable   Enable secrets synchronization
-      disable  Disable secrets synchronization
-
-    Note: agent-sync does not scrub secrets. Config files are synced as-is.
-    ALWAYS use a private repository.
-    """
-    pass
-
-
-@secrets.command("list")
-@click.option("--json", "json_output", is_flag=True, help="Output as JSON for programmatic use")
-def list_secrets(json_output: bool):
-    """List all secrets and environment variables."""
-    import json
-    from .secrets import SecretsManager
+        repo_name = name or Prompt.ask("Repository name", default="agent-sync")
     
-    secrets_mgr = SecretsManager()
+    success = sync_manager.init_repo(name=repo_name, private=private, agents=agents)
     
-    if json_output:
-        env_vars = {}
-        if secrets_mgr.env_file.exists():
-            content = secrets_mgr.env_file.read_text()
-            if content.strip():
-                for line in content.strip().split('\n'):
-                    line = line.strip()
-                    if line and not line.startswith('#') and '=' in line:
-                        key, _, value = line.partition('=')
-                        env_vars[key.strip()] = value.strip()
-        result = {
-            "env_file": str(secrets_mgr.env_file),
-            "exists": secrets_mgr.env_file.exists(),
-            "variables": env_vars,
-        }
-        console.print_json(json.dumps(result, indent=2))
-        return
-    
-    console.print("\n[bold]🔐 Secrets Manager[/]\n")
-    console.print(f"[dim].env file: {secrets_mgr.env_file}[/dim]\n")
-
-    # Show .env content
-    if secrets_mgr.env_file.exists():
-        content = secrets_mgr.env_file.read_text()
-        if content.strip():
-            console.print("[bold green]✓ .env file found:[/]")
-            console.print(f"[dim]{content}[/dim]\n")
-        else:
-            console.print("[yellow]⚠ .env file is empty[/yellow]\n")
-    else:
-        console.print("[yellow]⚠ No .env file found yet[/yellow]")
-        console.print("Run [green]agent-sync secrets edit[/green] to create one.\n")
-
-
-@secrets.command()
-def edit():
-    """Edit secrets in your $EDITOR."""
-    from .secrets import SecretsManager
-
-    secrets_mgr = SecretsManager()
-
-    # Create empty .env if not exists
-    if not secrets_mgr.env_file.exists():
-        secrets_mgr.env_file.parent.mkdir(parents=True, exist_ok=True)
-        secrets_mgr.env_file.write_text("# agent-sync environment variables\n")
-
-    # Open in editor
-    editor = os.environ.get("EDITOR", "nano")
-    try:
-        subprocess.run([editor, str(secrets_mgr.env_file)], check=True)
-        console.print("\n[green]✓ Secrets saved[/green]\n")
-    except FileNotFoundError:
-        console.print(f"\n[yellow]Editor '{editor}' not found[/yellow]")
-        console.print(f"Edit manually: {secrets_mgr.env_file}\n")
-    except Exception as e:
-        console.print(f"\n[red]Error: {e}[/red]\n")
-
-
-
-@secrets.command()
-def enable():
-    """Enable secrets synchronization."""
-    from .secrets import SecretsManager
-
-    secrets_mgr = SecretsManager()
-    secrets_mgr.enable()
-    console.print("\n[green]✓ Secrets synchronization enabled[/green]")
-    console.print("[dim]Warning: Secrets will be synced to your repository[/dim]\n")
-    console.print("[yellow]⚠️  IMPORTANT: Only use with a PRIVATE repository![/yellow]\n")
-
-
-
-@secrets.command()
-def disable():
-    """Disable secrets synchronization."""
-    from .secrets import SecretsManager
-
-    secrets_mgr = SecretsManager()
-    secrets_mgr.disable()
-    console.print("\n[green]✓ Secrets synchronization disabled[/green]\n")
-    console.print("[dim]Secrets will NOT be synced to your repository[/dim]\n")
-
-
-@main.command()
-def update():
-    """Check for available updates and install them."""
-    import os
-    import subprocess
-
-    import requests
-    from packaging import version
-    from rich.panel import Panel
-    from rich.prompt import Confirm
-
-    console.print("[bold]🔍 Checking for updates...[/]\n")
-
-    current = __version__
-
-    try:
-        # Try with GITHUB_TOKEN if available (for private repos)
-        headers = {}
-        token = os.environ.get("GITHUB_TOKEN")
-        if token:
-            headers["Authorization"] = f"token {token}"
-
-        response = requests.get(
-            "https://api.github.com/repos/renatocaliari/agent-sync/releases/latest",
-            headers=headers,
-            timeout=5,
-        )
-
-        if response.status_code == 404:
-            console.print(f"[dim]Current version: v{current}[/dim]")
-            console.print("[yellow]⚠ No official releases found on GitHub[/yellow]\n")
-            return
-
-        response.raise_for_status()
-        latest_data = response.json()
-        latest = latest_data["tag_name"].lstrip("v")
-
-        # Use proper version comparison (handles dev versions correctly)
-        try:
-            current_ver = version.parse(current)
-            latest_ver = version.parse(latest)
-
-            # Skip update check if current is a dev version
-            if current_ver.is_devrelease:
-                console.print(f"[dim]Current version: v{current} (development)[/dim]")
-                console.print("[yellow]⚠ You are running a development version.[/yellow]")
-                console.print("Update manually with: [cyan]pipx upgrade agent-sync[/cyan]\n")
-                return
-
-            if latest_ver > current_ver:
-                console.print(f"✨ [green]Update available:[/green] [bold]v{latest}[/] (Current: v{current})")
-            else:
-                console.print(f"✓ [green]Up to date:[/green] [bold]v{current}[/]\n")
-                return
-        except Exception:
-            # Fallback to string comparison if packaging fails
-            if latest > current:
-                console.print(f"✨ [green]Update available:[/green] [bold]v{latest}[/] (Current: v{current})")
-            else:
-                console.print(f"✓ [green]Up to date:[/green] [bold]v{current}[/]\n")
-                return
-
-        if Confirm.ask("\nDo you want to update now?", default=True):
-            console.print("\n🚀 [bold]Updating agent-sync...[/]")
-
-            # Execution logic with captured output for better UX
-            def run_upgrade(cmd_list):
-                return subprocess.run(cmd_list, capture_output=True, text=True, timeout=120)
-
-            # 1. Try PIPX
-            res = run_upgrade(["pipx", "upgrade", "agent-sync"])
-            if res.returncode == 0:
-                console.print("\n[bold green]✅ Updated successfully via pipx![/bold green]\n")
-                return
-
-            # 2. Try PIP with safety flag
-            cmd_pip = ["python3", "-m", "pip", "install", "--upgrade", "git+https://github.com/renatocaliari/agent-sync.git", "--break-system-packages"]
-            res = run_upgrade(cmd_pip)
-            if res.returncode == 0:
-                console.print("\n[bold green]✅ Updated successfully via pip![/bold green]\n")
-                return
-
-            # 3. If all fails, show a beautiful help panel
-            error_msg = res.stderr or res.stdout
-            is_managed = "externally-managed-environment" in error_msg
-
-            instruction = ""
-            if is_managed:
-                instruction = (
-                    "[yellow]Your Python environment is managed by the OS (macOS/Linux).[/yellow]\n\n"
-                    "[bold]Please run one of these commands manually:[/]\n\n"
-                    "  [cyan]pipx upgrade agent-sync[/cyan] (Recommended)\n"
-                    "  [cyan]python3 -m pip install --upgrade git+https://github.com/renatocaliari/agent-sync.git --break-system-packages[/cyan]"
-                )
-            else:
-                instruction = (
-                    f"[red]Update failed with error:[/red] {error_msg[:100]}...\n\n"
-                    "[bold]Try manual update:[/]\n"
-                    "  [cyan]pipx upgrade agent-sync[/cyan]"
-                )
-
-            console.print("\n")
-            console.print(Panel(instruction, title="[bold red]Update Required[/bold red]", expand=False))
-            console.print("\n")
-
-    except Exception as e:
-        console.print(f"[dim]Current version: v{current}[/dim]")
-        console.print(f"[yellow]⚠ Could not check for updates: {e}\n[/yellow]")
-
-
-@main.command()
-@click.option("--skills", is_flag=True, help="Publish skills")
-@click.option("--agents", is_flag=True, help="Publish agent instructions (AGENTS.md, GEMINI.md, etc.)")
-@click.option("--all", "publish_all", is_flag=True, default=True, help="Publish both skills and agent instructions (default)")
-@click.option("--dry-run", is_flag=True, help="Show what would be published without actually publishing")
-@click.option("--repo", "repo_url", help="GitHub repository URL")
-@click.pass_context
-def publish(ctx, skills: bool, agents: bool, publish_all: bool, dry_run: bool, repo_url: str | None):
-    """
-    Publish skills and/or agent instructions to a public GitHub repository.
-
-
-    Default: publishes BOTH skills and agent instructions (--all).
-    Use --skills or --agents to publish only one type.
-
-
-    \b
-    Examples:
-      # Publish both skills AND agent instructions (default)
-      agent-sync publish
-
-      # Publish only skills
-      agent-sync publish --skills
-
-      # Publish only agent instructions
-      agent-sync publish --agents
-
-      # Preview what would be published
-      agent-sync publish --dry-run
-
-      # Publish to a specific repository
-      agent-sync publish --repo https://github.com/user/my-repo
-    """
-    from rich import box
-    from rich.panel import Panel
-    from rich.prompt import Confirm
-    from rich.table import Table
-
-    from .publish import (
-        _interactive_flagged_selection,
-        format_issues_for_display,
-        get_available_agents,
-        get_available_skills,
-        publish_agents,
-        publish_skills,
-        scan_file,
-    )
-
-    # Default: publish all if no specific flags
-    do_all = publish_all and not skills and not agents
-    do_skills = skills or do_all
-    do_agents = agents or do_all
-
-    # ============================================================================
-    # PHASE 1: Discovery - Collect what will be published
-    # ============================================================================
-    skills_count = 0
-    agents_count = 0
-    available_skills = []
-    available_agents = []
-    scan_results = {}
-    skills_flagged = []  # Initialize to avoid UnboundLocalError
-
-    if do_skills:
-        available_skills = get_available_skills()
-        skills_count = len(available_skills)
-
-        # Scan skills for security
-        skills_scan_results = {}
-        for skill in available_skills:
-            if skill["path"].is_dir():
-                for f in skill["path"].rglob("*"):
-                    if f.is_file() and not f.name.startswith("."):
-                        result = scan_file(f)
-                        skills_scan_results[f] = result
-                        if not result.safe or any(i.get('context') != 'variable' and i['severity'] in ('high', 'critical') for i in result.issues):
-                            skills_flagged.append((f, skill["name"], result))
-            elif skill["path"].is_file():
-                result = scan_file(skill["path"])
-                skills_scan_results[skill["path"]] = result
-                # Also flag if has high/critical issues even if not marked unsafe
-                if not result.safe or any(i.get('context') != 'variable' and i['severity'] in ('high', 'critical') for i in result.issues):
-                    skills_flagged.append((skill["path"], skill["name"], result))
-
-    if do_agents:
-        available_agents = get_available_agents()
-        agents_count = len(available_agents)
-
-        # Scan agents for security
-        for agent in available_agents:
-            scan_results[agent["path"]] = scan_file(agent["path"])
-
-    # Check if anything to publish
-    if skills_count == 0 and agents_count == 0:
-        console.print("\n[yellow]⚠ Nothing found to publish.[/yellow]\n")
-        if do_skills:
-            console.print("[dim]Run [green]agent-sync skills centralize[/green] first.[/dim]\n")
-        return
-
-    # ============================================================================
-    # PHASE 2: Show Summary
-    # ============================================================================
-    console.print("\n[bold]📋 Publishing Summary[/]\n")
-
-    if do_skills:
-        if skills_count > 0:
-            console.print(f"[cyan]📚 Skills:[/cyan] {skills_count} found in ~/.agents/skills/")
-        else:
-            console.print("[cyan]📚 Skills:[/cyan] None found")
-
-    if do_agents:
-        if agents_count > 0:
-            unsafe_count = sum(1 for r in scan_results.values() if not r.safe)
-            safe_count = agents_count - unsafe_count
-
-            console.print(f"[cyan]🤖 Agents:[/cyan] {agents_count} found")
-            console.print(f"  [dim]├── Security: {safe_count} safe[/dim]")
-            if unsafe_count > 0:
-                console.print(f"  [red]└── Warnings: {unsafe_count} flagged[/red]")
-            else:
-                console.print("  [dim]└── All cleared[/dim]")
-        else:
-            console.print("[cyan]🤖 Agents:[/cyan] None found")
-
-    # ============================================================================
-    # ============================================================================
-    # PHASE 3: Interactive Selection for Skills and Agents (with saved state)
-    # ============================================================================
-    config = Config()
-    
-    # Get saved states
-    saved_skills = set(config.published_skills or [])
-    saved_agents = set(config.published_agents or [])
-    
-    # Track final selections
-    final_skills = []
-    final_agents = []
-    
-    # ----- DRY RUN: Use all available, skip interactive selection -----
-    if dry_run:
-        # In dry-run mode, use all available items
-        final_skills = available_skills
-        final_agents = available_agents
-        skills_count = len(final_skills)
-        agents_count = len(final_agents)
-    else:
-        # ----- Skills Selection -----
-        if do_skills and skills_count > 0:
-            from ._selection import parse_multiselect_input
-        from rich.prompt import Prompt
-        
-        # Build items for selection
-        skill_items = []
-        for skill in available_skills:
-            is_saved = skill["name"] in saved_skills
-            skill_items.append({
-                "name": skill["name"],
-                "saved": is_saved,
-                "flagged": any(s[1] == skill["name"] for s in skills_flagged),
-            })
-        
-        console.print("\n[bold magenta]📤 Select Skills to Publish[/bold magenta]\n")
-        console.print(f"[dim]Found {skills_count} skills in ~/.agents/skills/[/dim]\n")
-        
-        # Show current saved state if exists
-        if saved_skills:
-            console.print("[dim]📋 Previously saved selection:[/dim]")
-            for name in sorted(saved_skills)[:5]:
-                console.print(f"  [dim]• {name}[/dim]")
-            if len(saved_skills) > 5:
-                console.print(f"  [dim]  ...and {len(saved_skills) - 5} more[/dim]")
-            console.print()
-        
-        console.print("[bold]What would you like to do?[/bold]")
-        console.print("  [[bold green]u[/]] Use saved selection" + (" (recommended)" if saved_skills else ""))
-        console.print("  [[bold cyan]e[/]] Edit selection (show all skills with toggles)")
-        console.print("  [[bold yellow]a[/]] Select ALL skills")
-        console.print("  [[bold magenta]n[/]] Select NONE")
-        
-        choice = Prompt.ask("\nChoice", choices=["u", "e", "a", "n"], default="u" if saved_skills else "a")
-        
-        selected_skill_names = set()
-        
-        if choice == "u":
-            selected_skill_names = saved_skills
-            # Verify saved skills still exist
-            available_names = {s["name"] for s in available_skills}
-            missing = selected_skill_names - available_names
-            if missing:
-                console.print(f"\n[yellow]⚠️ {len(missing)} saved skills no longer exist and will be skipped[/yellow]")
-                selected_skill_names = selected_skill_names & available_names
-            console.print(f"\n[green]✓ Using saved selection ({len(selected_skill_names)} skills)[/green]")
-            
-        elif choice == "e":
-            # Show all skills with toggles
-            from rich.table import Table
-            selected = set()
-            item_names = [s["name"] for s in available_skills]
-            
-            # Pre-select saved ones
-            if saved_skills:
-                selected = {n for n in item_names if n in saved_skills}
-            
-            while True:
-                console.clear()
-                console.print("\n[bold magenta]📤 Toggle Skills to Publish[/bold magenta]\n")
-                
-                table = Table(box=box.ROUNDED, show_header=True, header_style="bold cyan")
-                table.add_column("ID", justify="right", style="dim", width=4)
-                table.add_column("Pub", justify="center", width=5)
-                table.add_column("Skill Name", style="cyan")
-                table.add_column("Status", width=12)
-                
-                for i, item in enumerate(skill_items, 1):
-                    key = item["name"]
-                    is_selected = key in selected
-                    status_icon = "[bold green]✓[/]" if is_selected else "[dim]○[/]"
-                    
-                    # Status indicators
-                    status_parts = []
-                    if item["saved"]:
-                        status_parts.append("[blue]saved[/]")
-                    if item["flagged"]:
-                        status_parts.append("[yellow]⚠️[/]")
-                    status_text = " ".join(status_parts) if status_parts else ""
-                    
-                    table.add_row(str(i), status_icon, key, status_text)
-                
-                console.print(table)
-                
-                if selected:
-                    console.print(f"\n[dim]Selected: {len(selected)} of {len(skill_items)}[/dim]")
-                else:
-                    console.print(f"\n[dim]None selected[/dim]")
-                
-                console.print("\n[bold]Controls:[/bold]")
-                console.print("  • Enter numbers to toggle (e.g. [green]'1,3,5'[/green])")
-                console.print("  • Type [cyan]'all'[/cyan] or [cyan]'none'[/cyan]")
-                console.print("  • Press [bold white]Enter[/] to confirm")
-                
-                input_choice = Prompt.ask("\nSelection", default="done")
-                result = parse_multiselect_input(input_choice, item_names, selected)
-                
-                if result is None:
-                    break
-                if len(result) == 0 and input_choice.strip() == "none":
-                    selected = set()
-                    break
-                selected = result
-            
-            selected_skill_names = selected
-            console.print(f"\n[green]✓ Selected {len(selected_skill_names)} skills[/green]")
-            
-        elif choice == "a":
-            selected_skill_names = {s["name"] for s in available_skills}
-            console.print(f"\n[green]✓ Selecting ALL skills ({len(selected_skill_names)})[/green]")
-            
-        else:  # n = none
-            selected_skill_names = set()
-            console.print("\n[yellow]⚠ No skills selected[/yellow]")
-        
-        # Save selection
-        config.published_skills = list(selected_skill_names)
-        
-        # Build final skills list
-        final_skills = [s for s in available_skills if s["name"] in selected_skill_names]
-        skills_count = len(final_skills)
-    
-    # ----- Agents Selection -----
-    if do_agents and agents_count > 0:
-        from ._selection import parse_multiselect_input
-        from rich.prompt import Prompt
-        
-        console.print("\n[bold cyan]🤖 Select Agent Instructions to Publish[/bold cyan]\n")
-        console.print(f"[dim]Found {agents_count} agent instructions[/dim]\n")
-        
-        # Show current saved state if exists
-        if saved_agents:
-            console.print("[dim]📋 Previously saved selection:[/dim]")
-            for key in sorted(saved_agents)[:5]:
-                console.print(f"  [dim]• {key}[/dim]")
-            if len(saved_agents) > 5:
-                console.print(f"  [dim]  ...and {len(saved_agents) - 5} more[/dim]")
-            console.print()
-        
-        console.print("[bold]What would you like to do?[/bold]")
-        console.print("  [[bold green]u[/]] Use saved selection" + (" (recommended)" if saved_agents else ""))
-        console.print("  [[bold cyan]e[/]] Edit selection (show all agents with toggles)")
-        console.print("  [[bold yellow]a[/]] Select ALL agents")
-        console.print("  [[bold magenta]n[/]] Select NONE")
-        
-        choice = Prompt.ask("\nChoice", choices=["u", "e", "a", "n"], default="u" if saved_agents else "a")
-        
-        selected_agent_keys = set()
-        
-        if choice == "u":
-            selected_agent_keys = saved_agents
-            # Verify saved agents still exist
-            available_keys = {f"{a['agent']}:{a['filename']}" for a in available_agents}
-            missing = selected_agent_keys - available_keys
-            if missing:
-                console.print(f"\n[yellow]⚠️ {len(missing)} saved agents no longer exist and will be skipped[/yellow]")
-                selected_agent_keys = selected_agent_keys & available_keys
-            console.print(f"\n[green]✓ Using saved selection ({len(selected_agent_keys)} agents)[/green]")
-            
-        elif choice == "e":
-            # Show all agents with toggles
-            from rich.table import Table
-            selected = set()
-            item_names = [f"{a['agent']}:{a['filename']}" for a in available_agents]
-            
-            # Pre-select saved ones
-            if saved_agents:
-                selected = {k for k in item_names if k in saved_agents}
-            
-            while True:
-                console.clear()
-                console.print("\n[bold cyan]🤖 Toggle Agent Instructions to Publish[/bold cyan]\n")
-                
-                table = Table(box=box.ROUNDED, show_header=True, header_style="bold green")
-                table.add_column("ID", justify="right", style="dim", width=4)
-                table.add_column("Pub", justify="center", width=5)
-                table.add_column("Agent", style="green")
-                table.add_column("File", style="cyan")
-                table.add_column("Security", justify="center", width=10)
-                table.add_column("Status", width=10)
-                
-                for i, agent in enumerate(available_agents, 1):
-                    key = f"{agent['agent']}:{agent['filename']}"
-                    is_selected = key in selected
-                    status_icon = "[bold green]✓[/]" if is_selected else "[dim]○[/]"
-                    
-                    result = scan_results.get(agent["path"])
-                    security_icon = "[red]⚠️[/]" if result and not result.safe else "[green]✓[/]"
-                    
-                    # Status indicators
-                    status_parts = []
-                    if key in saved_agents:
-                        status_parts.append("[blue]saved[/]")
-                    if result and not result.safe:
-                        status_parts.append("[yellow]⚠️[/]")
-                    status_text = " ".join(status_parts) if status_parts else ""
-                    
-                    table.add_row(str(i), status_icon, agent["agent"], agent["filename"], security_icon, status_text)
-                
-                console.print(table)
-                
-                if selected:
-                    console.print(f"\n[dim]Selected: {len(selected)} of {len(available_agents)}[/dim]")
-                else:
-                    console.print(f"\n[dim]None selected[/dim]")
-                
-                console.print("\n[bold]Controls:[/bold]")
-                console.print("  • Enter numbers to toggle (e.g. [green]'1,3,5'[/green])")
-                console.print("  • Type [cyan]'all'[/cyan] or [cyan]'none'[/cyan]")
-                console.print("  • Press [bold white]Enter[/] to confirm")
-                
-                input_choice = Prompt.ask("\nSelection", default="done")
-                result = parse_multiselect_input(input_choice, item_names, selected)
-                
-                if result is None:
-                    break
-                if len(result) == 0 and input_choice.strip() == "none":
-                    selected = set()
-                    break
-                selected = result
-            
-            selected_agent_keys = selected
-            console.print(f"\n[green]✓ Selected {len(selected_agent_keys)} agents[/green]")
-            
-        elif choice == "a":
-            selected_agent_keys = {f"{a['agent']}:{a['filename']}" for a in available_agents}
-            console.print(f"\n[green]✓ Selecting ALL agents ({len(selected_agent_keys)})[/green]")
-            
-        else:  # n = none
-            selected_agent_keys = set()
-            console.print("\n[yellow]⚠ No agents selected[/yellow]")
-        
-        # Save selection
-        config.published_agents = list(selected_agent_keys)
-        
-        # Build final agents list
-        final_agents = [a for a in available_agents if f"{a['agent']}:{a['filename']}" in selected_agent_keys]
-        agents_count = len(final_agents)
-    
-    # Update available lists for publishing
-    available_skills = final_skills
-    available_agents = final_agents
-    
-    # Check if anything to publish after selection
-    if skills_count == 0 and agents_count == 0:
-        console.print("\n[yellow]⚠ Nothing selected to publish.[/yellow]\n")
-        return
-    
-    # Show selection summary
-    console.print("\n[bold green]📋 Selection Summary[/]\n")
-    if do_skills and skills_count > 0:
-        console.print(f"[cyan]📚 Skills:[/cyan] {skills_count} selected")
-    if do_agents and agents_count > 0:
-        console.print(f"[cyan]🤖 Agents:[/cyan] {agents_count} selected")
-    console.print()
-    
-    # ============================================================================
-    # PHASE 4: Security Warning Panel
-    # ============================================================================
-    # Update counts after flagged selection
-    if do_agents:
-        agents_count = len(available_agents)
-    if do_skills:
-        skills_count = len(available_skills)
-
-    console.print("\n")
-    warning_lines = []
-
-    # Determine what we're publishing (with updated counts)
-    if do_skills and do_agents:
-        target_desc = f"[bold]{skills_count}[/bold] skills and [bold]{agents_count}[/bold] agent instructions"
-    elif do_skills:
-        target_desc = f"[bold]{skills_count}[/bold] skills"
-    else:
-        target_desc = f"[bold]{agents_count}[/bold] agent instructions"
-
-    warning_lines.append(f"Publishing {target_desc} to a [bold red]PUBLIC[/bold red] GitHub repository")
-    warning_lines.append("")
-    warning_lines.append("[bold cyan]What will be scanned:[/bold cyan]")
-    warning_lines.append("  • API keys, tokens, credentials")
-    warning_lines.append("  • Private URLs (server., .internal, /home/)")
-    warning_lines.append("  • Absolute paths (/Users/, /root/, D:\\)")
-    warning_lines.append("")
-    warning_lines.append("[bold red]What will NEVER be published:[/bold red]")
-    warning_lines.append("  ✗ Files with: auth, token, key, secret, credentials")
-    warning_lines.append("  ✗ .env files, config files, binary files (.pyc)")
-
-    console.print(Panel(
-        "\n".join(warning_lines),
-        border_style="yellow",
-        title="[bold yellow]⚠️ Public Disclosure[/]",
-    ))
-
-    # Show repository visibility
-    console.print(f"\n[green]✓ Repository renatocaliari/agent-sync-public is PUBLIC.[/green]")
-
-    # ============================================================================
-    # PHASE 5: Confirm
-    # ============================================================================
-    if dry_run:
-        console.print(f"\n[blue]🔍 DRY RUN: Would publish {skills_count} skills and {agents_count} agent instructions[/blue]\n")
-        return
-
-    if not Confirm.ask("\n[bold]Continue with publishing?[/]", default=True):
-        console.print("\n[yellow]Publish cancelled[/yellow]\n")
-        return
-
-    # ============================================================================
-    # PHASE 6: Execute (non-interactive, using pre-selected items)
-    # ============================================================================
-    success = True
-
-    if do_skills and skills_count > 0:
-        publish_skills(
-            repo_url=repo_url,
-            dry_run=False,
-            interactive=False,
-            skip_security_panel=True,
-            skip_confirm=True,
-            available_skills=available_skills,
-        )
-
-    if do_agents and agents_count > 0:
-        # Build selected keys from final_agents
-        selected_agent_keys = {f"{a['agent']}:{a['filename']}" for a in available_agents}
-        publish_agents(
-            repo_url=repo_url,
-            dry_run=False,
-            interactive=False,
-            skip_confirm=True,
-            selected_override=selected_agent_keys,
-        )
-
     if success:
-        console.print("\n[bold green]✅ Publishing complete![/bold green]\n")
-        
-        # Final summary
-        console.print("[bold]📋 Final Summary[/]\n")
-        if do_skills and skills_count > 0:
-            console.print(f"  [green]✓[/green] [cyan]Skills:[/cyan] {skills_count} published")
-        if do_agents and agents_count > 0:
-            console.print(f"  [green]✓[/green] [cyan]Agents:[/cyan] {agents_count} published")
-        console.print()
+        console.print("\n[green]✓ Initialized![/green]")
+        console.print(f"   Commit and push the [.sync/] directory to start syncing.")
     else:
-        console.print("\n[red]✗ Some items failed to publish[/red]\n")
-        raise click.Abort()
+        console.print("\n[red]✗ Failed to initialize.[/red]")
 
 
-
-@main.command()
-def version():
-    """Show version information."""
-    console.print(f"\n[bold]agent-sync[/] v{__version__}\n")
-
+# =============================================================================
+# SYNC COMMAND
+# =============================================================================
 
 @main.command()
-@click.option("--json", "json_output", is_flag=True, help="Output as JSON for programmatic use")
-def agents(json_output: bool):
-    """List supported agents and their status."""
-    import json
-    from .agents import get_agents
-    agents_list = get_agents()
-    config = Config()
-
-    if json_output:
-        output = {}
-        for agent in agents_list:
-            output[agent.name] = {
-                "available": agent.is_available(),
-                "enabled": config.is_agent_enabled(agent.name),
-                "method": config.get_skills_method(agent.name) or agent.method,
-                "config_path": str(agent.config_path) if agent.config_path else None
-            }
-        console.print_json(json.dumps(output, indent=2))
+@click.option("--force", is_flag=True, help="Force pull even if up to date")
+@click.option("--skills-only", is_flag=True, help="Only sync skills")
+@click.option("--configs-only", is_flag=True, help="Only sync configs")
+@click.option("--agents-only", is_flag=True, help="Only sync agent configs")
+def sync(force: bool, skills_only: bool, configs_only: bool, agents_only: bool):
+    """Sync skills and configs with the remote repository."""
+    sync_manager = SyncManager()
+    
+    if not sync_manager.is_initialized():
+        console.print("[red]✗ Not initialized. Run 'agent-sync init' first.[/red]")
         return
+    
+    # Determine what to sync
+    do_skills = skills_only or (not configs_only and not agents_only)
+    do_configs = configs_only or (not skills_only and not agents_only)
+    do_agents = agents_only
+    
+    if not (do_skills or do_configs or do_agents):
+        do_skills = do_configs = do_agents = True
+    
+    console.print("\n[cyan]Syncing...[/cyan]\n")
+    
+    success = sync_manager.sync(
+        force=force,
+        skills=do_skills,
+        configs=do_configs,
+        agents=do_agents,
+    )
+    
+    if success:
+        console.print("\n[green]✓ Synced![/green]")
+    else:
+        console.print("\n[yellow]⚠ Sync completed with warnings.[/yellow]")
 
-    console.print("\n🤖 Supported Agents\n")
-    table = Table(show_header=True, header_style="bold magenta")
-    table.add_column("Agent", style="cyan")
-    table.add_column("Status", style="yellow")
-    table.add_column("Sync", style="magenta")
-    table.add_column("Skills Method", style="blue")
-    table.add_column("Config Path", style="green")
 
-    config = Config()
-
-    for agent in agents_list:
-        enabled = config.is_agent_enabled(agent.name)
-        status = "✓" if agent.is_available() else "✗"
-        sync_status = "🟢 ON" if enabled else "🔴 OFF"
-
-        # Get actual method from user config or default to agent's registry method
-        method = config.get_skills_method(agent.name) or agent.method
-
-        config_path_str = str(agent.config_path) if agent.config_path else "-"
-
-        table.add_row(
-            agent.name,
-            status,
-            sync_status,
-            method,
-            config_path_str,
-        )
-
-    console.print(table)
-    console.print("\n💡 Use 'agent-sync enable <agent>' or 'agent-sync disable <agent>' to toggle sync")
-    console.print("\n🔧 [bold]How to customize skills method:[/]")
-    console.print("  Edit your config with [green]agent-sync config edit[/green] and add:")
-    console.print("  [dim]agents_config:[/dim]")
-    console.print("  [dim]  claude-code:[/dim]")
-    console.print("  [dim]    skills_method: copy  # Options: native, config, copy[/dim]\n")
-
+# =============================================================================
+# PUSH COMMAND
+# =============================================================================
 
 @main.command()
-@click.option("--agent", multiple=True, help="Specific agents to include")
-def generate_config(agent: tuple[str, ...]):
-    """Generate initial configuration file."""
-    console.print("\n⚙️  Generating configuration...\n")
+@click.option("--message", "-m", default=None, help="Commit message")
+@click.option("--skills-only", is_flag=True, help="Only push skills")
+@click.option("--configs-only", is_flag=True, help="Only push configs")
+def push(message: Optional[str], skills_only: bool, configs_only: bool):
+    """Push local changes to the remote repository."""
+    sync_manager = SyncManager()
+    
+    if not sync_manager.is_initialized():
+        console.print("[red]✗ Not initialized.[/red]")
+        return
+    
+    commit_msg = message or Prompt.ask("Commit message", default="Update configs")
+    
+    do_skills = skills_only or (not configs_only)
+    do_configs = configs_only or (not skills_only)
+    
+    success = sync_manager.push(message=commit_msg, skills=do_skills, configs=do_configs)
+    
+    if success:
+        console.print("\n[green]✓ Pushed![/green]")
+    else:
+        console.print("\n[red]✗ Push failed.[/red]")
 
+
+# =============================================================================
+# PULL COMMAND
+# =============================================================================
+
+@main.command()
+@click.option("--force", is_flag=True, help="Overwrite local changes")
+@click.option("--skills-only", is_flag=True, help="Only pull skills")
+@click.option("--configs-only", is_flag=True, help="Only pull configs")
+def pull(force: bool, skills_only: bool, configs_only: bool):
+    """Pull changes from the remote repository."""
+    sync_manager = SyncManager()
+    
+    if not sync_manager.is_initialized():
+        console.print("[red]✗ Not initialized.[/red]")
+        return
+    
+    do_skills = skills_only or (not configs_only)
+    do_configs = configs_only or (not skills_only)
+    
+    success = sync_manager.pull(force=force, skills=do_skills, configs=do_configs)
+    
+    if success:
+        console.print("\n[green]✓ Pulled![/green]")
+    else:
+        console.print("\n[red]✗ Pull failed.[/red]")
+
+
+# =============================================================================
+# EXPORT COMMAND
+# =============================================================================
+
+@main.command("export")
+@click.option("--output", type=click.Path(), default=None, help="Output path")
+def export_config(output: Optional[str]):
+    """Export agent config to JSON format."""
     config = Config()
-    target_agents = agent if agent else None
+    
+    output_path = Path(output) if output else Path.home() / ".agents" / "config.json"
+    
+    config_data = config.to_dict()
+    
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(yaml.dump(config_data, default_flow_style=False))
+    
+    console.print(f"[green]✓ Exported to {output_path}[/green]")
 
-    try:
-        config_path = config.generate_default(target_agents)
-        console.print(f"✅ Config generated: {config_path}", style="green")
-        console.print("\n📝 Edit ~/.config/agent-sync/config.yaml to customize")
-    except Exception as e:
-        console.print(f"\n❌ Error: {e}", style="red")
-        raise click.Abort()
+
+# =============================================================================
+# AGENTS COMMAND
+# =============================================================================
+
+@main.group()
+def agents():
+    """Manage agent configurations."""
+    pass
 
 
-def _resolve_agent(agent_name: str):
-    """Look up an agent by name, printing available agents on failure."""
-    from .agents import get_agent, get_agents
+@agents.command("list")
+@click.option("--json", "json_output", is_flag=True, help="JSON output")
+def list_agents(json_output: bool):
+    """List all configured agents."""
+    registry = load_registry()
+    
+    if json_output:
+        import json
+        console.print(json.dumps(registry, indent=2))
+        return
+    
+    table = Table(title="Configured Agents")
+    table.add_column("Name", style="cyan")
+    table.add_column("Type", style="green")
+    table.add_column("Location", style="dim")
+    
+    for agent_name, agent_data in registry.items():
+        if agent_name == "global-skills":
+            continue
+        
+        agent_type = agent_data.get("type", "unknown")
+        location = agent_data.get("config_dir", "N/A")
+        
+        table.add_row(agent_name, agent_type, location)
+    
+    console.print(table)
 
-    agent = get_agent(agent_name)
-    if not agent:
-        console.print(f"❌ Unknown agent: {agent_name}", style="red")
-        console.print("\nAvailable agents:", style="yellow")
-        for a in get_agents():
-            console.print(f"  • {a.name}")
-        raise click.Abort()
-    return agent
 
+# =============================================================================
+# SETUP COMMAND
+# =============================================================================
+
+# @main.command()
+# @click.option("--agent", "-a", multiple=True, help="Specific agents to setup")
+# def setup(agent: tuple[str, ...]):
+#     """Setup agent configurations interactively."""
+#     console.print("\n[bold cyan]Agent Setup[/bold cyan]\n")
+#     
+#     agents_to_setup = list(agent) if agent else []
+#     
+#     if not agents_to_setup:
+#         console.print("Available agents: opencode, claude-code, gemini-cli, pi.dev, qwen-code")
+#         choice = Prompt.ask("\nWhich agents to setup?", default="all")
+#         if choice.lower() == "all":
+#             agents_to_setup = ["opencode", "claude-code", "gemini-cli", "pi.dev", "qwen-code"]
+#         else:
+#             agents_to_setup = [a.strip() for a in choice.split(",")]
+#     
+#     for agent_name in agents_to_setup:
+#         console.print(f"\n[cyan]Setting up {agent_name}...[/cyan]")
+#         handler = AgentHandler(agent_name)
+#         
+#         if handler.exists():
+#             console.print(f"  [dim]Already configured[/dim]")
+#         else:
+#             success = handler.setup()
+#             if success:
+#                 console.print(f"  [green]✓ Configured[/green]")
+#             else:
+#                 console.print(f"  [red]✗ Failed[/red]")
+
+
+# =============================================================================
+# GENERATE COMMAND
+# =============================================================================
+
+@main.command("generate-config")
+@click.option("--agent", "-a", multiple=True, required=True, help="Agents to generate config for")
+def generate_config(agent: tuple[str, ...]):
+    """Generate configuration files for agents."""
+    from . import config
+    
+    target_agents = list(agent)
+    console.print(f"\n[cyan]Generating config for: {', '.join(target_agents)}[/cyan]\n")
+    
+    config_path = config.generate_default(target_agents)
+    
+    console.print(f"[green]✓ Config generated: {config_path}[/green]")
+
+
+# =============================================================================
+# ENABLE/DISABLE COMMANDS
+# =============================================================================
 
 @main.command()
 @click.argument("agent_name")
 def enable(agent_name: str):
-    """Enable sync for a specific agent."""
-    console.print(f"\n✅ Enabling sync for: {agent_name}")
-    agent = _resolve_agent(agent_name)
-    try:
-        Config().enable_agent(agent_name)
-        agent.enable()
-        console.print(f"✅ Sync enabled for {agent_name}", style="green")
-        console.print("\n💡 Run 'agent-sync push' to sync this agent's configs")
-    except Exception as e:
-        console.print(f"\n❌ Error: {e}", style="red")
-        raise click.Abort()
+    """Enable an agent for syncing."""
+    config = Config()
+    
+    if agent_name in config.agents:
+        console.print(f"[yellow]⚠ {agent_name} already enabled.[/yellow]")
+        return
+    
+    config.agents.append(agent_name)
+    config.save()
+    
+    console.print(f"[green]✓ Enabled {agent_name}[/green]")
 
 
 @main.command()
 @click.argument("agent_name")
 def disable(agent_name: str):
-    """Disable sync for a specific agent."""
-    console.print(f"\n🚫 Disabling sync for: {agent_name}")
-    agent = _resolve_agent(agent_name)
-    try:
-        Config().disable_agent(agent_name)
-        agent.disable()
-        console.print(f"✅ Sync disabled for {agent_name}", style="green")
-        console.print("\n💡 This agent's configs will no longer be synced")
-    except Exception as e:
-        console.print(f"\n❌ Error: {e}", style="red")
+    """Disable an agent from syncing."""
+    config = Config()
+    
+    if agent_name not in config.agents:
+        console.print(f"[yellow]⚠ {agent_name} not enabled.[/yellow]")
+        return
+    
+    config.agents.remove(agent_name)
+    config.save()
+    
+    console.print(f"[green]✓ Disabled {agent_name}[/green]")
+
+
+# =============================================================================
+# SKILLS MANAGEMENT
+# =============================================================================
+
+@main.group("skills")
+def skills_group():
+    """Manage skills."""
+    pass
+
+
+@skills_group.command("list")
+def list_skills():
+    """List available skills."""
+    skills_dir = Path.home() / ".agents" / "skills"
+    
+    if not skills_dir.exists():
+        console.print("[yellow]No skills directory found.[/yellow]")
+        return
+    
+    skills = [d.name for d in skills_dir.iterdir() if d.is_dir() and not d.name.startswith(".")]
+    
+    console.print(f"\n[cyan]Skills ({len(skills)}):[/cyan]")
+    for skill in sorted(skills):
+        console.print(f"  • {skill}")
+
+
+# =============================================================================
+# PUBLISH COMMAND
+# =============================================================================
+
+@main.command("publish")
+@click.option("--skills", "skills_flag", is_flag=True, help="Publish skills only")
+@click.option("--agents", "agents_flag", is_flag=True, help="Publish agent configs only")
+@click.option("--all", "publish_all", is_flag=True, default=True, help="Publish both (default)")
+@click.option("--dry-run", is_flag=True, help="Show what would be published")
+@click.option("--repo", "repo_url", help="Set GitHub repository URL")
+@click.option("--add-source", "add_source_url", help="Add external skill source")
+@click.option("--remove-source", "remove_source_url", help="Remove external skill source")
+@click.option("--list-sources", "list_sources_flag", is_flag=True, help="List skill sources")
+@click.option("--clear-cache", is_flag=True, help="Clear skill cache")
+@click.option("--reset-selection", is_flag=True, help="Reset saved selection")
+def publish(
+    skills_flag: bool,
+    agents_flag: bool,
+    publish_all: bool,
+    dry_run: bool,
+    repo_url: Optional[str],
+    add_source_url: Optional[str],
+    remove_source_url: Optional[str],
+    list_sources_flag: bool,
+    clear_cache: bool,
+    reset_selection: bool,
+):
+    """Publish skills and agent configs to a public repository.
+    
+    Examples:
+    
+      agent-sync publish                  Publish skills & agents
+      agent-sync publish --skills        Publish skills only
+      agent-sync publish --agents        Publish agent configs only
+      agent-sync publish --repo URL     Set repository URL
+      agent-sync publish --add-source URL  Add external skill source
+      agent-sync publish --list-sources List configured sources
+      agent-sync publish --clear-cache  Clear cached repos
+    """
+    
+    # Handle repo URL
+    if repo_url:
+        if not validate_github_url(repo_url):
+            console.print("[red]✗ Invalid repository URL[/red]")
+            raise click.Abort()
+        set_published_repo(repo_url)
+        console.print(f"[green]✓ Repository set to {repo_url}[/]")
+        return
+    
+    # Handle source management
+    if add_source_url:
+        if not validate_github_url(add_source_url):
+            console.print("[red]✗ Invalid repository URL[/red]")
+            raise click.Abort()
+        add_source(add_source_url)
+        console.print(f"[green]✓ Added source: {add_source_url}[/]")
+        return
+    
+    if remove_source_url:
+        if remove_source(remove_source_url):
+            console.print(f"[green]✓ Removed source: {remove_source_url}[/]")
+        else:
+            console.print(f"[yellow]⚠ Source not found: {remove_source_url}[/]")
+        return
+    
+    # Handle list sources
+    if list_sources_flag:
+        # Trigger discovery to update last_success and ensure cache is valid
+        from agent_sync.publish import load_config
+        config = load_config()
+        from agent_sync.publish.discovery import discover_skills_sources
+        discover_skills_sources(config)
+        
+        from agent_sync.publish.config import list_sources as get_sources
+        sources = get_sources()
+        if sources:
+            console.print("\n[bold]📚 External Skill Sources[/]\n")
+            for src in sources:
+                console.print(f"  • {src.url}")
+                console.print(f"    Status: {src.status.value}, Last: {src.last_success or 'N/A'}")
+        else:
+            console.print("\n[dim]No external sources configured.[/dim]")
+        from agent_sync.publish.config import get_published_repo
+        console.print(f"\n[dim]Published repo: {get_published_repo() or 'Not set'}[/dim]\n")
+        return
+    
+    # Handle clear cache
+    if clear_cache:
+        config = load_publish_config()
+        count = clear_publish_cache(config.cache_dir)
+        console.print(f"[green]✓ Cleared {count} cached repositories[/]")
+        return
+    
+    # Handle reset selection
+    if reset_selection:
+        save_selected_skills({})
+        console.print("[green]✓ Selection reset[/]")
+        return
+    
+    # =============================================================================
+    # Unified Publish Flow
+    # =============================================================================
+    
+    if skills_flag and not agents_flag:
+        # Only skills
+        success = run_publish_flow()
+        if not success:
+            raise click.Abort()
+        return
+    
+    if agents_flag and not skills_flag:
+        # Only agents
+        success = run_agents_publish_flow()
+        if not success:
+            raise click.Abort()
+        return
+    
+    # Default: step-by-step publish setup
+    success = run_publish_setup()
+    if not success:
         raise click.Abort()
+
+
+# =============================================================================
+# DIFF COMMAND
+# =============================================================================
+
+@main.command()
+@click.option("--skills", is_flag=True, help="Show skills diff")
+@click.option("--configs", is_flag=True, help="Show configs diff")
+def diff(skills: bool, configs: bool):
+    """Show differences between local and remote."""
+    sync_manager = SyncManager()
+    
+    if not sync_manager.is_initialized():
+        console.print("[red]✗ Not initialized.[/red]")
+        return
+    
+    do_skills = skills or (not configs)
+    do_configs = configs or (not skills)
+    
+    if do_skills:
+        console.print("\n[cyan]Skills Diff:[/cyan]")
+        # Show skills diff
+    
+    if do_configs:
+        console.print("\n[cyan]Configs Diff:[/cyan]")
+        # Show configs diff
+
+
+# =============================================================================
+# STATUS COMMAND
+# =============================================================================
+
+@main.command()
+def status():
+    """Show sync status."""
+    sync_manager = SyncManager()
+    config = Config()
+    
+    console.print("\n[bold cyan]agent-sync Status[/bold cyan]\n")
+    
+    if sync_manager.is_initialized():
+        console.print("[green]✓ Initialized[/green]")
+        repo = sync_manager.config.get("repo_url", "Not set")
+        console.print(f"  Repository: {repo}")
+    else:
+        console.print("[yellow]⚠ Not initialized[/yellow]")
+        console.print("  Run 'agent-sync init' to setup")
+    
+    console.print(f"\n[cyan]Enabled agents ({len(config.agents)}):[/cyan]")
+    for agent in config.agents:
+        console.print(f"  • {agent}")
+    
+    skills_dir = Path.home() / ".agents" / "skills"
+    if skills_dir.exists():
+        skill_count = len([d for d in skills_dir.iterdir() if d.is_dir() and not d.name.startswith(".")])
+        console.print(f"\n[cyan]Skills: {skill_count}[/cyan]")
+
+
+# =============================================================================
+# UPDATE COMMAND
+# =============================================================================
+
+@main.command()
+@click.option("--check", is_flag=True, help="Check for updates only")
+def update(check: bool):
+    """Update agent-sync to the latest version."""
+    console.print("\n[cyan]Checking for updates...[/cyan]\n")
+    
+    try:
+        result = subprocess.run(
+            ["pipx", "upgrade", "agent-sync"],
+            capture_output=True,
+            text=True,
+        )
+        
+        if result.returncode == 0:
+            console.print("[green]✓ Updated![/green]")
+        else:
+            console.print("[yellow]⚠ Update check failed[/yellow]")
+            console.print(result.stderr)
+    except Exception as e:
+        console.print(f"[red]✗ Error: {e}[/red]")
+
+
+# =============================================================================
+# VERSION COMMAND
+# =============================================================================
+
+@main.command()
+def version():
+    """Show version information."""
+    console.print(f"\n[cyan]agent-sync {__version__}[/cyan]\n")
+    console.print("  Config: ~/.config/agent-sync/")
+    console.print("  Skills: ~/.agents/skills/")
+    console.print("  Cache: ~/.cache/agent-sync/")
 
 
 if __name__ == "__main__":
