@@ -219,7 +219,7 @@ def _build_footer_commands(source_infos: list[SourceInfo]) -> list[tuple[str, st
 # =============================================================================
 
 def run_agents_flow() -> bool:
-    """Run agents-only publish flow.
+    """Run agents-only publish flow with step-by-step TUI.
     
     Returns:
         True if published successfully
@@ -238,21 +238,88 @@ def run_agents_flow() -> bool:
         console.print("[yellow]⚠ No agents found![/]")
         return False
     
-    footer_commands = [("a", "select all"), ("n", "none"), ("p", "publish"), ("q", "quit")]
+    # Load saved state from PublishStateManager (consistent with other flows)
+    selection = load_saved_selection(agents_source_infos)
+    agents_selection = selection.get("agents", set())
     
-    def on_publish(selection: dict[str, list[str]]) -> Optional[dict]:
-        if confirm(f"\nPublish to [green]{published_repo}[/]?"):
-            if publish_agents(selection, published_repo):
-                return selection
-        return None
+    # Build state
+    state = SelectionState()
+    state.items = {"agents": sorted(agents_source_infos[0].items)}
+    state.selected = {"agents": agents_selection}
+    state.build_index()
     
-    return _run_tui(
-        title="🤖 Agents Selection",
-        sources=agents_source_infos,
-        initial_selection={"agents": set()},
-        footer_commands=footer_commands,
-        on_publish=on_publish,
-    )
+    # TUI loop
+    while True:
+        console.clear()
+        
+        console.print("\n[bold cyan]🤖 AGENTS[/]")
+        console.print("[dim]────────────────────────────────────────────────────────[/]")
+        
+        selected = len(state.selected.get("agents", set()))
+        total = len(state.items.get("agents", []))
+        console.print(f"  Selected: [bold green]{selected}[/] / {total}")
+        console.print(f"  [dim]~/.pi/agent/[/]")
+        console.print()
+        
+        current_idx = 1
+        for name in state.items.get("agents", []):
+            is_sel = state.is_selected("agents", name)
+            status = "[green]●[/]" if is_sel else "[dim]○[/]"
+            console.print(f"    [dim]{current_idx:02d}[/] {status} {name}")
+            current_idx += 1
+        
+        console.print()
+        console.print("[dim]────────────────────────────────────────────────────────[/]")
+        console.print("  (1-N) select  (a) all  (n) none  (p) publish  (q) quit")
+        
+        choice = Prompt.ask("\n[cyan]>[/]", default="p")
+        choice = choice.strip()
+        
+        if choice == "q":
+            console.print("\n[yellow]Cancelled.[/]")
+            return False
+        
+        if choice in ("a", "all"):
+            state.select_all_in_source("agents")
+        elif choice in ("n", "none"):
+            state.select_none_in_source("agents")
+        elif choice in ("p", "publish", "done", "d"):
+            break
+        else:
+            _handle_number_input(state, choice)
+    
+    # Get final selection
+    final_selection = list(state.selected.get("agents", set()))
+    
+    if not final_selection:
+        console.print("\n[yellow]⚠ No agents selected![/]")
+        return False
+    
+    # Summary
+    console.clear()
+    console.print("\n[bold cyan]📦 Publish Summary[/]")
+    console.print("[dim]────────────────────────────────────────────────────────[/]")
+    console.print(f"\n[bold]AGENTS[/] - {len(final_selection)} selected:")
+    for name in sorted(final_selection):
+        console.print(f"  • {name}")
+    console.print()
+    console.print("[dim]────────────────────────────────────────────────────────[/]")
+    
+    if not confirm(f"\nPublish {len(final_selection)} agents to [green]{published_repo}[/]?"):
+        console.print("\n[yellow]Cancelled.[/]")
+        return False
+    
+    # Publish using publish_all (consistent with other flows)
+    console.print("\n[blue]Publishing...[/]")
+    from .git_publish import publish_all
+    success = publish_all({}, [], final_selection, published_repo)
+    
+    if success:
+        console.print("\n[green]✓ Published successfully![/]")
+        PublishStateManager.save({}, {"agents": final_selection})
+        return True
+    
+    return False
 
 
 # =============================================================================
