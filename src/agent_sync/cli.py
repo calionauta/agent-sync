@@ -22,8 +22,6 @@ from .publish import (
     list_sources,
     load_config as load_publish_config,
     remove_source,
-    run_publish_flow,
-    run_agents_publish_flow,
     run_publish_setup,
     save_selected_skills,
     set_published_repo,
@@ -372,9 +370,6 @@ def list_skills():
 # =============================================================================
 
 @main.command("publish")
-@click.option("--skills", "skills_flag", is_flag=True, help="Publish skills only")
-@click.option("--agents", "agents_flag", is_flag=True, help="Publish agent configs only")
-@click.option("--all", "publish_all", is_flag=True, default=True, help="Publish both (default)")
 @click.option("--dry-run", is_flag=True, help="Show what would be published")
 @click.option("--repo", "repo_url", help="Set GitHub repository URL")
 @click.option("--add-source", "add_source_url", help="Add external skill source")
@@ -383,9 +378,6 @@ def list_skills():
 @click.option("--clear-cache", is_flag=True, help="Clear skill cache")
 @click.option("--reset-selection", is_flag=True, help="Reset saved selection")
 def publish(
-    skills_flag: bool,
-    agents_flag: bool,
-    publish_all: bool,
     dry_run: bool,
     repo_url: Optional[str],
     add_source_url: Optional[str],
@@ -394,17 +386,17 @@ def publish(
     clear_cache: bool,
     reset_selection: bool,
 ):
-    """Publish skills and agent configs to a public repository.
+    """Publish skills and agents to a public repository.
+    
+    Run without options to select and publish skills & agents interactively.
     
     Examples:
     
-      agent-sync publish                  Publish skills & agents
-      agent-sync publish --skills        Publish skills only
-      agent-sync publish --agents        Publish agent configs only
-      agent-sync publish --repo URL     Set repository URL
+      agent-sync publish                  Select and publish skills & agents
+      agent-sync publish --repo URL       Set repository URL
       agent-sync publish --add-source URL  Add external skill source
-      agent-sync publish --list-sources List configured sources
-      agent-sync publish --clear-cache  Clear cached repos
+      agent-sync publish --list-sources   List configured sources
+      agent-sync publish --clear-cache    Clear cached repos
     """
     
     # Handle repo URL
@@ -467,24 +459,11 @@ def publish(
         return
     
     # =============================================================================
-    # Unified Publish Flow
+    # Publish Flow
     # =============================================================================
     
-    if skills_flag and not agents_flag:
-        # Only skills
-        success = run_publish_flow()
-        if not success:
-            raise click.Abort()
-        return
-    
-    if agents_flag and not skills_flag:
-        # Only agents
-        success = run_agents_publish_flow()
-        if not success:
-            raise click.Abort()
-        return
-    
-    # Default: step-by-step publish setup
+    # Simple: just run step-by-step publish setup
+    # User selects/deselects skills and agents in the TUI
     success = run_publish_setup()
     if not success:
         raise click.Abort()
