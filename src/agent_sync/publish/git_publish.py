@@ -84,6 +84,104 @@ def do_git_publish(
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
+def publish_all(
+    skills_selected: dict[str, list[str]],
+    skills_sources: list[SourceWithSkills],
+    agents_selected: list[str],
+    published_repo: str,
+) -> bool:
+    """Publish skills AND agents in a single push.
+    
+    This prevents the --force push from overwriting previous content.
+    Both skills and agents are published together in one git commit.
+    
+    Args:
+        skills_selected: Dict of source_id -> [skill_names]
+        skills_sources: List of SourceWithSkills for lookup
+        agents_selected: List of agent names to publish
+        published_repo: Target repository URL
+    
+    Returns:
+        True if published successfully
+    """
+    tmp_dir = Path(tempfile.mkdtemp(prefix="agent-sync-publish-"))
+    
+    try:
+        # Build source lookup for skills
+        source_map = {src.source_id: src for src in skills_sources}
+        
+        total_items = 0
+        
+        # Copy skills
+        if skills_selected and any(len(v) > 0 for v in skills_selected.values()):
+            skills_dir = tmp_dir / "skills"
+            skills_dir.mkdir(parents=True)
+            
+            skills_to_publish: list[tuple[Path, str]] = []
+            for source_id, skill_names in skills_selected.items():
+                src = source_map.get(source_id)
+                if not src:
+                    continue
+                
+                for skill_name in skill_names:
+                    for skill in src.skills:
+                        if skill.name == skill_name:
+                            dest_name = f"{source_id}/{skill_name}"
+                            dest = skills_dir / dest_name
+                            if skill.path.is_dir():
+                                shutil.copytree(skill.path, dest, dirs_exist_ok=True)
+                            else:
+                                dest.parent.mkdir(parents=True, exist_ok=True)
+                                shutil.copy2(skill.path, dest)
+                            skills_to_publish.append((skill.path, dest_name))
+                            break
+            
+            if skills_to_publish:
+                generate_skills_readme(skills_dir, skills_to_publish, published_repo)
+                total_items += len(skills_to_publish)
+        
+        # Copy agents
+        if agents_selected:
+            from .agents_source import discover_local_agents
+            
+            agents_dir = tmp_dir / "agents"
+            agents_dir.mkdir(parents=True)
+            
+            all_agents = {a.name: a for a in discover_local_agents()}
+            agents_to_publish: list[tuple[Path, str]] = []
+            
+            for agent_name in agents_selected:
+                agent = all_agents.get(agent_name)
+                if agent:
+                    dest = agents_dir / f"{agent_name}.md"
+                    shutil.copy2(Path(agent.path), dest)
+                    agents_to_publish.append((Path(agent.path), f"agents/{agent_name}.md"))
+            
+            if agents_to_publish:
+                generate_agents_readme(agents_dir, agents_to_publish, published_repo)
+                total_items += len(agents_to_publish)
+        
+        if total_items == 0:
+            console.print("[yellow]⚠ Nothing selected to publish[/]")
+            return False
+        
+        # Single git commit and push for everything
+        git_commit_and_push(tmp_dir, published_repo, total_items)
+        
+        console.print(f"\n[green]✓ Published {total_items} items (skills + agents)![/]")
+        return True
+        
+    except subprocess.CalledProcessError as e:
+        console.print(f"\n[red]✗ Git error: {e.stderr or str(e)}[/]")
+        return False
+    except Exception as e:
+        console.print(f"\n[red]✗ Error publishing: {e}[/]")
+        return False
+        
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
 def git_commit_and_push(tmp_dir: Path, repo_url: str, count: int) -> None:
     """Git add, commit, and push to repo.
     
