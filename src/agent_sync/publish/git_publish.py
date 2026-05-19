@@ -96,6 +96,16 @@ def git_commit_and_push(tmp_dir: Path, repo_url: str, count: int) -> None:
     subprocess.run(["git", "init"], cwd=tmp_dir, check=True, capture_output=True, timeout=10)
     subprocess.run(["git", "branch", "-M", "main"], cwd=tmp_dir, check=True, capture_output=True, timeout=10)
     
+    # Configure git user (required for commits)
+    subprocess.run(
+        ["git", "config", "user.email", "agent-sync@local"],
+        cwd=tmp_dir, check=True, capture_output=True, timeout=10
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "agent-sync"],
+        cwd=tmp_dir, check=True, capture_output=True, timeout=10
+    )
+    
     # Add and commit
     subprocess.run(["git", "add", "."], cwd=tmp_dir, check=True, capture_output=True, timeout=30)
     commit_result = subprocess.run(
