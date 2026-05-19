@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 """Git operations for publish feature.
 
 SoC: Git operations separated from discovery and UI logic.

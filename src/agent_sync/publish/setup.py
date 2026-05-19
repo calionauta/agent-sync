@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 """Publish setup flows - orchestrates discovery, selection, and publishing.
 
 SoC: Orchestration logic separated from git operations and discovery.

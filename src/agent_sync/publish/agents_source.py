@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 """Agent source discovery for publishing."""
 
 import shutil

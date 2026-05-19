@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 """Base types for skill sources."""
 
 from dataclasses import dataclass, field

@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 """Local skills source discovery."""
 
 from pathlib import Path

@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 """Cache management for external repositories."""
 
 import datetime

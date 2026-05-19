@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 """Reusable TUI components for multi-selection interfaces.
 
 SoC: UI logic separated from domain models (models.py).

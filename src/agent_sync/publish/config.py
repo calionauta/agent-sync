@@ -1,11 +1,14 @@
+from __future__ import annotations
+
+
 """Config file management for publish feature."""
+
 
 import os
 import shutil
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 from dataclasses import dataclass, field
 
 import yaml

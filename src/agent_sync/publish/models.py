@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 """Domain models for publish feature.
 
 Separated from UI logic (tui.py) for better SoC and testability.
