@@ -45,7 +45,9 @@ def confirm(prompt: str, default_yes: bool = True) -> bool:
 # =============================================================================
 
 def run_skills_flow() -> bool:
-    """Run skills-only publish flow with single TUI.
+    """Run skills-only publish flow with step-by-step TUI.
+    
+    Reuses run_publish_setup() but skips agents step.
     
     Returns:
         True if published successfully
@@ -59,31 +61,126 @@ def run_skills_flow() -> bool:
     console.print("\n[blue]🔍 Discovering skills...[/]")
     
     config = load_config()
-    sources = discover_skills_sources(config)
+    skills_sources = discover_skills_sources(config)
     
-    if not sources:
+    if not skills_sources:
         console.print("[yellow]⚠ No skills found![/]")
         return False
     
-    source_infos = skills_to_source_infos(sources)
-    initial_selection = _build_initial_selection(config, sources)
-    footer_commands = _build_footer_commands(source_infos)
+    # Build source infos for skills only
+    source_infos = skills_to_source_infos(skills_sources)
     
-    def on_publish(selection: dict[str, list[str]]) -> Optional[dict]:
-        save_selected_skills(selection)
-        total = sum(len(v) for v in selection.values())
-        if confirm(f"\nPublish {total} skills to [green]{published_repo}[/]?"):
-            if publish_skills(selection, sources, published_repo):
-                return selection
-        return None
+    # Build combined source infos (including agents placeholder for load_saved_selection)
+    agents_source_infos = discover_agents_sources()
+    all_source_infos = list(source_infos) + list(agents_source_infos)
     
-    return _run_tui(
-        title="📚 Skills Selection",
-        sources=source_infos,
-        initial_selection=initial_selection,
-        footer_commands=footer_commands,
-        on_publish=on_publish,
-    )
+    # Load saved state from PublishStateManager (consistent with run_publish_setup)
+    selection = load_saved_selection(all_source_infos)
+    
+    # Filter to skills only
+    skills_selection = {k: v for k, v in selection.items() if k != "agents"}
+    
+    # Step-by-step through each source
+    for src_info in source_infos:
+        if not src_info.items:
+            console.print(f"\n[dim]Skipping {src_info.label} (no items)[/]")
+            continue
+        
+        # Title
+        if src_info.source_id == "local":
+            title = "📁 LOCAL"
+        else:
+            title = f"📦 {src_info.label}"
+        
+        # Build state
+        state = SelectionState()
+        state.items = {src_info.source_id: sorted(src_info.items)}
+        state.selected = {src_info.source_id: skills_selection.get(src_info.source_id, set())}
+        state.build_index()
+        
+        # Source loop
+        while True:
+            console.clear()
+            
+            console.print(f"\n[bold cyan]{title}[/]")
+            console.print("[dim]────────────────────────────────────────────────────────[/]")
+            
+            selected = len(state.selected.get(src_info.source_id, set()))
+            total = len(src_info.items)
+            console.print(f"  Selected: [bold green]{selected}[/] / {total}")
+            
+            if src_info.subtitle:
+                console.print(f"  [dim]{src_info.subtitle}[/]")
+            
+            console.print()
+            
+            current_idx = 1
+            for name in src_info.items:
+                is_sel = state.is_selected(src_info.source_id, name)
+                status = "[green]●[/]" if is_sel else "[dim]○[/]"
+                console.print(f"    [dim]{current_idx:02d}[/] {status} {name}")
+                current_idx += 1
+            
+            console.print()
+            console.print("[dim]────────────────────────────────────────────────────────[/]")
+            console.print("  (1-N) select  (a) all  (n) none  (done) next  (q) quit")
+            
+            choice = Prompt.ask("\n[cyan]>[/]", default="done")
+            choice = choice.strip()
+            
+            if choice in ("done", "d"):
+                skills_selection[src_info.source_id] = state.selected.get(src_info.source_id, set())
+                break
+            
+            if choice == "q":
+                console.print("\n[yellow]Cancelled.[/]")
+                return False
+            
+            if choice in ("a", "all"):
+                state.select_all_in_source(src_info.source_id)
+            elif choice in ("n", "none"):
+                state.select_none_in_source(src_info.source_id)
+            else:
+                _handle_number_input(state, choice)
+    
+    # Summary
+    console.clear()
+    console.print("\n[bold cyan]📦 Publish Summary[/]")
+    console.print("[dim]────────────────────────────────────────────────────────[/]")
+    
+    total_selected = 0
+    for src_info in source_infos:
+        selected = skills_selection.get(src_info.source_id, set())
+        if selected:
+            console.print(f"\n[bold]{src_info.label}[/] - {len(selected)} selected:")
+            for name in sorted(selected):
+                console.print(f"  • {name}")
+            total_selected += len(selected)
+        else:
+            console.print(f"\n[dim]{src_info.label}[/] - none selected")
+    
+    if total_selected == 0:
+        console.print("\n[yellow]⚠ Nothing selected![/]")
+        return False
+    
+    console.print()
+    console.print("[dim]────────────────────────────────────────────────────────[/]")
+    
+    if not confirm(f"\nPublish {total_selected} skills to [green]{published_repo}[/]?"):
+        console.print("\n[yellow]Cancelled.[/]")
+        return False
+    
+    # Publish skills only (single operation)
+    console.print("\n[blue]Publishing...[/]")
+    from .git_publish import publish_all
+    success = publish_all(skills_selection, skills_sources, [], published_repo)
+    
+    if success:
+        console.print("\n[green]✓ Published successfully![/]")
+        PublishStateManager.save(skills_selection, {"agents": []})
+        return True
+    
+    return False
 
 
 def _build_initial_selection(config, sources) -> dict[str, set[str]]:
