@@ -15,7 +15,7 @@ from rich.prompt import Prompt
 
 from .config import get_published_repo, load_config, save_selected_skills, PublishStateManager
 from .discovery import discover_skills_sources, skills_to_source_infos, discover_agents_sources, load_saved_selection
-from .git_publish import publish_skills, publish_agents
+from .git_publish import publish_skills, publish_agents, publish_all
 from .models import SelectionState, SourceInfo
 
 
@@ -413,15 +413,9 @@ def run_publish_setup() -> bool:
     skills_sel = {k: list(v) for k, v in selection.items() if k != "agents"}
     agents_sel = list(selection.get("agents", set()))
     
-    success = True
-    
-    if skills_sel and any(len(v) > 0 for v in skills_sel.values()):
-        console.print("\n[blue]Publishing skills...[/]")
-        success = publish_skills(skills_sel, skills_sources, published_repo)
-    
-    if agents_sel and success:
-        console.print("\n[blue]Publishing agents...[/]")
-        success = publish_agents({"agents": agents_sel}, published_repo)
+    # Publish skills AND agents in ONE operation to prevent --force overwrite
+    console.print("\n[blue]Publishing...[/]")
+    success = publish_all(skills_sel, skills_sources, agents_sel, published_repo)
     
     if success:
         console.print("\n[green]✓ Published successfully![/]")
