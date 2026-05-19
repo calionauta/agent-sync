@@ -51,7 +51,8 @@ def main():
 @click.option("--force", is_flag=True, help="Force overwrite existing config")
 def init(name: Optional[str], agents: tuple[str, ...], no_wizard: bool, force: bool):
     """Initialize agent-sync in the current directory."""
-    sync_manager = SyncManager()
+    config = load_sync_config()
+    sync_manager = SyncManager(config)
     
     # Check if already initialized
     if sync_manager.is_initialized() and not force:
@@ -108,7 +109,8 @@ def init(name: Optional[str], agents: tuple[str, ...], no_wizard: bool, force: b
 @click.option("--agents-only", is_flag=True, help="Only sync agent configs")
 def sync(force: bool, skills_only: bool, configs_only: bool, agents_only: bool):
     """Sync skills and configs with the remote repository."""
-    sync_manager = SyncManager()
+    config = load_sync_config()
+    sync_manager = SyncManager(config)
     
     if not sync_manager.is_initialized():
         console.print("[red]✗ Not initialized. Run 'agent-sync init' first.[/red]")
@@ -147,7 +149,11 @@ def sync(force: bool, skills_only: bool, configs_only: bool, agents_only: bool):
 @click.option("--configs-only", is_flag=True, help="Only push configs")
 def push(message: Optional[str], skills_only: bool, configs_only: bool):
     """Push local changes to the remote repository."""
-    sync_manager = SyncManager()
+    from .sync import SyncManager
+    from .config_exporter import load_config as load_sync_config
+    
+    config = load_sync_config()
+    sync_manager = SyncManager(config)
     
     if not sync_manager.is_initialized():
         console.print("[red]✗ Not initialized.[/red]")
@@ -176,7 +182,8 @@ def push(message: Optional[str], skills_only: bool, configs_only: bool):
 @click.option("--configs-only", is_flag=True, help="Only pull configs")
 def pull(force: bool, skills_only: bool, configs_only: bool):
     """Pull changes from the remote repository."""
-    sync_manager = SyncManager()
+    config = load_sync_config()
+    sync_manager = SyncManager(config)
     
     if not sync_manager.is_initialized():
         console.print("[red]✗ Not initialized.[/red]")
@@ -478,7 +485,8 @@ def publish(
 @click.option("--configs", is_flag=True, help="Show configs diff")
 def diff(skills: bool, configs: bool):
     """Show differences between local and remote."""
-    sync_manager = SyncManager()
+    config = load_sync_config()
+    sync_manager = SyncManager(config)
     
     if not sync_manager.is_initialized():
         console.print("[red]✗ Not initialized.[/red]")
@@ -503,7 +511,8 @@ def diff(skills: bool, configs: bool):
 @main.command()
 def status():
     """Show sync status."""
-    sync_manager = SyncManager()
+    config = load_sync_config()
+    sync_manager = SyncManager(config)
     config = Config()
     
     console.print("\n[bold cyan]agent-sync Status[/bold cyan]\n")
