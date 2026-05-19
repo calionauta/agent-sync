@@ -73,6 +73,9 @@ def do_git_publish(
         console.print(f"\n[green]✓ Published {count} {item_name}![/]")
         return True
         
+    except subprocess.CalledProcessError as e:
+        console.print(f"\n[red]✗ Git error: {e.stderr or str(e)}[/]")
+        return False
     except Exception as e:
         console.print(f"\n[red]✗ Error publishing: {e}[/]")
         return False
@@ -90,32 +93,44 @@ def git_commit_and_push(tmp_dir: Path, repo_url: str, count: int) -> None:
         count: Number of items for commit message
     """
     # Initialize git
-    subprocess.run(["git", "init"], cwd=tmp_dir, capture_output=True, timeout=10)
-    subprocess.run(["git", "branch", "-M", "main"], cwd=tmp_dir, capture_output=True, timeout=10)
+    subprocess.run(["git", "init"], cwd=tmp_dir, check=True, capture_output=True, timeout=10)
+    subprocess.run(["git", "branch", "-M", "main"], cwd=tmp_dir, check=True, capture_output=True, timeout=10)
     
     # Add and commit
-    subprocess.run(["git", "add", "."], cwd=tmp_dir, capture_output=True, timeout=30)
-    subprocess.run(
+    subprocess.run(["git", "add", "."], cwd=tmp_dir, check=True, capture_output=True, timeout=30)
+    commit_result = subprocess.run(
         ["git", "commit", "-m", f"feat: publish {count} items"],
         cwd=tmp_dir,
         capture_output=True,
+        text=True,
         timeout=30,
     )
+    if commit_result.returncode != 0:
+        raise subprocess.CalledProcessError(
+            commit_result.returncode, "git commit",
+            commit_result.stdout, commit_result.stderr
+        )
     
     # Push
     subprocess.run(
         ["git", "remote", "add", "origin", repo_url],
         cwd=tmp_dir,
+        check=True,
         capture_output=True,
         timeout=10,
     )
-    subprocess.run(
+    push_result = subprocess.run(
         ["git", "push", "-u", "origin", "main", "--force"],
         cwd=tmp_dir,
-        check=True,
         capture_output=True,
+        text=True,
         timeout=120,
     )
+    if push_result.returncode != 0:
+        raise subprocess.CalledProcessError(
+            push_result.returncode, "git push",
+            push_result.stdout, push_result.stderr
+        )
 
 
 # =============================================================================
