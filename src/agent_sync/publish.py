@@ -109,6 +109,10 @@ def _git_clone_or_init(repo_url: str, tmp_path: Path) -> None:
 
 def _git_push(tmp_path: Path, repo_url: str, message: str) -> None:
     """Add, commit and push to remote."""
+    # Configure git user (required for commits)
+    subprocess.run(["git", "config", "user.email", "agent-sync@local"], cwd=tmp_path, capture_output=True, timeout=15)
+    subprocess.run(["git", "config", "user.name", "agent-sync"], cwd=tmp_path, capture_output=True, timeout=15)
+    
     subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, timeout=30)
     subprocess.run(
         ["git", "commit", "-m", message],
@@ -935,6 +939,8 @@ def publish_skills(
 
             subprocess.run(["gh", "api", f"repos/{repo_name}"], capture_output=True, check=False, timeout=30)
             subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True, timeout=15)
+            subprocess.run(["git", "config", "user.email", "agent-sync@local"], cwd=tmp_path, capture_output=True, timeout=15)
+            subprocess.run(["git", "config", "user.name", "agent-sync"], cwd=tmp_path, capture_output=True, timeout=15)
             subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, check=True, timeout=30)
             subprocess.run(["git", "commit", "-m", f"feat: publish {len(selected_skills)} skills"], cwd=tmp_path, capture_output=True, check=True, timeout=30)
             subprocess.run(["git", "branch", "-M", "main"], cwd=tmp_path, capture_output=True, check=True, timeout=15)

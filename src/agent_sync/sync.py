@@ -223,6 +223,8 @@ class SyncManager:
 
             # Initialize local git
             self._run_git("init")
+            self._run_git("config", "user.email", "agent-sync@local")
+            self._run_git("config", "user.name", "agent-sync")
             self._run_git("remote", "add", "origin", repo_url)
 
         # Create initial structure
