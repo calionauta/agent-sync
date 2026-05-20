@@ -352,17 +352,19 @@ class SyncManager:
             raise RuntimeError("Not linked to a repository. Run 'agent-sync init' or 'link' first")
 
         # Stage files based on flags
-        if skills_only:
-            # Stage only skills
+        # Both flags true = stage ALL (skills + configs + agents)
+        # Both flags false = default = stage ALL
+        # Only skills_only = stage ONLY skills
+        # Only configs_only = stage configs + agents
+        if skills_only and not configs_only:
+            # --skills-only: stage only skills
             self._stage_skills()
-        elif configs_only:
-            # Stage only configs (with new path support)
+        elif configs_only and not skills_only:
+            # --configs-only: stage configs + agents (no skills)
             self._stage_all_agent_files()
-        elif agents_only:
-            # Stage only custom agents
             self._stage_agents()
         else:
-            # Stage everything (default)
+            # Default (both or neither): stage everything
             self._stage_all_agent_files()
             self._stage_skills()
             self._stage_agents()
@@ -578,14 +580,50 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
     def _stage_agent_configs(self) -> None:
         """Stage agent configurations for commit."""
+        import subprocess
         from .agents import get_all_agents
+
+        def _is_submodule(path: Path) -> bool:
+            """Check if a path is a git submodule (has .git entry but no .git dir)."""
+            try:
+                result = subprocess.run(
+                    ["git", "ls-files", "--stage", str(path)],
+                    capture_output=True, text=True, cwd=path.parent if path.is_dir() else path, timeout=5
+                )
+                # If git ls-files shows it as a submodule (mode 160000)
+                for line in result.stdout.splitlines():
+                    if path.name in line and line.startswith("160000"):
+                        return True
+            except Exception:
+                pass
+            return False
 
         for agent in get_all_agents():
             # Skip if agent sync is disabled
             if not self.config.is_agent_enabled(agent.name):
                 continue
 
-            if not agent.is_available() and agent.name != "global-skills":
+            # Skip agents not available locally
+            if not agent.is_available():
+                continue
+
+            # Skip global-skills (it's a special skills-management agent, not a config agent)
+            if agent.name == "global-skills":
+                continue
+
+            # Skip agents whose config dir IS the agent-sync repo or is a parent of it
+            # (this prevents circular copying like ~/.config/opencode/ == configs/opencode/)
+            try:
+                agent_dir_abs = agent.config_path.parent.resolve()
+                repo_dir_abs = self.repo_dir.resolve()
+                if agent_dir_abs == repo_dir_abs or agent_dir_abs.is_relative_to(repo_dir_abs):
+                    continue
+            except (ValueError, OSError):
+                pass
+
+            # Skip submodules (git handles them separately)
+            repo_agent_dir = self.repo_dir / "configs" / agent.name
+            if repo_agent_dir.exists() and _is_submodule(repo_agent_dir):
                 continue
 
             # Get sync options for this agent
@@ -801,6 +839,31 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
         # Ensure repo agents directory exists
         repo_agents_dir.mkdir(parents=True, exist_ok=True)
+
+        # Remove agents directories that are no longer available locally
+        # (e.g., claude-code was uninstalled)
+        for agent_repo_subdir in list(repo_agents_dir.iterdir()):
+            agent_name = agent_repo_subdir.name
+            # Find the agent
+            agent = next((a for a in get_all_agents() if a.name == agent_name), None)
+            if not agent:
+                # Unknown agent in repo - remove it
+                if agent_repo_subdir.is_dir():
+                    shutil.rmtree(agent_repo_subdir)
+                    console.print(f"  [dim]Removed unknown agent: {agent_name}[/dim]")
+                continue
+            # If agent is available, keep (will be updated above)
+            if agent.is_available():
+                continue
+            # If agent has local agents dirs, keep (might have custom agents)
+            has_local = (agent.agents_path and agent.agents_path.exists()) or \
+                        (agent.agents_path_global and agent.agents_path_global.exists())
+            if has_local:
+                continue
+            # Agent not available and no local agents dirs - remove
+            if agent_repo_subdir.is_dir():
+                shutil.rmtree(agent_repo_subdir)
+                console.print(f"  [dim]Removed unavailable agent: {agent_name}[/dim]")
 
         for agent in get_all_agents():
             # Skip if agent sync is disabled
@@ -1208,6 +1271,8 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             # Restore pi.dev extra paths from repo to original locations
             if agent.name == "pi.dev":
                 self._restore_pi_extra_paths(agent, synced_config_dir, changes)
+            
+            extra_paths = agent.data.get("extra_paths", {})
             if extra_paths and agent.name != "pi.dev":
                 for category, source_paths in extra_paths.items():
                     synced_category_dir = synced_config_dir / category

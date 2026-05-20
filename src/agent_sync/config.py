@@ -54,6 +54,24 @@ class Config:
                 loaded = yaml.safe_load(f)
                 self._overrides = loaded if isinstance(loaded, dict) else {}
 
+        # Ensure protocols section is always initialized from defaults if not present
+        self._init_protocols_defaults()
+
+    def _init_protocols_defaults(self) -> None:
+        """Ensure protocols section has defaults (for migrating existing configs)."""
+        defaults = self._init_protocols_default()
+        if "protocols" not in self._config:
+            self._config["protocols"] = {}
+        # Merge each protocol's defaults
+        for proto_name, proto_defaults in defaults.items():
+            if proto_name not in self._config["protocols"]:
+                self._config["protocols"][proto_name] = proto_defaults
+            else:
+                # Merge individual keys
+                for key, value in proto_defaults.items():
+                    if key not in self._config["protocols"][proto_name]:
+                        self._config["protocols"][proto_name][key] = value
+
     def save(self) -> None:
         """Save configuration to file with help header."""
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -259,34 +277,29 @@ class Config:
             "include_mcp_secrets": False,
             # global_skills: sempre true (implícito)
             # Protocol support (opt-in)
-            "protocols": {
-                "dotagents": {
-                    "enabled": True,  # Já funciona por padrão
-                    "skills_hub": "~/.agents/skills/"
-                },
-                "gitagent": {
-                    "enabled": False,  # Opt-in - não buscar por padrão
-                    "patterns": [  # Arquivos GitAgent a sincronizar
-                        "agent.yaml",
-                        "SOUL.md",
-                        "RULES.md",
-                        "DUTIES.md",
-                        "AGENTS.md",
-                        "skills/",
-                        "knowledge/",
-                        "memory/",
-                        "hooks/",
-                        "workflows/",
-                        "tools/",
-                        "compliance/"
-                    ]
-                }
-            }
+            "protocols": self._init_protocols_default()
         }
 
         self._config = default_config
         self.save()
         return self.config_path
+
+    def _init_protocols_default(self) -> dict:
+        """Get default protocols configuration."""
+        return {
+            "dotagents": {
+                "enabled": True,
+                "skills_hub": "~/.agents/skills/"
+            },
+            "gitagent": {
+                "enabled": False,
+                "patterns": [
+                    "agent.yaml", "SOUL.md", "RULES.md", "DUTIES.md",
+                    "AGENTS.md", "skills/", "knowledge/", "memory/",
+                    "hooks/", "workflows/", "tools/", "compliance/"
+                ]
+            }
+        }
 
     def get_protocol_settings(self, protocol: str) -> dict:
         """Get settings for a specific protocol.
