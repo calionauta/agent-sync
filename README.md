@@ -110,8 +110,8 @@ agent-sync skills publish --repo https://github.com/YOUR_USERNAME/agent-sync-pub
 #### 🔄 Sync & Backup
 - `init` - Initialize a new sync repository (first machine)
 - `link <url>` - Connect to an existing repository (other machines)
-- `push` - Backup local changes to GitHub `[-m, --skills-only, --configs-only, --agents-only]`
-- `pull` - Download and apply changes from GitHub `[--force, --skills-only, --configs-only, --agents-only]`
+- `push` - Backup local changes to GitHub `[-m, --skills-only, --configs-only]`
+- `pull` - Download and apply changes from GitHub `[--force, --skills-only, --configs-only]`
 - `status` - Check sync state per agent
 
 #### 🤖 Agent Management
@@ -135,33 +135,23 @@ agent-sync skills publish --repo https://github.com/YOUR_USERNAME/agent-sync-pub
 - `skills delete` - Delete skills from hub and all agent directories (interactive)
 
 #### 📤 Publish
-- `publish` - Publish skills and/or agent instructions to public GitHub
-  - `publish` (default) — Publish both skills AND agent instructions
-  - `publish --skills` — Publish only skills
-  - `publish --agents` — Publish only agent instructions (AGENTS.md, GEMINI.md, etc.)
-  - `--dry-run` — Preview without publishing
-  - `--repo <url>` — Specify or set target repository
-
+- `publish` - Publish skills and agents to a public GitHub repository
+  Run without options to select and publish interactively.
+  
   **Source Management:**
   - `publish --list-sources` — List configured external skill sources
   - `publish --add-source <url>` — Add external GitHub repository as skill source
   - `publish --remove-source <url>` — Remove external skill source
-
+  
   **Cache:**
   - `publish --clear-cache` — Clear cached repositories
   - `publish --reset-selection` — Reset saved selections
-
+  
   **Security Scanner:** Scans for sensitive content before publishing:
   - Absolute paths (`/Users/`, `/home/`, `/root/`)
   - API tokens (`sk-`, `ghp_`)
   - Internal commands (`/skill:`, `ctx_batch_execute()`)
   - Server paths (`server.`, `.renatocaliari.com`)
-
-  **⚠️ Deprecated:** `skills publish` → Use `publish --skills` instead
-
-  **Unified Flow (v0.20+):**
-  - Discovery → Summary table → Security scan → Confirm → Publish
-  - Security warnings are contextual based on --skills/--agents/--all
 
 #### 🛠️ System
 - `config show` - View current configuration

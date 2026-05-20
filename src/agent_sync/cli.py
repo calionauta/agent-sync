@@ -369,16 +369,99 @@ def skills_group():
 def list_skills():
     """List available skills."""
     skills_dir = Path.home() / ".agents" / "skills"
-    
+
     if not skills_dir.exists():
         console.print("[yellow]No skills directory found.[/yellow]")
         return
-    
+
     skills = [d.name for d in skills_dir.iterdir() if d.is_dir() and not d.name.startswith(".")]
-    
+
     console.print(f"\n[cyan]Skills ({len(skills)}):[/cyan]")
     for skill in sorted(skills):
         console.print(f"  • {skill}")
+
+
+@skills_group.command("centralize")
+@click.option("--copy", is_flag=True, help="Copy skills (keep originals in agent directories)")
+@click.option("--push", is_flag=True, help="Push to GitHub after centralizing")
+@click.option("--distribute", is_flag=True, help="Copy all skills to all agent directories")
+@click.option("--yes", "skip_orphans", is_flag=True, help="Skip orphan skills")
+@click.option("--import-all", is_flag=True, help="Import all orphan skills without TUI")
+@click.option("--dry-run", is_flag=True, help="Preview changes without modifying anything")
+def centralize_skills(
+    copy: bool,
+    push: bool,
+    distribute: bool,
+    skip_orphans: bool,
+    import_all: bool,
+    dry_run: bool,
+):
+    """Centralize skills from all agents to ~/.agents/skills/.
+
+    Scans agent directories for scattered skills and consolidates them into the
+    global DotAgents hub (~/.agents/skills/). This is the single source of truth.
+
+    \b
+    Examples:
+      agent-sync skills centralize         # Move skills to hub (default)
+      agent-sync skills centralize --copy  # Copy skills (keep originals)
+      agent-sync skills centralize --push  # Centralize then push to GitHub
+
+    \b
+    Safety features:
+      --yes           Skip orphan skills (non-interactive)
+      --import-all    Import all orphans without TUI
+      --dry-run       Preview without changing anything
+      --distribute    Copy all skills to all agent directories
+    """
+    from .centralize.handlers.dot_agents_handler import DotAgentsHandler
+    from .skills import SkillsManager
+
+    move = not copy
+    action = "Copying" if copy else "Moving"
+
+    # Ensure DotAgents structure
+    handler = DotAgentsHandler()
+    handler.ensure_structure(dry_run=dry_run)
+
+    console.print(f"\n[bold]📁 {action} Skills to ~/.agents/skills/[/]\n")
+
+    skills_mgr = SkillsManager()
+    stats = skills_mgr.centralize(
+        move=move,
+        skip_orphans=skip_orphans,
+        import_all=import_all,
+        dry_run=dry_run,
+    )
+
+    if dry_run:
+        console.print("\n[dim]Dry run — no changes made.[/dim]\n")
+        return
+
+    # Distribute to all agents
+    if distribute:
+        console.print("\n[bold]📤 Distributing skills to all agents...[/]\n")
+        dist = skills_mgr.distribute_to_all_agents()
+        console.print(f"  [green]✓ Distributed {dist['distributed']} skills to {dist['agents_configured']} agents[/]\n")
+
+    # Push to GitHub
+    if push or Confirm.ask("\n[bold]Push to GitHub?[/]", default=True):
+        console.print("\n[bold]📤 Pushing to GitHub...[/]\n")
+        try:
+            subprocess.run(["git", "add", "."], check=True, capture_output=True, timeout=30)
+            subprocess.run(
+                ["git", "commit", "-m", "chore: centralize skills"],
+                check=True, capture_output=True, timeout=30,
+            )
+            subprocess.run(
+                ["git", "push", "origin", "main"],
+                check=True, capture_output=True, timeout=120,
+            )
+            console.print("[green]✓ Pushed![/]\n")
+        except subprocess.CalledProcessError as e:
+            console.print(f"[yellow]⚠ Git error: {e.stderr or e}. Run 'agent-sync push' manually.[/]\n")
+    else:
+        console.print("💡 Run [green]agent-sync push[/] to sync to GitHub\n")
 
 
 # =============================================================================
