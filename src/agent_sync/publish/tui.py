@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 """Reusable TUI components for multi-selection interfaces.
 
 SoC: UI logic separated from domain models (models.py).
@@ -15,6 +14,8 @@ from .models import (
     SelectionState,
     SourceInfo,
 )
+
+from .._tui import print_footer
 
 
 console = Console()
@@ -144,18 +145,19 @@ class MultiSelectTUI:
     
     def _print_footer(self) -> None:
         """Print the footer with commands."""
-        console.print("[dim]────────────────────────────────────────────────────────[/]")
-        
-        cmd_parts = []
+        # Detect default from first command (publish/push) — usually the action command
+        default_key = None
         for key, desc in self.footer_commands:
-            cmd_parts.append(f"[cyan][{key}][/]{desc}")
-        
-        console.print("  " + "  ".join(cmd_parts))
+            desc_lower = desc.lower()
+            if desc_lower in ("publish", "push", "confirm"):
+                default_key = key
+                break
+        print_footer(self.footer_commands, default_key=default_key)
     
     def _get_input(self) -> str:
         """Get user input."""
         from rich.prompt import Prompt
-        return Prompt.ask("\n[cyan]>[/]", default="publish")
+        return Prompt.ask("\n> ", default="publish")
     
     def _handle_input(
         self,

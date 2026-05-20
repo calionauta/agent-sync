@@ -15,6 +15,7 @@ from rich.console import Console
 from rich.prompt import Prompt
 from rich.table import Table
 
+from ._tui import print_footer
 from .agents import BaseAgent, get_all_agents
 
 console = Console()
@@ -245,19 +246,27 @@ class SkillsManager:
 
             console.print(table)
             console.print(f"\n[dim]{len(items)} skills | {len(selected)} selecionadas[/]")
-            console.print("[dim]────────────────────────────────────────────────────────[/]")
-            console.print("  [1-N]select    [a]all    [n]none    [r]remove    [Enter]select")
+            print_footer([
+                ("1-N", "select"),
+                ("a", "all"),
+                ("n", "none"),
+                ("m", "move to hub"),
+                ("d", "distribute"),
+            ], default_key="Enter")
 
-            choice = Prompt.ask("\n[cyan]>[/]")
+            choice = Prompt.ask("\n> ")
 
             # Parse shortcuts
             if choice.lower() == "a":
                 selected = set(all_orphan_names)
             elif choice.lower() == "n":
                 selected = set()
-            elif choice.lower() == "r":
-                # Remove: clear selection and exit
-                return set(), True
+            elif choice.lower() == "m":
+                # Move ALL orphans to hub + clean from agents
+                return set(all_orphan_names), "move"
+            elif choice.lower() == "d":
+                # Distribute ALL: import all to hub + copy back to agents
+                return set(all_orphan_names), "distribute"
             elif choice == "":
                 # Enter: confirm current selection
                 break
@@ -266,19 +275,18 @@ class SkillsManager:
                 if result is not None:
                     selected = result
 
-        return selected, False
+        return selected, None
 
     @staticmethod
-    def _post_selection_prompt(unselected_count: int, agent_names: list[str]) -> bool:
-        """Ask user: keep or remove unselected orphan skills.
-        Returns: True=Remove, False=Keep."""
+    def _post_selection_prompt(unselected_count: int, agent_names: list[str]) -> str:
+        """Ask user: move orphans to hub or keep in agents.
+        Returns: "move" or "keep"."""
         agents_str = ", ".join(sorted(set(agent_names)))
         console.print(f"\n📌 [bold]{unselected_count} skill(s)[/] não selecionadas.")
         console.print(f"   Estão em: [yellow]{agents_str}[/]\n")
-        console.print("[dim]────────────────────────────────────────────────────────[/]")
-        console.print("  [r]remove (default)    [k]keep")
-        choice = Prompt.ask("\n> ", default="r")
-        return choice.lower() != "k"
+        print_footer([("m", "move to hub"), ("k", "keep in agents")], default_key="m")
+        choice = Prompt.ask("\n> ")
+        return "move" if choice.lower() != "k" else "keep"
 
     def scan_all_agents(self) -> dict[str, list[Path]]:
         """Scan all agents for existing skills.
@@ -559,8 +567,8 @@ class SkillsManager:
         # ----------------------------------------------------------------
         # PHASE 5: Select which orphans to import
         # ----------------------------------------------------------------
-        # Initialize remove flag (set by [r] shortcut in TUI)
-        should_remove_unselected = False
+        # Initialize orphan action flag
+        orphan_action: str | None = None  # "move", "distribute", or None
 
         if orphans:
             if is_fresh_setup:
@@ -583,7 +591,7 @@ class SkillsManager:
                                      "[green]--import-all[/] to import all.\n")
                         selected_orphans = set()
                     else:
-                        selected_orphans, should_remove_unselected = self._orphan_selection_tui(orphans)
+                        selected_orphans, orphan_action = self._orphan_selection_tui(orphans)
                 except Exception as e:
                     console.print(f"[red]✗ TUI error: {e}[/red]. Falling back to --yes mode.\n")
                     selected_orphans = set()
@@ -642,13 +650,23 @@ class SkillsManager:
             console.print()
 
         # ----------------------------------------------------------------
-        # PHASE 7: Remove ALL orphans from agents (via [r] shortcut in TUI)
+        # PHASE 7: Handle [m] move to hub or [d] distribute shortcuts
         # ----------------------------------------------------------------
-        if not dry_run and should_remove_unselected:
-            remove_targets = selected_orphans or unselected
-            if remove_targets:
-                self._safe_remove_orphans(remove_targets, orphans, stats)
-                unselected = set()  # Skip post-selection prompt
+        if orphan_action == "move" and unselected:
+            # [m] pressed in TUI: move ALL orphans to hub, remove from agents
+            console.print()
+            self._centralize_orphans(unselected, orphans, stats, remove_from_agents=True)
+            console.print()
+            unselected = set()  # Skip post-selection
+
+        elif orphan_action == "distribute" and unselected:
+            # [d] pressed in TUI: import to hub AND distribute to agents
+            console.print()
+            self._centralize_orphans(unselected, orphans, stats, remove_from_agents=False)
+            dist = self.distribute_to_all_agents()
+            console.print(f"  [green]✓ Distributed {dist['distributed']} skills to {dist['agents_configured']} agents[/]\n")
+            console.print()
+            unselected = set()
 
         # ----------------------------------------------------------------
         # PHASE 8: Keep or Remove unselected orphans (via post-selection prompt)
@@ -657,16 +675,17 @@ class SkillsManager:
             if skip_orphans:
                 console.print(f"  [yellow]--yes: keeping {len(unselected)} unselected skill(s) in agents[/yellow]\n")
             elif import_all:
-                pass
+                pass  # With import_all, everything was selected and imported in Phase 6
             else:
                 agent_names = []
                 for name in unselected:
                     for a, _ in orphans[name]["agents"]:
                         agent_names.append(a)
-                should_remove = self._post_selection_prompt(len(unselected), agent_names)
-
-                if should_remove:
-                    self._safe_remove_orphans(unselected, orphans, stats)
+                action = self._post_selection_prompt(len(unselected), agent_names)
+                # action is "move" or "keep"
+                if action == "move":
+                    console.print()
+                    self._centralize_orphans(unselected, orphans, stats, remove_from_agents=True)
                 else:
                     console.print("  [green]✓ Keeping unselected skills in agents[/green]\n")
 
@@ -682,10 +701,13 @@ class SkillsManager:
             console.print("  [green]✓[/] No user symlinks found\n")
 
         # ----------------------------------------------------------------
-        # PHASE 10: Configure agents (without destructive cleanup)
+        # PHASE 10: Configure agents (if not already handled by [m] or [d])
         # ----------------------------------------------------------------
-        console.print("[bold]⚙️  Configuring agents to use global skills...[/]\n")
-        self.configure_agents()
+        # Skip if orphan_action was "move" (already removed from agents)
+        # Skip if orphan_action was "distribute" (already distributed to agents)
+        if orphan_action is None:
+            console.print("[bold]⚙️  Configuring agents to use global skills...[/]\n")
+            self.configure_agents()
 
         # ----------------------------------------------------------------
         # SUMMARY
@@ -732,36 +754,42 @@ class SkillsManager:
                     except Exception as e:
                         console.print(f"  [red]✗ Failed to remove {name} from {agent_name}: {e}[/]")
 
-    def _safe_remove_orphans(self, skill_names: set, orphans: dict, stats: dict) -> None:
-        """Centralize then remove orphans — hub backup before delete.
+    def _centralize_orphans(
+        self,
+        skill_names: set,
+        orphans: dict,
+        stats: dict,
+        remove_from_agents: bool = True,
+    ) -> None:
+        """Centralize orphans: copy to hub, optionally remove from agents.
 
-        For each orphan:
-        1. If NOT in hub → copy to hub (backup)
-        2. Remove from all agents
+        Priority for which copy to use:
+        1. If skill already in hub → use hub version (repo sync is authoritative)
+        2. If skill in multiple agents → pick the first one (deterministic)
 
         Args:
-            skill_names: Set of skill names to centralize+remove
+            skill_names: Set of skill names to centralize
             orphans: Orphan info dict with agent paths
             stats: Stats dict to update
+            remove_from_agents: If True, remove from agents after hub backup
         """
-        console.print("\n[bold]🗑 Centralizing then removing from agents...[/]\n")
-
         hub = self.global_skills_dir
         hub.mkdir(parents=True, exist_ok=True)
 
-        backed_up = 0
-        already_in_hub = 0
+        moved = 0
+        skipped = 0
         removed = 0
 
-        for name in skill_names:
+        for name in sorted(skill_names):
             if name not in orphans:
                 continue
 
             hub_path = hub / name
-            already_there = hub_path.exists()
 
-            # Step 1: backup to hub if needed
-            if not already_there:
+            # Step 1: ensure skill is in hub (if not already)
+            if hub_path.exists():
+                skipped += 1
+            else:
                 info = orphans[name]
                 agent_name, skill_path = info["agents"][0]
                 try:
@@ -769,34 +797,33 @@ class SkillsManager:
                         shutil.copytree(skill_path, hub_path)
                     else:
                         shutil.copy2(skill_path, hub_path)
-                    console.print(f"  [green]✓[/] {name} [dim](backed up to hub)[/]")
-                    backed_up += 1
+                    console.print(f"  [green]✓[/] {name} [dim](centralized from {agent_name})[/]")
+                    moved += 1
                 except Exception as e:
-                    console.print(f"  [red]✗ Failed to backup {name}: {e}[/]")
-                    continue
-            else:
-                already_in_hub += 1
+                    console.print(f"  [red]✗[/] {name} - {e}")
 
-            # Step 2: remove from all agents
-            for agent_name, skill_path in orphans[name]["agents"]:
-                if skill_path.exists():
-                    try:
-                        if skill_path.is_dir():
-                            shutil.rmtree(skill_path)
-                        else:
-                            skill_path.unlink()
-                        console.print(f"  [yellow]🗑[/] {name} [dim](removed from {agent_name})[/]")
-                        removed += 1
-                    except Exception as e:
-                        console.print(f"  [red]✗ Failed to remove {name} from {agent_name}: {e}[/]")
+            # Step 2: remove from agents (if requested)
+            if remove_from_agents:
+                for agent_name, skill_path in orphans[name]["agents"]:
+                    if skill_path.exists():
+                        try:
+                            if skill_path.is_dir():
+                                shutil.rmtree(skill_path)
+                            else:
+                                skill_path.unlink()
+                            console.print(f"  [yellow]🗑[/] {name} [dim](removed from {agent_name})[/]")
+                            removed += 1
+                        except Exception as e:
+                            console.print(f"  [red]✗[/] {name} - {e}")
 
-        console.print()
-        if backed_up > 0:
-            console.print(f"  [green]✓ Backed up {backed_up} skill(s) to hub[/green]")
-        if already_in_hub > 0:
-            console.print(f"  [dim]  {already_in_hub} skill(s) already in hub[/dim]")
-        console.print()
+        if moved > 0:
+            console.print(f"  [green]✓ Centralized {moved} skill(s) to hub[/green]")
+        if skipped > 0:
+            console.print(f"  [dim]  {skipped} skill(s) already in hub[/dim]")
+        if removed > 0:
+            console.print(f"  [yellow]🗑 Removed {removed} copy(ies) from agents[/yellow]")
 
+        stats["orphans_imported"] = stats.get("orphans_imported", 0) + moved
         stats["orphans_removed"] = stats.get("orphans_removed", 0) + removed
 
     def _cleanup_user_symlinks(self, preserve_extension_symlinks: bool = True) -> int:
