@@ -28,6 +28,8 @@ from .publish import (
 )
 from .sync import SyncManager
 from .validators import validate_github_url
+from .mcp_merger import MCPMerger
+from .secrets import SecretsManager
 
 
 console = Console()
@@ -661,6 +663,244 @@ def version():
     console.print("  Config: ~/.config/agent-sync/")
     console.print("  Skills: ~/.agents/skills/")
     console.print("  Cache: ~/.cache/agent-sync/")
+
+
+
+# =============================================================================
+# LINK COMMAND
+# =============================================================================
+
+@main.command("link")
+@click.argument("repo_url")
+def link(repo_url: str):
+    """Link to an existing sync repository (additional machines)."""
+    if not validate_github_url(repo_url):
+        console.print(f"\n✗ Invalid repository URL\n   Expected: https://github.com/user/repo.git\n   Got: {repo_url}\n")
+        raise click.Abort()
+
+    console.print(f"\n🔗 Linking to repository: {repo_url}")
+
+    config = Config()
+    sync_manager = SyncManager(config)
+
+    try:
+        sync_manager.link_repo(repo_url)
+        console.print("\n✅ Successfully linked to repository")
+        console.print("\n📥 Run 'agent-sync pull' to download configs")
+    except Exception as e:
+        console.print(f"\n❌ Error: {e}")
+
+
+
+# =============================================================================
+# CONFIG GROUP
+# =============================================================================
+
+@main.group("config")
+def config_group():
+    """Manage configuration (view, edit, reset)."""
+    pass
+
+
+@config_group.command("show")
+def config_show():
+    """Show current configuration."""
+    config = Config()
+    if not config.repo_url:
+        console.print("\n[yellow]⚠ Not configured yet. Run 'agent-sync setup'[/yellow]\n")
+        return
+
+    console.print(f"\n[bold]📋 Current Configuration[/]\n")
+    console.print(f"Repository: {config.repo_url}")
+    console.print(f"Enabled agents: {', '.join(config.agents)}")
+    console.print(f"Config file: {config.config_path}\n")
+
+
+@config_group.command("repo")
+@click.argument("repo_url", required=False)
+@click.option("--remove", is_flag=True, help="Remove repository configuration")
+def config_repo(repo_url: str | None, remove: bool):
+    """View or set the GitHub repository URL."""
+    config = Config()
+
+    if remove:
+        if not config.repo_url:
+            console.print("\n[yellow]No repository configured[/yellow]\n")
+            return
+        old = config.repo_url
+        config.repo_url = None
+        console.print(f"\n[green]✓ Repository removed: {old}[/green]\n")
+        return
+
+    if repo_url:
+        if not validate_github_url(repo_url):
+            console.print(f"\n[red]✗ Invalid URL: {repo_url}[/red]\n")
+            return
+        config.repo_url = repo_url
+        console.print(f"\n[green]✓ Repository set: {repo_url}[/green]\n")
+        return
+
+    if not config.repo_url:
+        console.print("\n[yellow]⚠ Not configured[/yellow]\n")
+        console.print("Run: agent-sync config repo <url>\n")
+        return
+
+    console.print(f"\n[cyan]📦 Repository:[/cyan] {config.repo_url}\n")
+
+
+@config_group.command("edit")
+def config_edit():
+    """Open configuration file in editor."""
+    import os, subprocess
+    config = Config()
+    if not config.config_path.exists():
+        config.generate_default()
+    editor = os.environ.get("EDITOR", "nano")
+    try:
+        subprocess.run([editor, str(config.config_path)], check=True)
+        console.print("\n[green]✓ Configuration saved[/green]\n")
+    except FileNotFoundError:
+        console.print(f"\n[yellow]Editor '{editor}' not found[/yellow]\n")
+    except Exception as e:
+        console.print(f"\n[red]Error: {e}[/red]\n")
+
+
+
+@config_group.command()
+@click.confirmation_option(prompt="Are you sure you want to reset?")
+def reset():
+    """Reset configuration to defaults (keeps repo linked)."""
+    config = Config()
+    path = config.reset()
+    console.print(f"\n[green]✓ Reset to defaults: {path}[/green]\n")
+
+
+
+# =============================================================================
+# SECRETS GROUP
+# =============================================================================
+
+@main.group("secrets")
+def secrets_group():
+    """Manage secrets and environment variables.
+
+    Note: agent-sync does not scrub secrets. Config files are synced as-is.
+    ALWAYS use a private repository.
+    """
+    pass
+
+
+@secrets_group.command("list")
+def secrets_list():
+    """List all secrets and environment variables."""
+    secrets_mgr = SecretsManager()
+    console.print("\n[bold]🔐 Secrets Manager[/]\n")
+    console.print(f"[dim].env file: {secrets_mgr.env_file}[/dim]\n")
+    if secrets_mgr.env_file.exists():
+        content = secrets_mgr.env_file.read_text()
+        if content.strip():
+            console.print("[bold green]✓ .env file:[/]")
+            console.print(f"[dim]{content}[/dim]\n")
+        else:
+            console.print("[yellow]⚠ .env file is empty[/yellow]\n")
+    else:
+        console.print("[yellow]⚠ No .env file found[/yellow]\n")
+
+
+@secrets_group.command("edit")
+def secrets_edit():
+    """Edit secrets in your $EDITOR."""
+    import os, subprocess
+    secrets_mgr = SecretsManager()
+    if not secrets_mgr.env_file.exists():
+        secrets_mgr.env_file.parent.mkdir(parents=True, exist_ok=True)
+        secrets_mgr.env_file.write_text("# agent-sync environment variables\n")
+    editor = os.environ.get("EDITOR", "nano")
+    try:
+        subprocess.run([editor, str(secrets_mgr.env_file)], check=True)
+        console.print("\n[green]✓ Secrets saved[/green]\n")
+    except FileNotFoundError:
+        console.print(f"\n[yellow]Editor '{editor}' not found[/yellow]\n")
+    except Exception as e:
+        console.print(f"\n[red]Error: {e}[/red]\n")
+
+
+
+@secrets_group.command("enable")
+def secrets_enable():
+    """Enable secrets synchronization."""
+    secrets_mgr = SecretsManager()
+    secrets_mgr.enable()
+    console.print("\n[green]✓ Secrets synchronization enabled[/green]")
+    console.print("[dim]Warning: Secrets will be synced to your repository[/dim]\n")
+    console.print("[yellow]⚠️  IMPORTANT: Only use with a PRIVATE repository![/yellow]\n")
+
+
+
+@secrets_group.command("disable")
+def secrets_disable():
+    """Disable secrets synchronization."""
+    secrets_mgr = SecretsManager()
+    secrets_mgr.disable()
+    console.print("\n[green]✓ Secrets synchronization disabled[/green]\n")
+
+
+
+# =============================================================================
+# MCP COMMAND
+# =============================================================================
+
+@main.command("mcp")
+@click.option("--dry-run", is_flag=True, help="Show merge preview without creating file")
+@click.option("--force", is_flag=True, help="Overwrite existing ~/.agents/mcp.json")
+@click.option("--conflicts", is_flag=True, help="Show only conflict report")
+@click.option("--source", "-s", multiple=True, type=click.Path(exists=True), help="Additional MCP config sources")
+@click.option("--output", type=click.Path(), default=None, help="Output path")
+def mcp(dry_run: bool, force: bool, conflicts: bool, source: tuple[str, ...], output: str | None):
+    """Export unified MCP configuration.
+
+
+    Scans vendor MCP configs and merges them into ~/.agents/mcp.json.
+    Does NOT modify vendor configs - creates a unified DotAgents-compatible file.
+
+    """
+    from pathlib import Path
+
+    sources = [Path(s) for s in source]
+    merger = MCPMerger(sources=sources if sources else None)
+
+    found = merger.find_mcp_configs()
+    if not found and not sources:
+        console.print("\n[yellow]⚠ No MCP configs found.[/yellow]")
+        console.print("[dim]Known: ~/.claude/mcp.json, ~/.cursor/mcp.json[/dim]")
+        console.print("[dim]Use --source to specify custom locations.[/dim]\n")
+        return
+
+    console.print("\n[bold]📋 MCP Config Sources[/]\n")
+    for src in (found + sources):
+        console.print(f"  • {src}")
+    console.print()
+
+    merger.merge()
+
+    if merger.conflicts:
+        console.print(merger.get_conflict_report())
+
+    if conflicts:
+        return
+
+    output_path = Path(output) if output else MCPMerger.DEFAULT_OUTPUT
+
+    if dry_run:
+        console.print(f"[dim]Would export to: {output_path}[/dim]\n")
+        console.print_json(data=merger.merge())
+        console.print()
+    elif output_path.exists() and not force:
+        console.print(f"[yellow]⚠ {output_path} exists. Use --force.[/yellow]\n")
+    else:
+        merger.save(output_path)
+        console.print(f"[green]✓[/green] Unified MCP config exported to {output_path}")
+        console.print(f"[dim]Servers: {len(merger.servers)}, Conflicts: {len(merger.conflicts)}[/dim]\n")
 
 
 if __name__ == "__main__":
