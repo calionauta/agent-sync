@@ -538,9 +538,141 @@ def repos_list():
     # ─── Help ─────────────────────────────────────────────────────────────
     console.print("[bold]Change repositories:[/]")
     console.print("  sync/push:    [cyan]agent-sync config repo <url>[/cyan]")
-    console.print("  publish add:  [cyan]agent-sync pub-repos add <url>[/cyan]")
-    console.print("  publish list: [cyan]agent-sync repos list[/cyan]")
+    console.print("  publish add:  [cyan]agent-sync publish add <url>[/cyan]")
+    console.print("  publish list: [cyan]agent-sync publish list[/cyan]")
     console.print()
+
+
+# =============================================================================
+# PUBLISH REPOS COMMAND
+# =============================================================================
+
+# =============================================================================
+# PUB-REPOS COMMAND
+# =============================================================================
+
+def _publish_repos_add(url: str) -> None:
+    """Add a publish repository."""
+    from .publish.config import get_published_repo, set_published_repo
+    from .validators import validate_github_url
+    import subprocess
+    from rich.prompt import Confirm
+
+    if not validate_github_url(url):
+        console.print(f"[red]✗ Invalid URL: {url}[/red]")
+        return
+    
+    if get_published_repo() == url:
+        console.print(f"[yellow]⚠ Already current: {url}[/yellow]")
+        return
+    
+    console.print(f"\n[dim]🔍 Checking {url}...[/dim]")
+    try:
+        result = subprocess.run(
+            ["gh", "api", "repos", url.replace("https://github.com/", "")],
+            capture_output=True, timeout=30
+        )
+        if result.returncode != 0:
+            console.print(f"[red]✗ Cannot access: {url}[/red]")
+            return
+    except Exception as e:
+        console.print(f"[red]✗ Error: {e}[/red]")
+        return
+    
+    if not Confirm.ask(f"\n[bold]Set as publish target?[/]\n  {url}", default=True):
+        console.print("[dim]Cancelled.[/dim]")
+        return
+    
+    set_published_repo(url)
+    console.print(f"\n[green]✓ Added: {url}[/green]")
+    console.print(f"\n[dim]Run 'agent-sync repos list' to see all repos.\n[/dim]")
+
+
+def _publish_repos_list() -> None:
+    """List all configured publish repositories."""
+    from .publish.config import get_published_repo, load_config
+
+    config = load_config()
+    published_repo = get_published_repo()
+    sources = config.skill_sources
+    
+    repos = []
+    if published_repo:
+        repos.append({"url": published_repo, "type": "published"})
+    for src in sources:
+        if src.url != published_repo:
+            repos.append({"url": src.url, "type": "source"})
+    
+    if not repos:
+        console.print("\n[yellow]No publish repositories configured.[/yellow]")
+        console.print("\n[dim]Add: agent-sync publish add <url>[/dim]\n")
+        return
+    
+    console.print(f"\n[bold]📦 Publish Repos ({len(repos)} repos)[/]\n")
+    for i, repo in enumerate(repos, 1):
+        t = "published" if repo["type"] == "published" else "source"
+        name = repo["url"].replace("https://github.com/", "")
+        console.print(f"  {i:02d}. {name} [dim]({t})[/dim]")
+    console.print("\n[dim]Add/remove: agent-sync publish add|remove <url>[/dim]\n")
+
+
+@main.group("publish")
+def publish_group():
+    """Manage publish repositories.
+    
+    Commands:
+      add <url>     Add a publish repository
+      list          List all configured repositories
+      remove <url>  Remove a repository
+    
+    Examples:
+      agent-sync publish add https://github.com/user/repo
+      agent-sync publish list
+      agent-sync publish remove https://github.com/user/repo
+    """
+    pass
+
+
+@publish_group.command("add")
+@click.argument("url")
+def publish_add(url: str):
+    """Add a publish repository.
+    
+    Examples:
+      agent-sync publish add https://github.com/user/repo
+    """
+    _publish_repos_add(url)
+
+
+@publish_group.command("list")
+def publish_list():
+    """List all configured publish repositories."""
+    _publish_repos_list()
+
+
+@publish_group.command("remove")
+@click.argument("url")
+def publish_remove(url: str):
+    """Remove a publish repository.
+    
+    Examples:
+      agent-sync publish remove https://github.com/user/repo
+    """
+    from .publish.config import remove_source
+    success = remove_source(url)
+    if success:
+        console.print(f"\n[green]✓ Removed: {url}[/green]\n")
+    else:
+        console.print(f"[yellow]⚠ Not found: {url}[/yellow]\n")
+
+
+
+# =============================================================================
+# PUBLISH COMMAND
+# =============================================================================
+
+# PUBLISH COMMAND
+# =============================================================================
 
 
 @skills_group.command("list")
@@ -802,128 +934,7 @@ def centralize_skills(copy: bool, push: bool, dry_run: bool):
             console.print(f"\n[dim]Manage repos: agent-sync repos list[/dim]\n")
         else:
             console.print(f"\n[dim]Nothing to push to {cfg.repo_url}[/dim]\n")
-
-# =============================================================================
-# PUBLISH REPOS COMMAND
-# =============================================================================
-
-@main.group("pub-repos")
-# =============================================================================
-# PUB-REPOS COMMAND
-# =============================================================================
-
-def _pub_repos_add(url: str) -> None:
-    """Add a publish repository."""
-    from .publish.config import get_published_repo, set_published_repo
-    from .validators import validate_github_url
-    import subprocess
-    from rich.prompt import Confirm
-
-    if not validate_github_url(url):
-        console.print(f"[red]✗ Invalid URL: {url}[/red]")
-        return
-    
-    if get_published_repo() == url:
-        console.print(f"[yellow]⚠ Already current: {url}[/yellow]")
-        return
-    
-    console.print(f"\n[dim]🔍 Checking {url}...[/dim]")
-    try:
-        result = subprocess.run(
-            ["gh", "api", "repos", url.replace("https://github.com/", "")],
-            capture_output=True, timeout=30
-        )
-        if result.returncode != 0:
-            console.print(f"[red]✗ Cannot access: {url}[/red]")
-            return
-    except Exception as e:
-        console.print(f"[red]✗ Error: {e}[/red]")
-        return
-    
-    if not Confirm.ask(f"\n[bold]Set as publish target?[/]\n  {url}", default=True):
-        console.print("[dim]Cancelled.[/dim]")
-        return
-    
-    set_published_repo(url)
-    console.print(f"\n[green]✓ Added: {url}[/green]")
-    console.print(f"\n[dim]Run 'agent-sync repos list' to see all repos.\n[/dim]")
-
-
-def _pub_repos_list() -> None:
-    """List all configured publish repositories."""
-    from .publish.config import get_published_repo, load_config
-
-    config = load_config()
-    published_repo = get_published_repo()
-    sources = config.skill_sources
-    
-    repos = []
-    if published_repo:
-        repos.append({"url": published_repo, "type": "published"})
-    for src in sources:
-        if src.url != published_repo:
-            repos.append({"url": src.url, "type": "source"})
-    
-    if not repos:
-        console.print("\n[yellow]No publish repositories configured.[/yellow]")
-        console.print("\n[dim]Add: agent-sync pub-repos add <url>[/dim]\n")
-        return
-    
-    console.print(f"\n[bold]📦 Publish Repos ({len(repos)} repos)[/]\n")
-    for i, repo in enumerate(repos, 1):
-        t = "published" if repo["type"] == "published" else "source"
-        name = repo["url"].replace("https://github.com/", "")
-        console.print(f"  {i:02d}. {name} [dim]({t})[/dim]")
-    console.print("\n[dim]Add/remove: agent-sync pub-repos add|remove <url>[/dim]\n")
-
-
-@main.group("pub-repos")
-def pub_repos_cmd():
-    """Manage publish repositories."""
-    pass
-
-
-@pub_repos_cmd.command("add")
-@click.argument("url")
-def pub_repos_add(url: str):
-    """Add a publish repository.
-    
-    Examples:
-      agent-sync pub-repos add https://github.com/user/repo
-    """
-    _pub_repos_add(url)
-
-
-@pub_repos_cmd.command("list")
-def pub_repos_list():
-    """List all configured publish repositories."""
-    _pub_repos_list()
-
-
-@pub_repos_cmd.command("remove")
-@click.argument("url")
-def pub_repos_remove(url: str):
-    """Remove a publish repository.
-    
-    Examples:
-      agent-sync pub-repos remove https://github.com/user/repo
-    """
-    from .publish.config import remove_source
-    success = remove_source(url)
-    if success:
-        console.print(f"\n[green]✓ Removed: {url}[/green]\n")
-    else:
-        console.print(f"[yellow]⚠ Not found: {url}[/yellow]\n")
-
-
-# =============================================================================
-# PUBLISH COMMAND
-# =============================================================================
-
-# PUBLISH COMMAND
-# =============================================================================
-
-@main.command("publish")
+@main.command("publish run")
 @click.option("--dry-run", is_flag=True, help="Show what would be published")
 @click.option("--repo", "repo_url", help="Set GitHub repository URL")
 @click.option("--add-source", "add_source_url", help="Add external skill source")
