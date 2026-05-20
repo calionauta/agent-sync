@@ -8,3 +8,6 @@ venv/
 *.egg-info/
 dist/
 build/
+
+# AI coding tool artifacts
+.jules/
