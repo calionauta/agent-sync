@@ -151,8 +151,7 @@ def sync(force: bool, skills_only: bool, configs_only: bool, agents_only: bool):
 @click.option("--configs-only", is_flag=True, help="Only push configs")
 def push(message: Optional[str], skills_only: bool, configs_only: bool):
     """Push local changes to the remote repository."""
-    from rich.tree import Tree as RichTree
-    from rich.table import Table
+    from ._tui import print_footer
 
     config = Config()
 
@@ -242,9 +241,8 @@ def push(message: Optional[str], skills_only: bool, configs_only: bool):
     total = len(changed_files)
     console.print(f"\n[dim]{total} item(s)[/dim]\n")
     console.print("[dim]────────────────────────────────────────────────────────[/]")
-    console.print("  [cyan][Enter][/]=push    [cyan][q][/]=cancel")
-
-    choice = Prompt.ask("\n[cyan]>[/]")
+    print_footer([("Enter", "push"), ("q", "cancel")], default_key="Enter")
+    choice = Prompt.ask("\n> ")
     if choice.lower() in ("q", "quit"):
         console.print("\n[yellow]Cancelled — changes not pushed.[/yellow]\n")
         # Unstage everything
