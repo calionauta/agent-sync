@@ -217,11 +217,11 @@ def publish_agents(
             timeout=120,
         )
 
-        console.print(f"\n[green]✓ Published {published_count} agents![/]")
+        console.print(f"\n[green]✓ Published {published_count} agent(s) to {published_repo.split('/')[-1]}[/green]")
         return True
 
     except Exception as e:
-        console.print(f"\n[red]✗ Error publishing agents: {e}[/]")
+        console.print(f"\n[red]✗ Error publishing agents to {published_repo.split('/')[-1]}: {e}[/]")
         return False
 
     finally:

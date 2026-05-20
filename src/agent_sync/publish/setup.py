@@ -176,7 +176,7 @@ def run_skills_flow() -> bool:
     success = publish_all(skills_selection, skills_sources, [], published_repo)
     
     if success:
-        console.print("\n[green]✓ Published successfully![/]")
+        console.print(f"\n[green]✓ Published {len(skills_selection)} skill(s) to {published_repo.split('/')[-1]}[/green]")
         PublishStateManager.save(skills_selection, {"agents": []})
         return True
     
@@ -315,7 +315,7 @@ def run_agents_flow() -> bool:
     success = publish_all({}, [], final_selection, published_repo)
     
     if success:
-        console.print("\n[green]✓ Published successfully![/]")
+        console.print(f"\n[green]✓ Published {len(final_selection)} agent(s) to {published_repo.split('/')[-1]}[/green]")
         PublishStateManager.save({}, {"agents": final_selection})
         return True
     
@@ -582,7 +582,8 @@ def run_publish_setup() -> bool:
     success = publish_all(skills_sel, skills_sources, agents_sel, published_repo)
     
     if success:
-        console.print("\n[green]✓ Published successfully![/]")
+        total = len(skills_sel) + len(agents_sel)
+        console.print(f"\n[green]✓ Published {total} item(s) to {published_repo.split('/')[-1]}[/green]")
         PublishStateManager.save(skills_sel, {"agents": agents_sel})
         return True
     
