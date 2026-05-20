@@ -16,7 +16,7 @@ def _get_app_name() -> str:
         return "agent-sync"
 
 
-APP_NAME = _get_app_name()
+APP_NAME = "agent-sync"
 
 # Cross-platform directories (generic, not hardcoded)
 DEFAULT_CONFIG_DIR = Path(user_config_dir(APP_NAME, APP_NAME))
