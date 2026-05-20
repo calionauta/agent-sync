@@ -171,7 +171,7 @@ def run_skills_flow() -> bool:
         return False
     
     # Publish skills only (single operation)
-    console.print("\n[blue]Publishing...[/]")
+    console.print(f"\n[bold]📤 Publishing to [cyan]{published_repo.split('/')[-1]}[/cyan]...[/]")
     from .git_publish import publish_all
     success = publish_all(skills_selection, skills_sources, [], published_repo)
     
@@ -310,7 +310,7 @@ def run_agents_flow() -> bool:
         return False
     
     # Publish using publish_all (consistent with other flows)
-    console.print("\n[blue]Publishing...[/]")
+    console.print(f"\n[bold]📤 Publishing to [cyan]{published_repo.split('/')[-1]}[/cyan]...[/]")
     from .git_publish import publish_all
     success = publish_all({}, [], final_selection, published_repo)
     
@@ -578,7 +578,7 @@ def run_publish_setup() -> bool:
     agents_sel = list(selection.get("agents", set()))
     
     # Publish skills AND agents in ONE operation to prevent --force overwrite
-    console.print("\n[blue]Publishing...[/]")
+    console.print(f"\n[bold]📤 Publishing to [cyan]{published_repo.split('/')[-1]}[/cyan]...[/]")
     success = publish_all(skills_sel, skills_sources, agents_sel, published_repo)
     
     if success:
