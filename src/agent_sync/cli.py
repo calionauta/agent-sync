@@ -453,6 +453,96 @@ def skills_group():
     pass
 
 
+# =============================================================================
+# REPOS COMMAND
+# =============================================================================
+
+@main.group("repos")
+def repos_group():
+    """Manage repositories (sync and publish)."""
+    pass
+
+
+@repos_group.command("list")
+def repos_list():
+    """List all configured repositories with status.
+    
+    Shows both sync repository (used by sync/push) and publish repositories
+    (used by publish command).
+    """
+    from .publish.config import get_published_repo, load_config
+    from .publish.base import SourceStatus
+    from rich.table import Table
+    from rich.box import ROUNDED
+
+    console.print("\n[bold]📦 Repositories[/]\n")
+    
+    # ─── Sync Repo (config.yaml) ───────────────────────────────────────────────
+    config = Config()
+    sync_repo = config.repo_url
+    
+    table = Table(box=ROUNDED, show_header=True, header_style="bold dim")
+    table.add_column("Purpose", width=20)
+    table.add_column("Repository", width=45)
+    table.add_column("Status", width=12)
+    
+    # Sync repo
+    if sync_repo:
+        sync_name = sync_repo.replace("https://github.com/", "").replace(".git", "")
+        table.add_row(
+            "sync / push",
+            sync_name,
+            "[green]✓ active[/green]",
+        )
+    else:
+        table.add_row(
+            "sync / push",
+            "[dim]not configured[/dim]",
+            "[yellow]⚠[/yellow]",
+        )
+    
+    # ─── Publish Repos (publish.yaml) ──────────────────────────────────────
+    pub_config = load_config()
+    published_repo = pub_config.published_repo
+    sources = pub_config.skill_sources
+    
+    if published_repo:
+        pub_name = published_repo.replace("https://github.com/", "").replace(".git", "")
+        table.add_row(
+            "publish (main)",
+            pub_name,
+            "[green]✓ active[/green]",
+        )
+    else:
+        table.add_row(
+            "publish (main)",
+            "[dim]not configured[/dim]",
+            "[yellow]⚠[/yellow]",
+        )
+    
+    # Show sources
+    for src in sources:
+        if src.url != published_repo:
+            src_name = src.url.replace("https://github.com/", "").replace(".git", "")
+            src_status = src.status.value if hasattr(src, 'status') else "unknown"
+            status_color = "green" if src_status == "active" else "yellow"
+            table.add_row(
+                "publish (source)",
+                src_name,
+                f"[{status_color}]{src_status}[/{status_color}]",
+            )
+    
+    console.print(table)
+    console.print()
+    
+    # ─── Help ─────────────────────────────────────────────────────────────
+    console.print("[bold]Change repositories:[/]")
+    console.print("  sync/push:    [cyan]agent-sync config repo <url>[/cyan]")
+    console.print("  publish add:  [cyan]agent-sync publish repos add <url>[/cyan]")
+    console.print("  publish list: [cyan]agent-sync publish repos list[/cyan]")
+    console.print()
+
+
 @skills_group.command("list")
 def list_skills():
     """List and manage skills interactively."""
@@ -709,7 +799,7 @@ def centralize_skills(copy: bool, push: bool, dry_run: bool):
         changed = sync_mgr.push(skills_only=True)
         if changed:
             console.print(f"\n[green]✓ Pushed {len(changed)} file(s) to {cfg.repo_url}[/green]")
-            console.print(f"\n[dim]Manage repos: agent-sync pub repos list[/dim]\n")
+            console.print(f"\n[dim]Manage repos: agent-sync repos list[/dim]\n")
         else:
             console.print(f"\n[dim]Nothing to push to {cfg.repo_url}[/dim]\n")
 
@@ -717,9 +807,9 @@ def centralize_skills(copy: bool, push: bool, dry_run: bool):
 # PUBLISH REPOS COMMAND
 # =============================================================================
 
-@main.group("pub")
+@main.group("publish")
 def pub_group():
-    """Manage publish repositories. Use: agent-sync pub repos <action>[/]"""
+    """Manage publish repositories. Use: agent-sync publish repos <action>[/]"""
     pass
 
 
@@ -736,7 +826,7 @@ def pub_repos(action: str | None, url: str | None):
     
     Examples:
       agent-sync pub repos add https://github.com/user/repo
-      agent-sync pub repos list
+      agent-sync repos list
       agent-sync pub repos remove https://github.com/user/repo
     """
     from .publish.config import (

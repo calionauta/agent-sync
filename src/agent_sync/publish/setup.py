@@ -177,7 +177,7 @@ def run_skills_flow() -> bool:
     
     if success:
         console.print(f"\n[green]✓ Published to {published_repo}[/green]")
-        console.print("[dim]\nManage repos: agent-sync pub repos list[/dim]")
+        console.print("[dim]\nManage repos: agent-sync repos list[/dim]")
         PublishStateManager.save(skills_selection, {"agents": []})
         return True
     
@@ -317,7 +317,7 @@ def run_agents_flow() -> bool:
     
     if success:
         console.print(f"\n[green]✓ Published to {published_repo}[/green]")
-        console.print("[dim]\nManage repos: agent-sync pub repos list[/dim]")
+        console.print("[dim]\nManage repos: agent-sync repos list[/dim]")
         PublishStateManager.save({}, {"agents": final_selection})
         return True
     
@@ -585,7 +585,7 @@ def run_publish_setup() -> bool:
     
     if success:
         console.print(f"\n[green]✓ Published to {published_repo}[/green]")
-        console.print("[dim]\nManage repos: agent-sync pub repos list[/dim]")
+        console.print("[dim]\nManage repos: agent-sync repos list[/dim]")
         PublishStateManager.save(skills_sel, {"agents": agents_sel})
         return True
     
