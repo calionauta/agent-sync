@@ -112,7 +112,7 @@ def sync(force: bool, skills_only: bool, configs_only: bool, agents_only: bool):
     config = Config()
     sync_manager = SyncManager(config)
     
-    if not sync_manager.is_initialized():
+    if not config.repo_url:
         console.print("[red]✗ Not initialized. Run 'agent-sync init' first.[/red]")
         return
     
@@ -151,11 +151,12 @@ def push(message: Optional[str], skills_only: bool, configs_only: bool):
     """Push local changes to the remote repository."""
     
     config = Config()
-    sync_manager = SyncManager(config)
     
-    if not sync_manager.is_initialized():
-        console.print("[red]✗ Not initialized.[/red]")
+    if not config.repo_url:
+        console.print("[red]✗ Not initialized. Run 'agent-sync init' first.[/red]")
         return
+    
+    sync_manager = SyncManager(config)
     
     commit_msg = message or Prompt.ask("Commit message", default="Update configs")
     
@@ -183,7 +184,7 @@ def pull(force: bool, skills_only: bool, configs_only: bool):
     config = Config()
     sync_manager = SyncManager(config)
     
-    if not sync_manager.is_initialized():
+    if not config.repo_url:
         console.print("[red]✗ Not initialized.[/red]")
         return
     
@@ -486,7 +487,7 @@ def diff(skills: bool, configs: bool):
     config = Config()
     sync_manager = SyncManager(config)
     
-    if not sync_manager.is_initialized():
+    if not config.repo_url:
         console.print("[red]✗ Not initialized.[/red]")
         return
     
@@ -515,7 +516,7 @@ def status():
     
     console.print("\n[bold cyan]agent-sync Status[/bold cyan]\n")
     
-    if sync_manager.is_initialized():
+    if config.repo_url:
         console.print("[green]✓ Initialized[/green]")
         repo = sync_manager.config.get("repo_url", "Not set")
         console.print(f"  Repository: {repo}")
