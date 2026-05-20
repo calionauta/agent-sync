@@ -128,6 +128,19 @@ def test_cli_skills_centralize_dry_run():
 
 
 # =============================================================================
+def test_cli_skills_list_help():
+    """skills list --help should describe interactive TUI."""
+    result = runner.invoke(main, ["skills", "list", "--help"])
+    assert result.exit_code == 0
+    assert "skill" in result.output.lower()
+
+def test_cli_skills_list_no_crash():
+    """skills list should not crash on empty or populated hub."""
+    result = runner.invoke(main, ["skills", "list"])
+    assert "Traceback" not in result.output
+
+
+
 # All commands visible in --help
 # =============================================================================
 

@@ -64,26 +64,39 @@ Manage configuration (view, edit, reset).
 ## Skills
 
 ### `agent-sync skills`
-Manage global skills.
+Manage skills in `~/.agents/skills/`.
 
 **Subcommands:**
-- `list` — List all skills in `~/.agents/skills/`
-- `centralize` — Consolidate scattered skills to `~/.agents/skills/`
+- `list` — Interactive skill management console
+- `centralize` — Auto-import scattered skills from agents to hub
+
+### `agent-sync skills list`
+Interactive skill management with multi-select and delete.
+
+**Features:**
+- Numbered table with file count
+- Multi-select: `(1-N)` toggle, `(a)` all, `(n)` none, `(d)` deselect
+- Preview: `(p)` cycles through SKILL.md descriptions
+- Delete: `(r)` toggles REMOVE MODE (skills shown in red), `[Enter]` confirms
+
+**Remove mode flow:**
+1. Press `(r)` to enter REMOVE MODE
+2. Select skills to delete with `(1-N)`
+3. Press `[Enter]` → confirmation prompt → deleted from hub + all agents
 
 ### `agent-sync skills centralize`
-Centralize skills from all agents to `~/.agents/skills/`.
+Auto-import scattered skills from agent directories into `~/.agents/skills/`.
+
+Pipeline: scan agents → sync from repo → auto-import orphans → configure agents.
+
+No interaction needed — centralizes everything automatically.
 
 **Options:**
-- `--copy` — Copy skills (keep originals in agent directories)
+- `--copy` — Copy skills instead of moving (keep originals in agents)
 - `--push` — Push to GitHub after centralizing
-- `--distribute` — Copy all skills to all agent directories
-- `--yes` — Skip orphan skills (non-interactive)
-- `--import-all` — Import all orphan skills without TUI
 - `--dry-run` — Preview without changing anything
 
----
-
-## Publishing
+### `agent-sync publish`
 
 ### `agent-sync publish`
 Publish skills and agents to a public GitHub repository.

@@ -121,7 +121,7 @@ agent-sync publish --repo https://github.com/YOUR_USERNAME/agent-sync-public.git
 
 #### 📚 Skills
 - `skills list` - List all centralized skills in `~/.agents/skills/`
-- `skills centralize` - Move skills from agent directories to global hub (with safety TUI)
+- `skills centralize` - Auto-import scattered skills from agents to hub
   - `--yes` - Non-interactive: skip all orphan skills
   - `--import-all` - Import all orphans without TUI (old behavior)
   - `--dry-run` - Preview changes without modifying anything
