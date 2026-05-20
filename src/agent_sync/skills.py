@@ -206,36 +206,28 @@ class SkillsManager:
 
         return orphans
 
-    def _orphan_selection_tui(self, orphans: dict) -> set:
+    def _orphan_selection_tui(self, orphans: dict) -> tuple[set, bool]:
         """Interactive TUI for selecting orphan skills to import.
 
-        Hybrid A+E design:
-        - Table with ID, checkbox, skill name, agents, status
-        - Keyboard shortcuts: a=all, n=none, numbers=toggle, /filter (planned)
-        - ⚠️ diverge for content divergence
-        - Default: none selected
-
-        Returns:
-            set of selected skill names
+        Pattern from publish TUI: footer_commands with key descriptions.
+        Returns: (selected_skill_names, should_remove_unselected)
         """
         from ._selection import parse_multiselect_input
 
         selected: set = set()
         all_orphan_names = sorted(orphans.keys())
 
-        # Build display items
         items = []
         for i, name in enumerate(all_orphan_names, 1):
             info = orphans[name]
             agents_str = ", ".join(a for a, _ in info["agents"])
-            status = ("[red]⚠️ diverge[/]" if info.get("content_differs")
-                      else "[green]✓[/]")
+            status = "[red]⚠ diverge[/]" if info.get("content_differs") else "[green]✓[/]"
             items.append({"id": i, "name": name, "agents": agents_str, "status": status})
 
         while True:
             console.clear()
             console.print("\n[bold]📦 Skills órfãs encontradas em agentes[/]")
-            console.print("  [dim]Nenhuma selecionada — importe apenas o que quiser[/]\n")
+            console.print("  [dim]Selecione as skills para importar ou remover[/]\n")
 
             table = Table(box=box.SIMPLE, show_header=True)
             table.add_column("#", style="dim", width=4)
@@ -253,41 +245,47 @@ class SkillsManager:
 
             console.print(table)
             console.print(f"\n[dim]{len(items)} skills | {len(selected)} selecionadas[/]")
-            console.print("  [a]ll  [n]one  [Enter]=done")
+            console.print("[dim]────────────────────────────────────────────────────────[/]")
+            console.print("  [cyan][1-N][/] select    [cyan][a][/] all    [cyan][n][/] none    [cyan][r][/] remove    [cyan][Enter][/] done")
 
-            choice = Prompt.ask("\nSelection", default="done")
+            choice = Prompt.ask("\n[cyan]>[/]", default="")
 
-            # Convert keyboard shortcuts
+            # Parse shortcuts
             if choice.lower() == "a":
-                choice = "all"
+                selected = set(all_orphan_names)
             elif choice.lower() == "n":
-                choice = "none"
-
-            result = parse_multiselect_input(choice, all_orphan_names, selected)
-            if result is None:
+                selected = set()
+            elif choice.lower() == "r":
+                # Remove: toggle to none and break
+                selected = set()
                 break
-            selected = result
+            elif choice == "":
+                break
+            else:
+                result = parse_multiselect_input(choice, all_orphan_names, selected)
+                if result is not None:
+                    selected = result
 
-        return selected
+        # Post-selection: keep or remove unselected?
+        should_remove = False
+        if len(selected) < len(all_orphan_names):
+            unselected_count = len(all_orphan_names) - len(selected)
+            # If user chose r, all were removed
+            if unselected_count > 0:
+                should_remove = self._post_selection_prompt(unselected_count, all_orphan_names)
+
+        return selected, should_remove
 
     @staticmethod
     def _post_selection_prompt(unselected_count: int, agent_names: list[str]) -> bool:
-        """Ask user what to do with unselected orphan skills.
-
-        Returns:
-            True if Keep (default), False if Remove
-        """
-        if unselected_count == 0:
-            return True
-
+        """Ask user: keep or remove unselected orphan skills.
+        Returns: True=Remove, False=Keep."""
         agents_str = ", ".join(sorted(set(agent_names)))
-        console.print(f"\n📌 [bold]{unselected_count} skill(s)[/] não foram importadas para o hub.")
+        console.print(f"\n📌 [bold]{unselected_count} skill(s)[/] não selecionadas.")
         console.print(f"   Estão em: [yellow]{agents_str}[/]\n")
-
-        prompt_text = "[K] Keep (default) | [R] Remove"
-        choice = Prompt.ask(prompt_text, choices=["k", "K", "r", "R", ""], default="k")
-
-        return choice.lower() != "r"
+        choice = Prompt.ask("[R]emove (default) | [K]eep",
+                            choices=["r", "R", "k", "K", ""], default="r")
+        return choice.lower() in ("r", "")
 
     def scan_all_agents(self) -> dict[str, list[Path]]:
         """Scan all agents for existing skills.
@@ -593,7 +591,7 @@ class SkillsManager:
                         # Show what would be done (as in dry-run)
                         selected_orphans = set()
                     else:
-                        selected_orphans = self._orphan_selection_tui(orphans)
+                        selected_orphans, _ = self._orphan_selection_tui(orphans)
                 except Exception as e:
                     console.print(f"[red]✗ TUI error: {e}[/red]. Falling back to --yes mode.\n")
                     selected_orphans = set()
