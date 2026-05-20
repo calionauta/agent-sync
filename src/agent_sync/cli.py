@@ -906,7 +906,7 @@ def list_skills():
         s = len(selected)
         header = f"[bold]📚 Skills Hub ({n} skills)[/]"
         if s > 0:
-            header += f"  |  Selected ({s}): {", ".join(sorted(selected))}"
+            header += f"  |  Selected ({s}): {', '.join(sorted(selected))}"
         if remove_mode:
             header += "  [red]│ REMOVE MODE[/red]"
 
