@@ -27,7 +27,7 @@ def _get_app_name() -> str:
         return "agent-sync"
 
 
-APP_NAME = _get_app_name()
+APP_NAME = "agent-sync"
 
 
 class SyncManager:
