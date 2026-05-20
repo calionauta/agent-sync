@@ -116,10 +116,8 @@ def test_cli_skills_centralize_help():
     assert result.exit_code == 0
     assert "--copy" in result.output
     assert "--push" in result.output
-    assert "--distribute" in result.output
-    assert "--yes" in result.output
-    assert "--import-all" in result.output
     assert "--dry-run" in result.output
+    # Simplified: no --distribute, --yes, --import-all anymore
 
 
 def test_cli_skills_centralize_dry_run():
