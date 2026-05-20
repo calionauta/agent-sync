@@ -246,7 +246,7 @@ class SkillsManager:
             console.print(table)
             console.print(f"\n[dim]{len(items)} skills | {len(selected)} selecionadas[/]")
             console.print("[dim]────────────────────────────────────────────────────────[/]")
-            console.print("  [cyan][1-N][/]=select    [cyan][a][/]=all    [cyan][n][/]=none    [cyan][r][/]=remove    [cyan][Enter][/]=select")
+            console.print("  [cyan][1-N][/]select    [cyan][a][/]all    [cyan][n][/]none    [cyan][r][/]remove    [cyan][Enter][/]select")
 
             choice = Prompt.ask("\n[cyan]>[/]")
 
@@ -278,9 +278,10 @@ class SkillsManager:
         agents_str = ", ".join(sorted(set(agent_names)))
         console.print(f"\n📌 [bold]{unselected_count} skill(s)[/] não selecionadas.")
         console.print(f"   Estão em: [yellow]{agents_str}[/]\n")
-        choice = Prompt.ask("[R]emove (default) | [K]eep",
-                            choices=["r", "R", "k", "K", ""], default="r")
-        return choice.lower() in ("r", "")
+        console.print("[dim]────────────────────────────────────────────────────────[/]")
+        console.print("  [cyan][r][/]remove    [cyan][k][/]keep (default)")
+        choice = Prompt.ask("\n[cyan]>[/]", default="r")
+        return choice.lower() != "k"
 
     def scan_all_agents(self) -> dict[str, list[Path]]:
         """Scan all agents for existing skills.
