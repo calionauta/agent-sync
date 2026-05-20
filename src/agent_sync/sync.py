@@ -361,7 +361,9 @@ class SyncManager:
             raise RuntimeError("Not linked to a repository. Run 'agent-sync init' or 'link' first")
 
         # Show progress spinner based on what's being synced
-        agents_count = len([a for a in get_all_agents() if self.config.is_agent_enabled(a.name)])
+        # Count only available agents that are enabled (not all registry entries)
+        agents_count = len([a for a in get_all_agents()
+                           if self.config.is_agent_enabled(a.name) and a.is_available()])
         
         if skills_only and not configs_only:
             console.print(f"  [dim]📦 Staging skills...[/dim]")

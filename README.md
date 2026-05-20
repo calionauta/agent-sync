@@ -97,8 +97,13 @@ agent-sync init --name agent-sync-configs
 # Link on additional machines
 agent-sync link https://github.com/YOUR_USERNAME/agent-sync-configs.git
 
-# Publish skills to public repo
-agent-sync publish --repo https://github.com/YOUR_USERNAME/agent-sync-public.git
+# Manage repositories
+agent-sync repos list              # See all configured repos
+agent-sync publish add https://github.com/YOUR_USERNAME/agent-sync-public.git
+agent-sync publish list             # List publish repos
+
+# Run interactive publish
+agent-sync publish run              # Select skills/agents to share
 ```
 
 ---
@@ -135,23 +140,13 @@ agent-sync publish --repo https://github.com/YOUR_USERNAME/agent-sync-public.git
 - `skills delete` - Delete skills from hub and all agent directories (interactive)
 
 #### 📤 Publish
-- `publish` - Publish skills and agents to a public GitHub repository
-  Run without options to select and publish interactively.
-  
-  **Source Management:**
-  - `publish --list-sources` — List configured external skill sources
-  - `publish --add-source <url>` — Add external GitHub repository as skill source
-  - `publish --remove-source <url>` — Remove external skill source
-  
-  **Cache:**
-  - `publish --clear-cache` — Clear cached repositories
-  - `publish --reset-selection` — Reset saved selections
-  
-  **Security Scanner:** Scans for sensitive content before publishing:
-  - Absolute paths (`/Users/`, `/home/`, `/root/`)
-  - API tokens (`sk-`, `ghp_`)
-  - Internal commands (`/skill:`, `ctx_batch_execute()`)
-  - Server paths (`server.`, `.renatocaliari.com`)
+- `publish run` - Run interactive publish flow (select skills/agents to share)
+- `publish add <url>` - Add a publish repository (validates + confirms)
+- `publish list` - List configured publish repositories
+- `publish remove <url>` - Remove a publish repository
+
+#### 📦 Repositories
+- `repos list` - Show ALL repositories (sync + publish) with status
 
 #### 🛠️ System
 - `config show` - View current configuration
