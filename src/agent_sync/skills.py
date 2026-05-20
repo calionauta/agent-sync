@@ -276,8 +276,8 @@ class SkillsManager:
         console.print(f"\n📌 [bold]{unselected_count} skill(s)[/] não selecionadas.")
         console.print(f"   Estão em: [yellow]{agents_str}[/]\n")
         console.print("[dim]────────────────────────────────────────────────────────[/]")
-        console.print("  [cyan][r][/]remove    [cyan][k][/]keep (default)")
-        choice = Prompt.ask("\n[cyan]>[/]", default="r")
+        console.print("  [r]remove (default)    [k]keep")
+        choice = Prompt.ask("\n> ", default="r")
         return choice.lower() != "k"
 
     def scan_all_agents(self) -> dict[str, list[Path]]:
@@ -642,13 +642,17 @@ class SkillsManager:
             console.print()
 
         # ----------------------------------------------------------------
-        # PHASE 7: Remove selected orphans from agents (via [r] shortcut)
+        # PHASE 7: Remove ALL orphans from agents (via [r] shortcut in TUI)
         # ----------------------------------------------------------------
-        if not dry_run and selected_orphans and should_remove_unselected:
-            console.print(f"\n[bold]🗑 Removing {len(selected_orphans)} skills from agents...[/]\n")
-            self._remove_orphans_from_agents(selected_orphans, orphans)
-            stats["orphans_removed"] = len(selected_orphans)
-            console.print()
+        if not dry_run and should_remove_unselected:
+            remove_targets = selected_orphans or unselected
+            if remove_targets:
+                console.print(f"\n[bold]🗑 Removing all orphans from agents...[/]\n")
+                self._remove_orphans_from_agents(remove_targets, orphans)
+                stats["orphans_removed"] = len(remove_targets)
+                console.print()
+                # Skip post-selection prompt — user already chose remove
+                unselected = set()
 
         # ----------------------------------------------------------------
         # PHASE 8: Keep or Remove unselected orphans (via post-selection prompt)
@@ -663,15 +667,15 @@ class SkillsManager:
                 for name in unselected:
                     for a, _ in orphans[name]["agents"]:
                         agent_names.append(a)
-                keep_unselected = self._post_selection_prompt(len(unselected), agent_names)
+                should_remove = self._post_selection_prompt(len(unselected), agent_names)
 
-                if keep_unselected:
-                    console.print("  [green]✓ Keeping unselected skills in agents[/green]\n")
-                else:
+                if should_remove:
                     console.print(f"  [yellow]🗑 Removing {len(unselected)} unselected skills from agents[/yellow]\n")
                     self._remove_orphans_from_agents(unselected, orphans)
                     stats["orphans_removed"] = stats.get("orphans_removed", 0) + len(unselected)
                     console.print()
+                else:
+                    console.print("  [green]✓ Keeping unselected skills in agents[/green]\n")
 
         # ----------------------------------------------------------------
         # PHASE 9: Clean up user symlinks
