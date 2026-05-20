@@ -207,86 +207,6 @@ class SkillsManager:
 
         return orphans
 
-    def _orphan_selection_tui(self, orphans: dict) -> tuple[set, bool]:
-        """Interactive TUI for selecting orphan skills to import.
-
-        Pattern from publish TUI: footer_commands with key descriptions.
-        Returns: (selected_skill_names, should_remove_unselected)
-        """
-        from ._selection import parse_multiselect_input
-
-        selected: set = set()
-        all_orphan_names = sorted(orphans.keys())
-
-        items = []
-        for i, name in enumerate(all_orphan_names, 1):
-            info = orphans[name]
-            agents_str = ", ".join(a for a, _ in info["agents"])
-            status = "[red]⚠ diverge[/]" if info.get("content_differs") else "[green]✓[/]"
-            items.append({"id": i, "name": name, "agents": agents_str, "status": status})
-
-        while True:
-            console.clear()
-            console.print("\n[bold]📦 Skills órfãs encontradas em agentes[/]")
-            console.print("  [dim]Selecione as skills para importar ou remover[/]\n")
-
-            table = Table(box=box.SIMPLE, show_header=True)
-            table.add_column("#", style="dim", width=4)
-            table.add_column("Sel", width=5)
-            table.add_column("Skill", style="cyan")
-            table.add_column("Agentes", style="yellow")
-            table.add_column("Status")
-
-            for item in items:
-                sel_flag = "[bold green]✓[/]" if item["name"] in selected else "[red]○[/]"
-                table.add_row(
-                    str(item["id"]), sel_flag, item["name"],
-                    item["agents"], item["status"]
-                )
-
-            console.print(table)
-            console.print(f"\n[dim]{len(items)} skills | {len(selected)} selecionadas[/]")
-            print_footer([
-                ("1-N", "select"),
-                ("a", "all"),
-                ("n", "none"),
-                ("m", "move to hub"),
-                ("d", "distribute"),
-            ], default_key="Enter")
-
-            choice = Prompt.ask("\n> ")
-
-            # Parse shortcuts
-            if choice.lower() == "a":
-                selected = set(all_orphan_names)
-            elif choice.lower() == "n":
-                selected = set()
-            elif choice.lower() == "m":
-                # Move ALL orphans to hub + clean from agents
-                return set(all_orphan_names), "move"
-            elif choice.lower() == "d":
-                # Distribute ALL: import all to hub + copy back to agents
-                return set(all_orphan_names), "distribute"
-            elif choice == "":
-                # Enter: confirm current selection
-                break
-            else:
-                result = parse_multiselect_input(choice, all_orphan_names, selected)
-                if result is not None:
-                    selected = result
-
-        return selected, None
-
-    @staticmethod
-    def _post_selection_prompt(unselected_count: int, agent_names: list[str]) -> str:
-        """Ask user: move orphans to hub or keep in agents.
-        Returns: "move" or "keep"."""
-        agents_str = ", ".join(sorted(set(agent_names)))
-        console.print(f"\n📌 [bold]{unselected_count} skill(s)[/] não selecionadas.")
-        console.print(f"   Estão em: [yellow]{agents_str}[/]\n")
-        print_footer([("m", "move to hub"), ("k", "keep in agents")], default_key="m")
-        choice = Prompt.ask("\n> ")
-        return "move" if choice.lower() != "k" else "keep"
 
     def scan_all_agents(self) -> dict[str, list[Path]]:
         """Scan all agents for existing skills.
@@ -660,26 +580,6 @@ class SkillsManager:
 
         return stats
 
-    def _remove_orphans_from_agents(self, skill_names: set, orphans: dict) -> None:
-        """Remove specific orphan skills from their agent directories.
-
-        Args:
-            skill_names: Set of skill names to remove
-            orphans: Orphan info dict with agent paths
-        """
-        for name in skill_names:
-            if name not in orphans:
-                continue
-            for agent_name, skill_path in orphans[name]["agents"]:
-                if skill_path.exists():
-                    try:
-                        if skill_path.is_dir():
-                            shutil.rmtree(skill_path)
-                        else:
-                            skill_path.unlink()
-                        console.print(f"  [yellow]🗑[/] {name} [dim](from {agent_name})[/]")
-                    except Exception as e:
-                        console.print(f"  [red]✗ Failed to remove {name} from {agent_name}: {e}[/]")
 
     def _cleanup_user_symlinks(self, preserve_extension_symlinks: bool = True) -> int:
         """
@@ -780,7 +680,7 @@ class SkillsManager:
         method = agent_conf.get("skills_method") or agent.method
 
         # NOTE: Cleanup is now managed by the centralize() pipeline,
-        # not by configure_agents(). See _remove_orphans_from_agents().
+    
 
         # Apply the chosen method
         result = None
