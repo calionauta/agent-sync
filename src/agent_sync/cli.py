@@ -257,7 +257,7 @@ def push(message: Optional[str], skills_only: bool, configs_only: bool):
         sync_manager._run_git("commit", "-m", commit_msg)
         sync_manager._run_git("push", "origin", "main")
         sync_manager._save_state("pushed", sync_manager.config.repo_url)
-        console.print("\n[green]✓ Pushed![/green]\n")
+        console.print(f"\n[green]✓ Pushed to {config.repo_url.split('/')[-1]}[/green]\n")
     except subprocess.CalledProcessError as e:
         console.print(f"\n[red]✗ Push failed:[/red] {e.stderr or e}")
 
@@ -704,7 +704,11 @@ def centralize_skills(copy: bool, push: bool, dry_run: bool):
 
         cfg = Config()
         sync_mgr = SyncManager(cfg)
-        sync_mgr.push(skills_only=True)
+        changed = sync_mgr.push(skills_only=True)
+        if changed:
+            console.print(f"\n[green]✓ Pushed {len(changed)} file(s) to {cfg.repo_url.split('/')[-1]}[/green]\n")
+        else:
+            console.print(f"\n[dim]Nothing to push to {cfg.repo_url.split('/')[-1]}[/dim]\n")
 
 # =============================================================================
 # PUBLISH COMMAND
