@@ -451,6 +451,27 @@ class SkillsManager:
         console.print()
 
         # ─────────────────────────────────────────────────────────────────────
+        # Phase 1b: Show hub status
+        # ─────────────────────────────────────────────────────────────────────
+        hub_skills = set()
+        if self.global_skills_dir.exists():
+            hub_skills = {
+                item.name for item in self.global_skills_dir.iterdir()
+                if not item.name.startswith(".")
+            }
+
+        console.print("[bold]📦 Skills Hub Status (~/.agents/skills/):[/]\n")
+        if hub_skills:
+            console.print(f"  [green]✓ {len(hub_skills)} skills centralized[/green]")
+            console.print("  [dim]Skills:[/dim]")
+            for skill_name in sorted(hub_skills):
+                console.print(f"    • {skill_name}")
+        else:
+            console.print("  [yellow]⚠ No skills in hub[/yellow]")
+            console.print("  [dim]Skills will be imported from agents[/dim]")
+        console.print()
+
+        # ─────────────────────────────────────────────────────────────────────
         # Phase 2: Sync from repo → hub (authoritative source)
         # ─────────────────────────────────────────────────────────────────────
         console.print("[bold]📥 Syncing skills from repo to ~/.agents/skills/...[/]\n")
@@ -463,13 +484,6 @@ class SkillsManager:
         # ─────────────────────────────────────────────────────────────────────
         # Phase 3: Find orphans
         # ─────────────────────────────────────────────────────────────────────
-        hub_skills = set()
-        if self.global_skills_dir.exists():
-            hub_skills = {
-                item.name for item in self.global_skills_dir.iterdir()
-                if not item.name.startswith(".")
-            }
-
         orphans = self._find_orphans(hub_skills, skills_found)
         stats["orphans_found"] = len(orphans)
 
@@ -596,22 +610,7 @@ class SkillsManager:
             Number of symlinks removed
         """
         symlinks_removed = 0
-        symlinks_preserved = 0
-        """
-        Remove user-created symlinks from agent skill directories.
-
-        Extension symlinks (pointing to internal subdirectories) are preserved.
-        User symlinks (pointing to ~/.agents/skills/) are removed.
-
-        Args:
-            preserve_extension_symlinks: If True, keep symlinks pointing to internal
-                                         extension directories (default: True)
-
-        Returns:
-            Number of symlinks removed
-        """
-        symlinks_removed = 0
-        symlinks_preserved = 0
+        symlinks_preserved = []
 
         for agent in get_all_agents():
             if agent.name == "global-skills":
@@ -624,21 +623,72 @@ class SkillsManager:
                 if item.is_symlink():
                     # Check if this is an extension symlink
                     if preserve_extension_symlinks and self._is_extension_symlink(item, agent):
-                        # Preserve extension symlink (e.g., superpowers → ../superpowers/skills/)
-                        console.print(f"  [dim]Preserving extension symlink: {item.name}[/dim]")
-                        symlinks_preserved += 1
+                        try:
+                            target = item.readlink()
+                            resolved_target = (item.parent / target).resolve()
+                            # Get agent config dir for display
+                            config_dir = Path(agent.config_dir).expanduser().resolve()
+                            is_inside = str(resolved_target).startswith(str(config_dir))
+                            
+                            if is_inside:
+                                # This is an extension symlink - preserve and show details
+                                ext_name = item.name
+                                ext_path = resolved_target
+                                symlinks_preserved.append({
+                                    "agent": agent.name,
+                                    "symlink": str(item),
+                                    "target": str(ext_path),
+                                    "extension": ext_name,
+                                })
+                                console.print(
+                                    f"  [dim]🔗 Preserving extension symlink: {agent.name}/{item.name}[/dim]"
+                                )
+                                console.print(
+                                    f"     [dim]└─ {item} → {ext_path}[/dim]"
+                                )
+                            else:
+                                # Points outside config dir - remove
+                                item.unlink()
+                                symlinks_removed += 1
+                                console.print(
+                                    f"  [yellow]Removed external symlink: {agent.name}/{item.name}[/yellow]"
+                                )
+                        except (OSError, ValueError):
+                            symlinks_preserved.append({
+                                "agent": agent.name,
+                                "symlink": str(item),
+                                "target": "(unresolved)",
+                                "extension": item.name,
+                            })
                         continue
 
                     # User symlink - remove
                     try:
+                        target = item.readlink()
                         item.unlink()
                         symlinks_removed += 1
-                        console.print(f"  [yellow]Removed user symlink: {item.name}[/yellow]")
+                        console.print(
+                            f"  [yellow]Removed user symlink: {agent.name}/{item.name}[/yellow]"
+                        )
+                        console.print(f"     [dim]└─ pointed to {target}[/dim]")
                     except Exception as e:
-                        console.print(f"  [red]Failed to remove symlink {item.name}: {e}[/red]")
+                        console.print(
+                            f"  [red]Failed to remove symlink {agent.name}/{item.name}: {e}[/red]"
+                        )
 
-        if symlinks_preserved > 0:
-            console.print(f"\n  [green]✓ Preserved {symlinks_preserved} extension symlinks[/green]")
+        if symlinks_preserved:
+            console.print()
+            console.print(f"  [green]✓ Preserved {len(symlinks_preserved)} extension symlink(s):[/green]")
+            for info in symlinks_preserved:
+                console.print(
+                    f"    [dim]• {info['agent']}/{info['extension']}:[/dim]"
+                )
+                console.print(
+                    f"      [dim]  {info['symlink']}[/dim]"
+                )
+                console.print(
+                    f"      [dim]  → {info['target']}[/dim]"
+                )
 
         return symlinks_removed
 
