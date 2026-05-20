@@ -30,6 +30,8 @@ from .sync import SyncManager
 from .validators import validate_github_url
 from .mcp_merger import MCPMerger
 from .secrets import SecretsManager
+from ._tui import print_footer
+from .skills_delete import SkillsDeleter
 
 
 console = Console()
@@ -451,18 +453,210 @@ def skills_group():
 
 @skills_group.command("list")
 def list_skills():
-    """List available skills."""
+    """List and manage skills interactively."""
+    from rich.box import ROUNDED
     skills_dir = Path.home() / ".agents" / "skills"
 
     if not skills_dir.exists():
         console.print("[yellow]No skills directory found.[/yellow]")
         return
 
-    skills = [d.name for d in skills_dir.iterdir() if d.is_dir() and not d.name.startswith(".")]
+    skills = sorted([
+        d.name for d in skills_dir.iterdir()
+        if d.is_dir() and not d.name.startswith(".")
+    ])
 
-    console.print(f"\n[cyan]Skills ({len(skills)}):[/cyan]")
-    for skill in sorted(skills):
-        console.print(f"  • {skill}")
+    if not skills:
+        console.print("[yellow]No skills in hub.[/yellow]")
+        return
+
+    # ─── State ────────────────────────────────────────────────────────────────
+    selected: set[str] = set()
+    preview_skill: str | None = None
+    remove_mode = False
+
+    while True:
+        # ─── Header ───────────────────────────────────────────────────────────
+        n = len(skills)
+        s = len(selected)
+        header = f"[bold]📚 Skills Hub ({n} skills)[/]"
+        if s > 0:
+            header += f"  |  Selected ({s}): {", ".join(sorted(selected))}"
+        if remove_mode:
+            header += "  [red]│ REMOVE MODE[/red]"
+
+        console.print(f"\n{header}\n")
+
+        # ─── Preview panel ────────────────────────────────────────────────────
+        if preview_skill:
+            skill_path = skills_dir / preview_skill
+            console.print(f"  [dim]⚡ Preview:[/dim] [cyan]{preview_skill}[/cyan]")
+            desc_lines = _skill_description_lines(skill_path)
+            for line in desc_lines[:5]:
+                console.print(f"  [dim]{line}[/dim]")
+            if len(desc_lines) > 5:
+                console.print(f"  [dim]... ({len(desc_lines)-5} more lines)[/dim]")
+            console.print()
+
+        # ─── Table ────────────────────────────────────────────────────────────
+        table = Table(box=ROUNDED, show_header=True, header_style="bold dim")
+        table.add_column("#", width=3, justify="right")
+        table.add_column("", width=3)
+        table.add_column("Skill", width=40)
+        table.add_column("Files", width=6, justify="right")
+
+        for i, name in enumerate(skills, 1):
+            mark = "●" if name in selected else "○"
+            mark_color = "green" if name in selected else "dim"
+            skill_path = skills_dir / name
+            n_files = sum(1 for f in skill_path.rglob("*") if f.is_file())
+            style = "" if not remove_mode else "red bold"
+
+            table.add_row(
+                f"[dim]{i:02d}[/dim]",
+                f"[{mark_color}]{mark}[/{mark_color}]",
+                name,
+                f"[dim]{n_files}[/dim]",
+                style=style,
+            )
+
+        console.print(table)
+        console.print()
+
+        # ─── Footer ───────────────────────────────────────────────────────────
+        if remove_mode:
+            footer_lines = [
+                "(a) all  (n) none  (r) toggle-remove  (q) quit",
+                "(p) preview  [Enter] confirm removal  (d) deselect",
+            ]
+        else:
+            footer_lines = [
+                "(1-N) toggle  (a) all  (n) none  (d) deselect",
+                "(r) remove  (q) quit  (p) preview [Enter] confirm",
+            ]
+        print_footer(footer_lines, default_key="Enter" if selected else None)
+
+        # ─── Input ───────────────────────────────────────────────────────────
+        choice = Prompt.ask("\n›", default="").strip()
+
+        if not choice:
+            if selected:
+                break
+            continue
+
+        if choice.lower() in ("q", "quit"):
+            console.print("[dim]Cancelled.[/dim]\n")
+            return
+
+        if choice.lower() in ("a", "all"):
+            selected = set(skills)
+
+        elif choice.lower() in ("n", "none"):
+            selected = set()
+            preview_skill = None
+
+        elif choice.lower() in ("d", "deselect"):
+            selected = set()
+            remove_mode = False
+
+        elif choice.lower() in ("r", "remove"):
+            remove_mode = not remove_mode
+
+        elif choice.lower() in ("p", "preview"):
+            if selected:
+                sel_list = sorted(selected)
+                cur_idx = sel_list.index(preview_skill) + 1 if preview_skill in sel_list else 0
+                preview_skill = sel_list[cur_idx % len(sel_list)]
+            else:
+                cur_idx = skills.index(preview_skill) + 1 if preview_skill in skills else 0
+                preview_skill = skills[cur_idx % len(skills)]
+
+        elif choice.isdigit():
+            idx = int(choice) - 1
+            if 0 <= idx < len(skills):
+                name = skills[idx]
+                if name in selected:
+                    selected.discard(name)
+                    if preview_skill == name:
+                        preview_skill = None
+                else:
+                    selected.add(name)
+
+        elif "-" in choice or "," in choice:
+            new_selected: set[str] = set()
+            for part in choice.replace(",", " ").replace(";", " ").split():
+                part = part.strip()
+                if "-" in part:
+                    try:
+                        start_s, end_s = part.split("-", 1)
+                        start = max(0, int(start_s) - 1)
+                        end = min(len(skills), int(end_s))
+                        for j in range(start, end):
+                            new_selected.add(skills[j])
+                    except ValueError:
+                        pass
+                else:
+                    try:
+                        idx = int(part) - 1
+                        if 0 <= idx < len(skills):
+                            new_selected.add(skills[idx])
+                    except ValueError:
+                        pass
+
+            if new_selected:
+                selected = new_selected
+
+    # ─── Confirm deletion ──────────────────────────────────────────────────
+    if not selected:
+        return
+
+    console.print(f"\n[bold]🗑 Delete {len(selected)} skill(s)?[/]")
+    for name in sorted(selected):
+        console.print(f"  • {name}")
+
+    if not Confirm.ask("\n[bold]Confirm deletion?[/]", default=False):
+        console.print("[dim]Cancelled.[/dim]\n")
+        return
+
+    # ─── Delete ─────────────────────────────────────────────────────────────
+    deleter = SkillsDeleter()
+    stats = deleter.delete_skills(list(selected))
+
+    console.print(f"\n[green]✓ Deleted {stats['deleted_from_hub']} skill(s)[/green]")
+    console.print(f"  [dim]└─ {stats['hub_files']} files from hub[/dim]")
+    if stats["deleted_from_agents"]:
+        console.print(f"  [dim]└─ {stats['deleted_from_agents']} from agents ({stats['agent_files']} files)[/dim]")
+    if stats["not_found"]:
+        console.print(f"  [yellow]⚠ {stats['not_found']} not found[/yellow]")
+    if stats["errors"]:
+        console.print(f"  [red]✗ {stats['errors']} errors[/red]")
+    console.print()
+
+
+def _skill_description_lines(skill_path: Path) -> list[str]:
+    """Extract description lines from SKILL.md."""
+    skill_md = skill_path / "SKILL.md"
+    if not skill_md.exists():
+        return [f"[dim]No SKILL.md[/dim]"]
+
+    try:
+        lines = skill_md.read_text().splitlines()
+        desc = []
+        capturing = False
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith("# "):
+                continue
+            if stripped.startswith("## "):
+                break
+            if stripped:
+                capturing = True
+                desc.append(stripped[:80])
+            elif capturing and desc:
+                break
+        return desc if desc else [f"[dim]Empty SKILL.md[/dim]"]
+    except Exception:
+        return [f"[dim]Could not read SKILL.md[/dim]"]
 
 
 @skills_group.command("centralize")
@@ -470,35 +664,20 @@ def list_skills():
 @click.option("--push", is_flag=True, help="Push to GitHub after centralizing")
 @click.option("--dry-run", is_flag=True, help="Preview without modifying anything")
 def centralize_skills(copy: bool, push: bool, dry_run: bool):
-    """Centralize skills from all agents to ~/.agents/skills/.
-
-    Scans agent directories for scattered skills and consolidates them into the
-    global DotAgents hub (~/.agents/skills/). This is the single source of truth.
-
-    \b
-    Examples:
-      agent-sync skills centralize         # Move skills to hub (default)
-      agent-sync skills centralize --copy  # Copy skills (keep originals)
-      agent-sync skills centralize --push  # Centralize then push to GitHub
-
-    \b
-    Safety features:
-      --yes           Skip orphan skills (non-interactive)
-      --import-all    Import all orphans without TUI
-      --dry-run       Preview without changing anything
-      --distribute    Copy all skills to all agent directories
-    """
-    from .centralize.handlers.dot_agents_handler import DotAgentsHandler
-    from .skills import SkillsManager
-
     """Centralize all skills from agents into ~/.agents/skills/.
-    Pipeline: scan agents → sync from repo → import orphans → configure agents.
+
+    Pipeline: scan → sync from repo → import orphans → configure agents.
     No interaction needed — auto-centralizes everything.
+
+    Examples:
+      agent-sync skills centralize         # Auto: sync + import + configure
+      agent-sync skills centralize --copy  # Copy instead of move
+      agent-sync skills centralize --push  # + push to GitHub
+      agent-sync skills centralize --dry-run  # Preview
     """
     from .centralize.handlers.dot_agents_handler import DotAgentsHandler
     from .skills import SkillsManager
 
-    # Ensure DotAgents structure exists
     handler = DotAgentsHandler()
     handler.ensure_structure(dry_run=dry_run)
 
@@ -509,25 +688,13 @@ def centralize_skills(copy: bool, push: bool, dry_run: bool):
         console.print("\n[dim]Dry run — no changes made.[/dim]\n")
         return
 
-    # Push to GitHub
     if push or Confirm.ask("\n[bold]Push to GitHub?[/]", default=False):
-        console.print("\n[bold]📤 Pushing to GitHub...[/]\n")
-        try:
-            subprocess.run(["git", "add", "."], check=True, capture_output=True, timeout=30)
-            subprocess.run(
-                ["git", "commit", "-m", "chore: centralize skills"],
-                check=True, capture_output=True, timeout=30,
-            )
-            subprocess.run(
-                ["git", "push", "origin", "main"],
-                check=True, capture_output=True, timeout=120,
-            )
-            console.print("[green]✓ Pushed![/]\n")
-        except subprocess.CalledProcessError as e:
-            console.print(f"[yellow]⚠ Git error: {e.stderr or e}. Run 'agent-sync push' manually.[/]\n")
-    else:
-        console.print("💡 Run [green]agent-sync push[/] to sync to GitHub\n")
+        from .sync import SyncManager
+        from .config import Config
 
+        cfg = Config()
+        sync_mgr = SyncManager(cfg)
+        sync_mgr.push(skills_only=True)
 
 # =============================================================================
 # PUBLISH COMMAND
