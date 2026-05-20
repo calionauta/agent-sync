@@ -118,10 +118,9 @@ def test_centralize_with_conflicts(tmp_path):
 
     manager = SkillsManager(global_skills_dir=global_dir)
 
-    with patch("agent_sync.skills.get_all_agents", return_value=[agent_a, agent_b]):
-        # Mocking console input might be tricky, but centralize should detect conflicts
-        # and resolve them using the first one found if not interactive
-        stats = manager.centralize(move=True, import_all=True)
+    with patch("agent_sync.skills.get_all_agents", return_value=[agent_a, agent_b]), \
+         patch.object(manager, '_sync_from_repo', return_value=0):
+        stats = manager.centralize(move=True)
 
     assert stats["orphans_found"] >= 1
     assert (global_dir / "shared-skill" / "SKILL.md").exists()
@@ -170,8 +169,7 @@ def test_centralize_does_not_move_extension_skills(tmp_path):
 
     with patch("agent_sync.skills.get_all_agents", return_value=[agent]), \
          patch.object(manager, '_sync_from_repo', return_value=0):
-        # Use dry_run=False to actually move files, move=True to move (not copy)
-        manager.centralize(dry_run=False, move=True, import_all=True)
+        manager.centralize(dry_run=False, move=True)
 
     # Extension skill should NOT be moved to global directory
     assert not (global_dir / "extension-skill").exists(), \
@@ -191,7 +189,7 @@ def test_centralize_does_not_move_extension_skills(tmp_path):
         "Regular skills should be moved (not copied)"
 
 
-def test_centralize_yes_skips_orphans(tmp_path):
+def test_centralize_auto_imports_orphans(tmp_path):
     """Test that --yes skip_orphans=True does NOT import orphans."""
     home = tmp_path / "home"
     global_dir = home / ".agents" / "skills"
@@ -209,19 +207,20 @@ def test_centralize_yes_skips_orphans(tmp_path):
 
     with patch("agent_sync.skills.get_all_agents", return_value=[agent]), \
          patch.object(manager, '_sync_from_repo', return_value=0):
-        stats = manager.centralize(move=True, skip_orphans=True)
+        stats = manager.centralize(move=True)
 
-    # Orphan should NOT have been imported
-    assert not (global_dir / "orphan-skill").exists(), \
-        "orphan-skill should NOT be imported with --yes"
-    assert stats["orphans_imported"] == 0
-    # Orphan should still be in agent
+    # Orphan SHOULD be auto-imported to hub
+    assert (global_dir / "orphan-skill" / "SKILL.md").exists(), \
+        "orphan-skill should be in hub"
+    assert stats["orphans_imported"] == 1
+    # Phase 5 (configure_agents) re-populates copy-method agents from hub,
+    # so the skill is ALSO in the agent (copied from hub, not the orphan copy)
     assert (agent_home / "skills" / "orphan-skill" / "SKILL.md").exists(), \
-        "--yes should keep orphans in agents"
+        "configure_agents() re-populates copy agents from hub"
 
 
-def test_centralize_import_all_imports_orphans(tmp_path):
-    """Test that --import-all imports all orphans (old behavior)."""
+def test_centralize_copy_mode_keeps_originals(tmp_path):
+    """Test that --copy mode imports orphans but keeps originals in agents."""
     home = tmp_path / "home"
     global_dir = home / ".agents" / "skills"
     global_dir.mkdir(parents=True)
@@ -238,11 +237,11 @@ def test_centralize_import_all_imports_orphans(tmp_path):
 
     with patch("agent_sync.skills.get_all_agents", return_value=[agent]), \
          patch.object(manager, '_sync_from_repo', return_value=0):
-        stats = manager.centralize(move=False, import_all=True)
+        stats = manager.centralize(move=False)
 
     # Orphan SHOULD have been imported
     assert (global_dir / "orphan-skill" / "SKILL.md").exists(), \
-        "--import-all should import orphan-skill"
+        "--copy should import orphan-skill"
     assert stats["orphans_imported"] == 1
     # With move=False, orphan should remain in agent
     assert (agent_home / "skills" / "orphan-skill" / "SKILL.md").exists(), \
