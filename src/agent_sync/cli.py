@@ -128,7 +128,7 @@ def sync(force: bool, skills_only: bool, configs_only: bool, agents_only: bool):
     if not (do_skills or do_configs or do_agents):
         do_skills = do_configs = do_agents = True
     
-    console.print("\n[cyan]Syncing...[/cyan]\n")
+    console.print(f"\n[bold]🔄 Syncing with [cyan]{config.repo_url.split('/')[-1]}[/cyan]...[/]\n")
     
     success = sync_manager.sync(
         force=force,
@@ -197,7 +197,7 @@ def push(message: Optional[str], skills_only: bool, configs_only: bool):
             groups["other"].append(f)
 
     # Print tree
-    console.print("\n[bold]📤 Changes to be pushed:[/]")
+    console.print(f"\n[bold]📤 Changes to be pushed to [cyan]{config.repo_url.split('/')[-1]}[/cyan]:[/]")
 
     def status_label(f):
         s = f["status"]

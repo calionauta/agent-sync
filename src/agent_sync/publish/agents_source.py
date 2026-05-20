@@ -165,6 +165,8 @@ def publish_agents(
         console.print("[yellow]⚠ No agents selected to publish[/]")
         return False
 
+    console.print(f"\n[bold]📤 Publishing agents to [cyan]{published_repo.split('/')[-1]}[/cyan]...[/]")
+
     # Build lookup: name -> AgentSource (handles both simple and path-based names)
     all_sources = {a.name: a for a in discover_local_agents()}
 
