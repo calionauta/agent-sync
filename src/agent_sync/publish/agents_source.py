@@ -218,7 +218,7 @@ def publish_agents(
         )
 
         console.print(f"\n[green]✓ Published to {published_repo}[/green]")
-        console.print("[dim]\nManage repos: agent-sync pub repos list[/dim]")
+        console.print("[dim]\nManage repos: agent-sync repos list[/dim]")
         return True
 
     except Exception as e:
