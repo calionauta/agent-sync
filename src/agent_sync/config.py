@@ -1,18 +1,27 @@
 """Configuration management for agent-sync."""
 
+
 from pathlib import Path
 
 import yaml
 from platformdirs import user_config_dir, user_data_dir
 
-# Cross-platform directories
-# Linux: ~/.config/agent-sync, ~/.local/share/agent-sync
-# macOS: ~/Library/Application Support/agent-sync
-# Windows: ~\AppData\Roaming\agent-sync
-DEFAULT_CONFIG_DIR = Path(user_config_dir("agent-sync", "renatocaliari"))
+
+def _get_app_name() -> str:
+    """Get app name from package metadata (or fallback)."""
+    try:
+        from importlib.metadata import version
+        return version("agent-sync").split(".")[0]
+    except Exception:
+        return "agent-sync"
+
+
+APP_NAME = _get_app_name()
+
+# Cross-platform directories (generic, not hardcoded)
+DEFAULT_CONFIG_DIR = Path(user_config_dir(APP_NAME, APP_NAME))
 DEFAULT_CONFIG_FILE = DEFAULT_CONFIG_DIR / "config.yaml"
-# State files (last sync, update check) in data dir
-DEFAULT_STATE_DIR = Path(user_data_dir("agent-sync", "renatocaliari"))
+DEFAULT_STATE_DIR = Path(user_data_dir(APP_NAME, APP_NAME))
 DEFAULT_OVERRIDES_FILE = DEFAULT_CONFIG_DIR / "overrides.yaml"
 
 

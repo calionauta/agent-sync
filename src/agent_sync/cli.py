@@ -708,9 +708,283 @@ def centralize_skills(copy: bool, push: bool, dry_run: bool):
         sync_mgr = SyncManager(cfg)
         changed = sync_mgr.push(skills_only=True)
         if changed:
-            console.print(f"\n[green]✓ Pushed {len(changed)} file(s) to {cfg.repo_url.split('/')[-1]}[/green]\n")
+            console.print(f"\n[green]✓ Pushed {len(changed)} file(s) to {cfg.repo_url}[/green]")
+            console.print(f"\n[dim]Manage repos: agent-sync pub repos list[/dim]\n")
         else:
-            console.print(f"\n[dim]Nothing to push to {cfg.repo_url.split('/')[-1]}[/dim]\n")
+            console.print(f"\n[dim]Nothing to push to {cfg.repo_url}[/dim]\n")
+
+# =============================================================================
+# PUBLISH REPOS COMMAND
+# =============================================================================
+
+@main.group("pub")
+def pub_group():
+    """Manage publish repositories. Use: agent-sync pub repos <action>[/]"""
+    pass
+
+
+@pub_group.command("repos")
+@click.argument("action", type=click.Choice(["add", "list", "remove"]), required=False)
+@click.argument("url", required=False)
+def pub_repos(action: str | None, url: str | None):
+    """Manage publish repositories.
+    
+    Actions:
+      add <url>     Add a new publish repository
+      list          List all configured repositories (interactive)
+      remove <url>  Remove a repository
+    
+    Examples:
+      agent-sync pub repos add https://github.com/user/repo
+      agent-sync pub repos list
+      agent-sync pub repos remove https://github.com/user/repo
+    """
+    from .publish.config import (
+        get_published_repo,
+        set_published_repo,
+        load_config,
+        save_config,
+        add_source,
+        remove_source,
+        list_sources,
+    )
+    from .validators import validate_github_url
+
+    # ─── LIST ────────────────────────────────────────────────────────────────
+    if action == "list" or (action is None and url is None):
+        _publish_repos_list()
+        return
+
+    # ─── ADD ────────────────────────────────────────────────────────────────
+    if action == "add":
+        if not url:
+            console.print("[red]✗ URL required for add[/red]")
+            console.print("[dim]Usage: agent-sync publish repos add <url>[/dim]")
+            return
+        
+        if not validate_github_url(url):
+            console.print(f"[red]✗ Invalid GitHub URL: {url}[/red]")
+            console.print("[dim]Expected: https://github.com/owner/repo.git[/dim]")
+            return
+        
+        # Check if repo is accessible
+        console.print(f"\n[dim]🔍 Checking repository {url}...[/dim]")
+        import subprocess
+        try:
+            result = subprocess.run(
+                ["gh", "api", "repos", url.replace("https://github.com/", "")],
+                capture_output=True,
+                timeout=30,
+            )
+            if result.returncode != 0:
+                console.print(f"[red]✗ Cannot access repository: {url}[/red]")
+                console.print("[dim]Make sure the repo exists and you have access.[/dim]")
+                return
+        except Exception as e:
+            console.print(f"[red]✗ Error checking repository: {e}[/red]")
+            return
+        
+        # Confirm with user
+        if not Confirm.ask(f"\n[bold]Add this repository as publish target?[/]\n  {url}", default=True):
+            console.print("[dim]Cancelled.[/dim]")
+            return
+        
+        # Set as published repo
+        set_published_repo(url)
+        console.print(f"\n[green]✓ Repository added: {url}[/green]")
+        console.print("[dim]\nRun 'agent-sync publish repos list' to see all repos.[/dim]")
+        return
+
+    # ─── REMOVE ───────────────────────────────────────────────────────────────
+    if action == "remove":
+        if not url:
+            console.print("[red]✗ URL required for remove[/red]")
+            console.print("[dim]Usage: agent-sync publish repos remove <url>[/dim]")
+            return
+        
+        success = remove_source(url)
+        if success:
+            console.print(f"\n[green]✓ Repository removed: {url}[/green]")
+        else:
+            console.print(f"[yellow]⚠ Repository not found: {url}[/yellow]")
+        return
+
+
+def _publish_repos_list():
+    """Interactive list of publish repos (reuses skills list patterns)."""
+    from rich.box import ROUNDED
+    from .publish.config import (
+        get_published_repo,
+        set_published_repo,
+        load_config,
+        save_config,
+    )
+    from .publish.base import SourceStatus
+
+    config = load_config()
+    
+    # Get current published repo and sources
+    published_repo = get_published_repo()
+    sources = config.skill_sources
+    
+    # Build list of repos: published_repo + skill_sources
+    repos = []
+    if published_repo:
+        repos.append({
+            "url": published_repo,
+            "type": "published",
+            "status": "active",
+            "is_current": True,
+        })
+    for src in sources:
+        if src.url != published_repo:  # Don't duplicate
+            repos.append({
+                "url": src.url,
+                "type": "source",
+                "status": src.status.value if hasattr(src, 'status') else "unknown",
+                "is_current": False,
+            })
+    
+    if not repos:
+        console.print("\n[yellow]No publish repositories configured.[/yellow]")
+        console.print("\n[dim]Add one: agent-sync publish repos add <url>[/dim]")
+        return
+    
+    # ─── Interactive TUI ──────────────────────────────────────────────────────
+    selected: set[str] = set()
+    remove_mode = False
+    
+    while True:
+        # Header
+        n = len(repos)
+        s = len(selected)
+        header = f"[bold]📦 Publish Repos ({n} repos)[/]"
+        if s > 0:
+            header += f"  |  Selected ({s})"
+        if remove_mode:
+            header += "  [red]│ REMOVE MODE[/red]"
+        console.print(f"\n{header}\n")
+        
+        # Table
+        table = Table(box=ROUNDED, show_header=True, header_style="bold dim")
+        table.add_column("#", width=3, justify="right")
+        table.add_column("", width=3)
+        table.add_column("Repository", width=50)
+        table.add_column("Type", width=12)
+        
+        for i, repo in enumerate(repos, 1):
+            mark = "●" if repo["url"] in selected else "○"
+            mark_color = "green" if repo["url"] in selected else "dim"
+            
+            # Style based on state
+            style = ""
+            if remove_mode:
+                style = "red bold"
+            elif repo["is_current"]:
+                style = "cyan bold"
+            
+            type_label = "published" if repo["type"] == "published" else "source"
+            type_color = "green" if repo["type"] == "published" else "yellow"
+            
+            table.add_row(
+                f"[dim]{i:02d}[/dim]",
+                f"[{mark_color}]{mark}[/{mark_color}]",
+                repo["url"].replace("https://github.com/", ""),
+                f"[{type_color}]{type_label}[/{type_color}]",
+                style=style,
+            )
+        
+        console.print(table)
+        console.print()
+        
+        # Footer
+        if remove_mode:
+            footer_lines = [
+                ("1-N", "[dim] toggle[/dim]"),
+                ("a", "[cyan](a)[/cyan]ll"),
+                ("n", "[cyan](n)[/cyan]one"),
+                ("Enter", "[cyan]confirm[/cyan]"),
+                ("r", "[cyan](r)[/cyan]emove mode"),
+                ("q", "[cyan](q)[/cyan]uit"),
+            ]
+        else:
+            footer_lines = [
+                ("1-N", "[dim] toggle[/dim]"),
+                ("a", "[cyan](a)[/cyan]ll"),
+                ("n", "[cyan](n)[/cyan]one"),
+                ("s", "[cyan](s)[/cyan]et current"),
+                ("r", "[cyan](r)[/cyan]emove"),
+                ("q", "[cyan](q)[/cyan]uit"),
+            ]
+        print_footer(footer_lines, default_key="Enter" if selected else None)
+        
+        # Input
+        choice = Prompt.ask("[cyan]›[/cyan]", default="", show_default=False).strip()
+        
+        if not choice:
+            if selected and not remove_mode:
+                # Set as current
+                if len(selected) == 1:
+                    url = list(selected)[0]
+                    set_published_repo(url)
+                    console.print(f"\n[green]✓ Set as current: {url}[/green]\n")
+                else:
+                    console.print("[yellow]⚠ Select only one repo to set as current[/yellow]")
+                break
+            continue
+        
+        if choice.lower() in ("q", "quit"):
+            console.print("[dim]Done.[/dim]\n")
+            return
+        
+        if choice.lower() in ("a", "all"):
+            selected = {r["url"] for r in repos}
+        elif choice.lower() in ("n", "none"):
+            selected = set()
+        elif choice.lower() in ("r", "remove"):
+            remove_mode = not remove_mode
+        elif choice.lower() in ("s", "set"):
+            # Enter number to set as current
+            continue  # Let user select by number
+        elif choice.isdigit():
+            idx = int(choice) - 1
+            if 0 <= idx < len(repos):
+                url = repos[idx]["url"]
+                if url in selected:
+                    selected.discard(url)
+                else:
+                    selected.add(url)
+        elif "-" in choice:
+            # Range selection
+            try:
+                parts = choice.split("-")
+                start = int(parts[0]) - 1
+                end = int(parts[1])
+                for j in range(start, min(end, len(repos))):
+                    selected.add(repos[j]["url"])
+            except ValueError:
+                pass
+    
+    # Handle remove mode confirmation
+    if remove_mode and selected:
+        console.print(f"\n[bold]🗑 Remove {len(selected)} repo(s)?[/]")
+        for url in sorted(selected):
+            console.print(f"  • {url}")
+        
+        if not Confirm.ask("\n[bold]Confirm removal?[/]", default=False):
+            console.print("[dim]Cancelled.[/dim]\n")
+            return
+        
+        # Remove each
+        removed = 0
+        for url in selected:
+            if remove_source(url):
+                removed += 1
+        
+        if removed > 0:
+            console.print(f"\n[green]✓ Removed {removed} repo(s)[/green]\n")
+        return
+
 
 # =============================================================================
 # PUBLISH COMMAND
