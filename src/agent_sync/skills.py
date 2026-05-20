@@ -647,12 +647,8 @@ class SkillsManager:
         if not dry_run and should_remove_unselected:
             remove_targets = selected_orphans or unselected
             if remove_targets:
-                console.print(f"\n[bold]🗑 Removing all orphans from agents...[/]\n")
-                self._remove_orphans_from_agents(remove_targets, orphans)
-                stats["orphans_removed"] = len(remove_targets)
-                console.print()
-                # Skip post-selection prompt — user already chose remove
-                unselected = set()
+                self._safe_remove_orphans(remove_targets, orphans, stats)
+                unselected = set()  # Skip post-selection prompt
 
         # ----------------------------------------------------------------
         # PHASE 8: Keep or Remove unselected orphans (via post-selection prompt)
@@ -670,10 +666,7 @@ class SkillsManager:
                 should_remove = self._post_selection_prompt(len(unselected), agent_names)
 
                 if should_remove:
-                    console.print(f"  [yellow]🗑 Removing {len(unselected)} unselected skills from agents[/yellow]\n")
-                    self._remove_orphans_from_agents(unselected, orphans)
-                    stats["orphans_removed"] = stats.get("orphans_removed", 0) + len(unselected)
-                    console.print()
+                    self._safe_remove_orphans(unselected, orphans, stats)
                 else:
                     console.print("  [green]✓ Keeping unselected skills in agents[/green]\n")
 
@@ -738,6 +731,73 @@ class SkillsManager:
                         console.print(f"  [yellow]🗑[/] {name} [dim](from {agent_name})[/]")
                     except Exception as e:
                         console.print(f"  [red]✗ Failed to remove {name} from {agent_name}: {e}[/]")
+
+    def _safe_remove_orphans(self, skill_names: set, orphans: dict, stats: dict) -> None:
+        """Centralize then remove orphans — hub backup before delete.
+
+        For each orphan:
+        1. If NOT in hub → copy to hub (backup)
+        2. Remove from all agents
+
+        Args:
+            skill_names: Set of skill names to centralize+remove
+            orphans: Orphan info dict with agent paths
+            stats: Stats dict to update
+        """
+        console.print("\n[bold]🗑 Centralizing then removing from agents...[/]\n")
+
+        hub = self.global_skills_dir
+        hub.mkdir(parents=True, exist_ok=True)
+
+        backed_up = 0
+        already_in_hub = 0
+        removed = 0
+
+        for name in skill_names:
+            if name not in orphans:
+                continue
+
+            hub_path = hub / name
+            already_there = hub_path.exists()
+
+            # Step 1: backup to hub if needed
+            if not already_there:
+                info = orphans[name]
+                agent_name, skill_path = info["agents"][0]
+                try:
+                    if skill_path.is_dir():
+                        shutil.copytree(skill_path, hub_path)
+                    else:
+                        shutil.copy2(skill_path, hub_path)
+                    console.print(f"  [green]✓[/] {name} [dim](backed up to hub)[/]")
+                    backed_up += 1
+                except Exception as e:
+                    console.print(f"  [red]✗ Failed to backup {name}: {e}[/]")
+                    continue
+            else:
+                already_in_hub += 1
+
+            # Step 2: remove from all agents
+            for agent_name, skill_path in orphans[name]["agents"]:
+                if skill_path.exists():
+                    try:
+                        if skill_path.is_dir():
+                            shutil.rmtree(skill_path)
+                        else:
+                            skill_path.unlink()
+                        console.print(f"  [yellow]🗑[/] {name} [dim](removed from {agent_name})[/]")
+                        removed += 1
+                    except Exception as e:
+                        console.print(f"  [red]✗ Failed to remove {name} from {agent_name}: {e}[/]")
+
+        console.print()
+        if backed_up > 0:
+            console.print(f"  [green]✓ Backed up {backed_up} skill(s) to hub[/green]")
+        if already_in_hub > 0:
+            console.print(f"  [dim]  {already_in_hub} skill(s) already in hub[/dim]")
+        console.print()
+
+        stats["orphans_removed"] = stats.get("orphans_removed", 0) + removed
 
     def _cleanup_user_symlinks(self, preserve_extension_symlinks: bool = True) -> int:
         """
