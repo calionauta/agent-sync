@@ -7,6 +7,20 @@ This module handles publishing skills from multiple sources to a central
 public repository for sharing with the community.
 """
 
+
+
+def has_significant_issues(result: ScanResult) -> bool:
+    """Check if result has issues that warrant user attention."""
+    if not result.safe:
+        return True
+    return any(
+        issue.get('context') not in ('variable', 'deprecated')
+        and issue.get('severity') in ('critical', 'high')
+        for issue in result.issues
+    )
+
+
+
 from .base import (
     PublishConfig,
     SkillSource,
