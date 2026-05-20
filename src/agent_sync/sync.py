@@ -380,7 +380,59 @@ class SyncManager:
             console.print(f"  [dim]🤖 Staging custom agents...[/dim]")
             self._stage_agents()
 
-        # Parse git status for working tree changes
+        # Parse BOTH staged and unstaged changes
+        status = self._run_git("status", "--porcelain")
+        
+        # Always parse working tree changes (unstaged)
+        changed_files = []
+        for line in status.split("\n"):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            
+            # Parse porcelain format: XY PATH or R100 OLD\tNEW (tab-separated)
+            if '\t' in stripped:
+                status_code = stripped[:1]
+                path = stripped.split('\t')[-1]
+            else:
+                parts = stripped.split()
+                status_code = parts[0]
+                path = parts[-1]
+            
+            # Skip manifest file
+            if path == '.agent-sync-manifest.json':
+                continue
+            
+            # Skip if already in list
+            if any(c['path'] == path for c in changed_files):
+                continue
+            
+            # Classify the status for a human-readable label
+            if status_code == '??':
+                label = 'added'
+            elif 'D' in status_code:
+                label = 'deleted'
+            elif 'A' in status_code:
+                label = 'added'
+            else:
+                label = 'modified'
+            
+            # Count files if git reported a whole directory (trailing slash)
+            directory_count = None
+            if path.endswith('/'):
+                dir_path = self.repo_dir / path.rstrip('/')
+                if dir_path.exists():
+                    directory_count = sum(1 for _ in dir_path.rglob('*') if _.is_file())
+                path = path.rstrip('/')
+            
+            changed_files.append({
+                'path': path,
+                'status': status_code,
+                'label': label,
+                'directory_count': directory_count,
+            })
+        
+        return changed_files
         status = self._run_git("status", "--porcelain")
         
         # If no working tree changes, check for staged changes (skills were staged)
