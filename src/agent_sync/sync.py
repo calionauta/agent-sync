@@ -360,42 +360,93 @@ class SyncManager:
             self._stage_skills()
             self._stage_agents()
 
-        # Check for changes
+        # Parse git status for working tree changes
         status = self._run_git("status", "--porcelain")
-        if not status:
-            return []
-
-        # Parse git status
+        
+        # If no working tree changes, check for staged changes (skills were staged)
+        staged_status = self._run_git("diff", "--cached", "--name-status")
+        
         changed_files = []
-        for line in status.split("\n"):
+        
+        # Parse staged changes
+        for line in staged_status.split("\n"):
             stripped = line.strip()
             if not stripped:
                 continue
-
-            if '\t' in stripped:
-                status_code = stripped[:1]
-                path = stripped.split('\t')[-1]
-            else:
-                parts = stripped.split()
+            
+            parts = stripped.split("\t")
+            if len(parts) >= 2:
                 status_code = parts[0]
-                path = parts[-1]
-
-            label = ('added' if status_code == '??' or 'A' in status_code
-                     else 'deleted' if 'D' in status_code
-                     else 'modified')
-
-            directory_count = None
-            if path.endswith('/'):
-                dir_path = self.repo_dir / path.rstrip('/')
-                if dir_path.exists():
+                path = parts[1]
+                
+                # Skip if already in working tree changes
+                if any(c['path'] == path for c in changed_files):
+                    continue
+                
+                # Check path filters
+                is_skill = path.startswith("skills/")
+                is_config = path.startswith("configs/") or path.startswith("agents/")
+                
+                if skills_only and not is_skill:
+                    continue
+                if configs_only and not is_config and not path.startswith("agents/"):
+                    continue
+                if agents_only and not path.startswith("agents/"):
+                    continue
+                
+                label = 'added' if status_code in ('A', '?', 'M') else 'deleted' if status_code == 'D' else 'modified'
+                
+                # Count files in directory if exists
+                directory_count = None
+                dir_path = self.repo_dir / path
+                if dir_path.exists() and dir_path.is_dir():
                     directory_count = sum(1 for _ in dir_path.rglob('*') if _.is_file())
-                path = path.rstrip('/')
-
+                
+                changed_files.append({
+                    'path': path,
+                    'status': status_code,
+                    'label': label,
+                    'directory_count': directory_count,
+                    'staged': True,
+                })
+        
+        # Also check for untracked files
+        for line in status.split("\n"):
+            stripped = line.strip()
+            if not stripped or '\t' not in stripped:
+                continue
+            
+            status_code = stripped[:1]
+            path = stripped.split('\t')[-1]
+            
+            # Skip if already in list
+            if any(c['path'] == path for c in changed_files):
+                continue
+            
+            # Check path filters
+            is_skill = path.startswith("skills/")
+            is_config = path.startswith("configs/") or path.startswith("agents/")
+            
+            if skills_only and not is_skill:
+                continue
+            if configs_only and not is_config and not path.startswith("agents/"):
+                continue
+            if agents_only and not path.startswith("agents/"):
+                continue
+            
+            label = 'added'
+            # Count files in directory if exists
+            directory_count = None
+            dir_path = self.repo_dir / path
+            if dir_path.exists() and dir_path.is_dir():
+                directory_count = sum(1 for _ in dir_path.rglob('*') if _.is_file())
+            
             changed_files.append({
-                'path': path,
+                'path': path.rstrip('/') if path.endswith('/') else path,
                 'status': status_code,
                 'label': label,
                 'directory_count': directory_count,
+                'staged': False,
             })
 
         return changed_files
