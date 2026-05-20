@@ -246,7 +246,7 @@ class SkillsManager:
             console.print(table)
             console.print(f"\n[dim]{len(items)} skills | {len(selected)} selecionadas[/]")
             console.print("[dim]────────────────────────────────────────────────────────[/]")
-            console.print("  [cyan][1-N][/]select    [cyan][a][/]all    [cyan][n][/]none    [cyan][r][/]remove    [cyan][Enter][/]select")
+            console.print("  [1-N]select    [a]all    [n]none    [r]remove    [Enter]select")
 
             choice = Prompt.ask("\n[cyan]>[/]")
 
@@ -255,9 +255,6 @@ class SkillsManager:
                 selected = set(all_orphan_names)
             elif choice.lower() == "n":
                 selected = set()
-            elif choice.lower() == "r":
-                # Remove: clear selection and exit
-                return set(), True
             elif choice.lower() == "r":
                 # Remove: clear selection and exit
                 return set(), True
@@ -562,7 +559,8 @@ class SkillsManager:
         # ----------------------------------------------------------------
         # PHASE 5: Select which orphans to import
         # ----------------------------------------------------------------
-        selected_orphans: set = set()
+        # Initialize remove flag (set by [r] shortcut in TUI)
+        should_remove_unselected = False
 
         if orphans:
             if is_fresh_setup:
@@ -578,16 +576,14 @@ class SkillsManager:
             else:
                 # Interactive TUI
                 try:
-                    # Check if terminal is interactive
                     import sys
                     if not sys.stdout.isatty():
                         console.print("[red]✗ Terminal not interactive.[/red] "
                                      "Use [green]--yes[/] to skip orphans or "
                                      "[green]--import-all[/] to import all.\n")
-                        # Show what would be done (as in dry-run)
                         selected_orphans = set()
                     else:
-                        selected_orphans, _ = self._orphan_selection_tui(orphans)
+                        selected_orphans, should_remove_unselected = self._orphan_selection_tui(orphans)
                 except Exception as e:
                     console.print(f"[red]✗ TUI error: {e}[/red]. Falling back to --yes mode.\n")
                     selected_orphans = set()
@@ -646,16 +642,21 @@ class SkillsManager:
             console.print()
 
         # ----------------------------------------------------------------
-        # PHASE 7: Post-selection — Keep or Remove unselected
+        # PHASE 7: Remove selected orphans from agents (via [r] shortcut)
         # ----------------------------------------------------------------
-        keep_unselected = True
+        if not dry_run and selected_orphans and should_remove_unselected:
+            console.print(f"\n[bold]🗑 Removing {len(selected_orphans)} skills from agents...[/]\n")
+            self._remove_orphans_from_agents(selected_orphans, orphans)
+            stats["orphans_removed"] = len(selected_orphans)
+            console.print()
+
+        # ----------------------------------------------------------------
+        # PHASE 8: Keep or Remove unselected orphans (via post-selection prompt)
+        # ----------------------------------------------------------------
         if unselected and not dry_run:
-            # Auto-decision for non-interactive modes
             if skip_orphans:
-                keep_unselected = True
                 console.print(f"  [yellow]--yes: keeping {len(unselected)} unselected skill(s) in agents[/yellow]\n")
             elif import_all:
-                # With --import-all, everything was imported, nothing unselected
                 pass
             else:
                 agent_names = []
@@ -668,25 +669,9 @@ class SkillsManager:
                     console.print("  [green]✓ Keeping unselected skills in agents[/green]\n")
                 else:
                     console.print(f"  [yellow]🗑 Removing {len(unselected)} unselected skills from agents[/yellow]\n")
-                stats["orphans_removed"] = len(unselected)
-
-        # ----------------------------------------------------------------
-        # PHASE 8: Cleanup — only for Remove + move=True
-        # ----------------------------------------------------------------
-        if not dry_run:
-            # Build set of skills to remove from agents
-            remove_skills = set()
-
-            if not keep_unselected:
-                remove_skills.update(unselected)
-
-            # For move=True, the imported skills were already moved in phase 6
-            # (they're gone from agents). No extra cleanup needed.
-
-            if remove_skills:
-                console.print("[bold]🧹 Cleaning up removed skills from agents...[/]\n")
-                self._remove_orphans_from_agents(remove_skills, orphans)
-                console.print()
+                    self._remove_orphans_from_agents(unselected, orphans)
+                    stats["orphans_removed"] = stats.get("orphans_removed", 0) + len(unselected)
+                    console.print()
 
         # ----------------------------------------------------------------
         # PHASE 9: Clean up user symlinks
