@@ -346,18 +346,27 @@ class SyncManager:
         Returns:
             List of dicts with 'path', 'status', 'label', 'directory_count'
         """
+        from .agents import get_all_agents
+        
         if not self.repo_dir.exists():
             raise RuntimeError("Not linked to a repository. Run 'agent-sync init' or 'link' first")
 
-        # Stage files based on flags
+        # Show progress spinner based on what's being synced
+        agents_count = len([a for a in get_all_agents() if self.config.is_agent_enabled(a.name)])
+        
         if skills_only and not configs_only:
+            console.print(f"  [dim]📦 Staging skills...[/dim]")
             self._stage_skills()
         elif configs_only and not skills_only:
+            console.print(f"  [dim]⚙️  Staging {agents_count} agent configs...[/dim]")
             self._stage_all_agent_files()
             self._stage_agents()
         else:
+            console.print(f"  [dim]⚙️  Staging {agents_count} agents...[/dim]")
             self._stage_all_agent_files()
+            console.print(f"  [dim]📦 Staging skills...[/dim]")
             self._stage_skills()
+            console.print(f"  [dim]🤖 Staging custom agents...[/dim]")
             self._stage_agents()
 
         # Parse git status for working tree changes

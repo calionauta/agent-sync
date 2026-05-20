@@ -252,9 +252,11 @@ def push(message: Optional[str], skills_only: bool, configs_only: bool):
         return
 
     # User confirmed — commit and push
+    console.print(f"\n  [dim]📝 Committing to {config.repo_url.split('/')[-1]}...[/dim]")
     try:
         sync_manager._run_git("add", ".")
         sync_manager._run_git("commit", "-m", commit_msg)
+        console.print(f"  [dim]🚀 Pushing to {config.repo_url.split('/')[-1]}...[/dim]")
         sync_manager._run_git("push", "origin", "main")
         sync_manager._save_state("pushed", sync_manager.config.repo_url)
         console.print(f"\n[green]✓ Pushed to {config.repo_url.split('/')[-1]}[/green]\n")
