@@ -400,6 +400,28 @@ class SyncManager:
 
         return changed_files
 
+    def sync(self, force: bool = False, skills: bool = True, configs: bool = True, agents: bool = False) -> bool:
+        """
+        Run full sync cycle (pull + push).
+
+        Args:
+            force: Force pull even with local changes
+            skills: Include skills in sync
+            configs: Include configs in sync
+            agents: Include agent configs in sync
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Pull first
+            self.pull(force=force, skills_only=not skills, configs_only=not configs and not agents, agents_only=agents)
+            # Then push
+            self.push(skills_only=not skills, configs_only=not configs, agents_only=agents)
+            return True
+        except Exception:
+            return False
+
     def push(self, message: str = "chore: sync config updates", skills_only: bool = False, configs_only: bool = False, agents_only: bool = False) -> list[str]:
         """Commit and push local changes. Returns changed_files list."""
         changed_files = self._push_stage_and_get_changes(message, skills_only, configs_only, agents_only)
