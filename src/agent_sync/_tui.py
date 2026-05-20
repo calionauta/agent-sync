@@ -1,7 +1,5 @@
 """Shared TUI helpers — DRY components for interactive CLI interfaces."""
 
-from typing import Optional
-
 from rich.console import Console
 
 console = Console()
@@ -13,22 +11,29 @@ def print_footer(
 ) -> None:
     """Print a consistent footer bar with command shortcuts.
 
-    Pattern from publish TUI:
-        [1-N]select    [a]all    [n]none    [m]move to hub    [Enter]confirm (default)
+    Each command is a (key, desc) tuple.
+    - key: The key letter(s), e.g. "a", "1-N", "Enter"
+    - desc: Description with the key letter(s) highlighted, e.g. "(a)ll", "[r]emove"
 
-    Args:
-        commands: List of (key, description) tuples.
-                  Key can include brackets like "[1-N]" or be just "a".
-        default_key: Key that gets (default) suffix. e.g. "Enter" → "[Enter]confirm (default)".
+    The key letter appears in brackets [a] in desc, and separately as [key].
+
+    Example commands:
+        ("a", "(a)ll")       → [a] (a)ll
+        ("r", "[r]emove")     → [r] [r]emove  (key appears twice)
+        ("1-N", " toggle")    → [1-N] toggle
+
+    For short keys, desc should include (k)ey pattern:
+        ("a", "(a)ll"), ("n", "(n)one"), ("q", "(q)uit")
+    For multi-char keys, desc should include [key] pattern:
+        ("1-N", " toggle"), ("Enter", " confirm")
     """
     console.print("[dim]────────────────────────────────────────────────────────[/]")
     parts = []
     for key, desc in commands:
-        # Strip existing brackets from key if present
-        key_clean = key.strip("[]")
-        if key_clean == default_key or key == f"[{default_key}]":
-            label = f"[cyan][{key_clean}][/]{desc} (default)"
+        # Format: [key] desc  — key always in brackets, desc as-is
+        if key == default_key or (default_key and key == default_key):
+            label = f"[cyan][{key}][/]{desc}[dim] (default)[/dim]"
         else:
-            label = f"[cyan][{key_clean}][/]{desc}"
+            label = f"[cyan][{key}][/]{desc}"
         parts.append(label)
     console.print("  " + "    ".join(parts))

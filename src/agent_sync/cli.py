@@ -243,7 +243,7 @@ def push(message: Optional[str], skills_only: bool, configs_only: bool):
     total = len(changed_files)
     console.print(f"\n[dim]{total} item(s)[/dim]\n")
     console.print("[dim]────────────────────────────────────────────────────────[/]")
-    print_footer([("Enter", "push"), ("q", "cancel")], default_key="Enter")
+    print_footer([("Enter", "[cyan]push[/cyan]"), ("q", "[cyan](q)[/cyan] cancel")], default_key="Enter")
     choice = Prompt.ask("\n> ")
     if choice.lower() in ("q", "quit"):
         console.print("\n[yellow]Cancelled — changes not pushed.[/yellow]\n")
@@ -526,18 +526,28 @@ def list_skills():
         # ─── Footer ───────────────────────────────────────────────────────────
         if remove_mode:
             footer_lines = [
-                "(a) all  (n) none  (r) toggle-remove  (q) quit",
-                "(p) preview  [Enter] confirm removal  (d) deselect",
+                ("1-N", "[dim] toggle[/dim]"),
+                ("a", "[cyan](a)[/cyan]ll"),
+                ("n", "[cyan](n)[/cyan]one"),
+                ("d", "[cyan](d)[/cyan]eselect"),
+                ("Enter", "[cyan]confirm[/cyan]"),
+                ("r", "[cyan](r)[/cyan]emove mode"),
+                ("q", "[cyan](q)[/cyan]uit"),
             ]
         else:
             footer_lines = [
-                "(1-N) toggle  (a) all  (n) none  (d) deselect",
-                "(r) remove  (q) quit  (p) preview [Enter] confirm",
+                ("1-N", "[dim] toggle[/dim]"),
+                ("a", "[cyan](a)[/cyan]ll"),
+                ("n", "[cyan](n)[/cyan]one"),
+                ("d", "[cyan](d)[/cyan]eselect"),
+                ("r", "[cyan](r)[/cyan]emove"),
+                ("q", "[cyan](q)[/cyan]uit"),
+                ("p", "[cyan](p)[/cyan]review"),
             ]
         print_footer(footer_lines, default_key="Enter" if selected else None)
 
         # ─── Input ───────────────────────────────────────────────────────────
-        choice = Prompt.ask("\n›", default="").strip()
+        choice = Prompt.ask("[cyan]›[/cyan]", default="", show_default=False).strip()
 
         if not choice:
             if selected:
