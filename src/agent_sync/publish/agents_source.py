@@ -165,7 +165,7 @@ def publish_agents(
         console.print("[yellow]⚠ No agents selected to publish[/]")
         return False
 
-    console.print(f"\n[bold]📤 Publishing agents to [cyan]{published_repo.split('/')[-1]}[/cyan]...[/]")
+    console.print(f"\n[bold]📤 Publishing agents to [cyan]{published_repo}[/cyan]...[/]")
 
     # Build lookup: name -> AgentSource (handles both simple and path-based names)
     all_sources = {a.name: a for a in discover_local_agents()}
@@ -217,11 +217,12 @@ def publish_agents(
             timeout=120,
         )
 
-        console.print(f"\n[green]✓ Published {published_count} agent(s) to {published_repo.split('/')[-1]}[/green]")
+        console.print(f"\n[green]✓ Published to {published_repo}[/green]")
+        console.print("[dim]\nManage repos: agent-sync pub repos list[/dim]")
         return True
 
     except Exception as e:
-        console.print(f"\n[red]✗ Error publishing agents to {published_repo.split('/')[-1]}: {e}[/]")
+        console.print(f"\n[red]✗ Error publishing agents to {published_repo}: {e}[/]")
         return False
 
     finally:

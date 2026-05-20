@@ -171,12 +171,13 @@ def run_skills_flow() -> bool:
         return False
     
     # Publish skills only (single operation)
-    console.print(f"\n[bold]📤 Publishing to [cyan]{published_repo.split('/')[-1]}[/cyan]...[/]")
+    console.print(f"\n[bold]📤 Publishing to [cyan]{published_repo}[/cyan]...[/]")
     from .git_publish import publish_all
     success = publish_all(skills_selection, skills_sources, [], published_repo)
     
     if success:
-        console.print(f"\n[green]✓ Published {len(skills_selection)} skill(s) to {published_repo.split('/')[-1]}[/green]")
+        console.print(f"\n[green]✓ Published to {published_repo}[/green]")
+        console.print("[dim]\nManage repos: agent-sync pub repos list[/dim]")
         PublishStateManager.save(skills_selection, {"agents": []})
         return True
     
@@ -310,12 +311,13 @@ def run_agents_flow() -> bool:
         return False
     
     # Publish using publish_all (consistent with other flows)
-    console.print(f"\n[bold]📤 Publishing to [cyan]{published_repo.split('/')[-1]}[/cyan]...[/]")
+    console.print(f"\n[bold]📤 Publishing to [cyan]{published_repo}[/cyan]...[/]")
     from .git_publish import publish_all
     success = publish_all({}, [], final_selection, published_repo)
     
     if success:
-        console.print(f"\n[green]✓ Published {len(final_selection)} agent(s) to {published_repo.split('/')[-1]}[/green]")
+        console.print(f"\n[green]✓ Published to {published_repo}[/green]")
+        console.print("[dim]\nManage repos: agent-sync pub repos list[/dim]")
         PublishStateManager.save({}, {"agents": final_selection})
         return True
     
@@ -578,12 +580,12 @@ def run_publish_setup() -> bool:
     agents_sel = list(selection.get("agents", set()))
     
     # Publish skills AND agents in ONE operation to prevent --force overwrite
-    console.print(f"\n[bold]📤 Publishing to [cyan]{published_repo.split('/')[-1]}[/cyan]...[/]")
+    console.print(f"\n[bold]📤 Publishing to [cyan]{published_repo}[/cyan]...[/]")
     success = publish_all(skills_sel, skills_sources, agents_sel, published_repo)
     
     if success:
-        total = len(skills_sel) + len(agents_sel)
-        console.print(f"\n[green]✓ Published {total} item(s) to {published_repo.split('/')[-1]}[/green]")
+        console.print(f"\n[green]✓ Published to {published_repo}[/green]")
+        console.print("[dim]\nManage repos: agent-sync pub repos list[/dim]")
         PublishStateManager.save(skills_sel, {"agents": agents_sel})
         return True
     

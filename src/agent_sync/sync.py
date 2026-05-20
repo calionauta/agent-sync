@@ -18,14 +18,23 @@ from .validators import validate_github_url
 console = Console()
 
 
+def _get_app_name() -> str:
+    """Get app name from package metadata (or fallback)."""
+    try:
+        from importlib.metadata import version
+        return version("agent-sync").split(".")[0]
+    except Exception:
+        return "agent-sync"
+
+
+APP_NAME = _get_app_name()
+
+
 class SyncManager:
     """Manages synchronization with GitHub repository."""
 
-    # Cross-platform data directory
-    # Linux: ~/.local/share/agent-sync
-    # macOS: ~/Library/Application Support/agent-sync
-    # Windows: ~\AppData\Roaming\agent-sync
-    DATA_DIR = Path(user_data_dir("agent-sync", "renatocaliari"))
+    # Cross-platform data directory (generic, not hardcoded)
+    DATA_DIR = Path(user_data_dir(APP_NAME, APP_NAME))
     DEFAULT_REPO_DIR = DATA_DIR / "repo"
     STATE_FILE = DATA_DIR / "sync-state.json"
     MANIFEST_FILE = DATA_DIR / "repo" / ".agent-sync-manifest.json"
