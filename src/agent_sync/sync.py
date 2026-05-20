@@ -334,20 +334,96 @@ class SyncManager:
 
         return changes
 
-    def push(self, message: str = "chore: sync config updates", skills_only: bool = False, configs_only: bool = False, agents_only: bool = False) -> list[str]:
-        """
-        Commit and push local changes.
-
-        Args:
-            message: Commit message
-            skills_only: Push only skills (not configs)
-            configs_only: Push only configs (not skills)
-            agents_only: Push only custom agents (not configs or skills)
+    def _push_stage_and_get_changes(
+        self,
+        message: str = "chore: sync config updates",
+        skills_only: bool = False,
+        configs_only: bool = False,
+        agents_only: bool = False,
+    ) -> list[dict]:
+        """Stage files and return changed files list WITHOUT committing or pushing.
 
         Returns:
-            List of dicts with 'path', 'status' (git code), 'label' (human-readable),
-            and 'directory_count' (int or None for whole-directory entries)
+            List of dicts with 'path', 'status', 'label', 'directory_count'
         """
+        if not self.repo_dir.exists():
+            raise RuntimeError("Not linked to a repository. Run 'agent-sync init' or 'link' first")
+
+        # Stage files based on flags
+        if skills_only and not configs_only:
+            self._stage_skills()
+        elif configs_only and not skills_only:
+            self._stage_all_agent_files()
+            self._stage_agents()
+        else:
+            self._stage_all_agent_files()
+            self._stage_skills()
+            self._stage_agents()
+
+        # Check for changes
+        status = self._run_git("status", "--porcelain")
+        if not status:
+            return []
+
+        # Parse git status
+        changed_files = []
+        for line in status.split("\n"):
+            stripped = line.strip()
+            if not stripped:
+                continue
+
+            if '\t' in stripped:
+                status_code = stripped[:1]
+                path = stripped.split('\t')[-1]
+            else:
+                parts = stripped.split()
+                status_code = parts[0]
+                path = parts[-1]
+
+            label = ('added' if status_code == '??' or 'A' in status_code
+                     else 'deleted' if 'D' in status_code
+                     else 'modified')
+
+            directory_count = None
+            if path.endswith('/'):
+                dir_path = self.repo_dir / path.rstrip('/')
+                if dir_path.exists():
+                    directory_count = sum(1 for _ in dir_path.rglob('*') if _.is_file())
+                path = path.rstrip('/')
+
+            changed_files.append({
+                'path': path,
+                'status': status_code,
+                'label': label,
+                'directory_count': directory_count,
+            })
+
+        return changed_files
+
+    def push(self, message: str = "chore: sync config updates", skills_only: bool = False, configs_only: bool = False, agents_only: bool = False) -> list[str]:
+        """Commit and push local changes. Returns changed_files list."""
+        changed_files = self._push_stage_and_get_changes(message, skills_only, configs_only, agents_only)
+        if not changed_files:
+            return []
+
+        self._run_git("add", ".")
+        self._run_git("commit", "-m", message)
+
+        try:
+            self._run_git("push", "origin", "main")
+        except subprocess.CalledProcessError as e:
+            if "Authentication failed" in e.stderr or "Invalid username or token" in e.stderr:
+                raise RuntimeError(
+                    "GitHub authentication failed. Try one of these solutions:\n"
+                    "  1. Unset GITHUB_TOKEN: run 'unset GITHUB_TOKEN' and try again\n"
+                    "  2. Refresh gh CLI auth: run 'gh auth refresh'\n"
+                    "  3. Check auth status: run 'gh auth status'\n"
+                    f"\nOriginal error: {e.stderr.strip()}"
+                ) from e
+            raise
+
+        self._save_state("pushed", self.config.repo_url)
+        return changed_files
         if not self.repo_dir.exists():
             raise RuntimeError("Not linked to a repository. Run 'agent-sync init' or 'link' first")
 

@@ -151,31 +151,115 @@ def sync(force: bool, skills_only: bool, configs_only: bool, agents_only: bool):
 @click.option("--configs-only", is_flag=True, help="Only push configs")
 def push(message: Optional[str], skills_only: bool, configs_only: bool):
     """Push local changes to the remote repository."""
-    
+    from rich.tree import Tree as RichTree
+    from rich.table import Table
+
     config = Config()
-    
+
     if not config.repo_url:
         console.print("[red]✗ Not initialized. Run 'agent-sync init' first.[/red]")
         return
-    
+
     sync_manager = SyncManager(config)
-    
+
     commit_msg = message or "chore: sync config updates"
-    
-    # Default: push both (unless explicit --skills-only or --configs-only)
-    do_skills = not configs_only  # True unless --configs-only
-    do_configs = not skills_only  # True unless --skills-only
-    # If neither flag, do both
+
+    do_skills = not configs_only
+    do_configs = not skills_only
     if not skills_only and not configs_only:
         do_skills = True
         do_configs = True
-    
-    success = sync_manager.push(message=commit_msg, skills_only=do_skills, configs_only=do_configs)
-    
-    if success is not False:  # Success if not explicitly False (empty list is success)
-        console.print("\n[green]✓ Pushed![/green]")
-    else:
-        console.print("\n[red]✗ Push failed.[/red]")
+
+    # Stage and get changed files (don't commit yet)
+    changed_files = sync_manager._push_stage_and_get_changes(
+        message=commit_msg,
+        skills_only=do_skills,
+        configs_only=do_configs,
+    )
+
+    # No changes?
+    if not changed_files:
+        console.print("\n[yellow]Nothing to push (no changes since last sync).[/yellow]\n")
+        return
+
+    # Build category groups
+    groups = {"skills": [], "configs": [], "agents": [], "other": []}
+    for f in changed_files:
+        path = f["path"]
+        if path.startswith("skills/"):
+            groups["skills"].append(f)
+        elif path.startswith("configs/"):
+            groups["configs"].append(f)
+        elif path.startswith("agents/"):
+            groups["agents"].append(f)
+        else:
+            groups["other"].append(f)
+
+    # Print tree
+    console.print("\n[bold]📤 Changes to be pushed:[/]")
+
+    def status_label(f):
+        s = f["status"]
+        if s == "??": return "[green]+[/]"
+        if "D" in s: return "[red]-[/]"
+        if "A" in s: return "[green]+[/]"
+        return "[yellow]·[/]"
+
+    def sort_key(f):
+        return f["path"].lower()
+
+    # Skills section
+    if groups["skills"]:
+        console.print("\n  [cyan]skills/[/cyan]")
+        for f in sorted(groups["skills"], key=sort_key):
+            rel = f["path"].replace("skills/", "", 1)
+            cnt = f.get("directory_count")
+            extra = f" ({cnt} files)" if cnt else ""
+            console.print(f"    {status_label(f)} {rel}{extra}")
+
+    # Configs section
+    if groups["configs"]:
+        console.print("\n  [cyan]configs/[/cyan]")
+        for f in sorted(groups["configs"], key=sort_key):
+            rel = f["path"].replace("configs/", "", 1)
+            console.print(f"    {status_label(f)} {rel}")
+
+    # Agents section
+    if groups["agents"]:
+        console.print("\n  [cyan]agents/[/cyan]")
+        for f in sorted(groups["agents"], key=sort_key):
+            rel = f["path"].replace("agents/", "", 1)
+            cnt = f.get("directory_count")
+            extra = f" ({cnt} files)" if cnt else ""
+            console.print(f"    {status_label(f)} {rel}{extra}")
+
+    # Other
+    if groups["other"]:
+        console.print("\n  [cyan]other/[/cyan]")
+        for f in sorted(groups["other"], key=sort_key):
+            console.print(f"    {status_label(f)} {f['path']}")
+
+    total = len(changed_files)
+    console.print(f"\n[dim]{total} item(s)[/dim]\n")
+    console.print("[dim]────────────────────────────────────────────────────────[/]")
+    console.print("  [cyan][Enter][/]=push    [cyan][q][/]=cancel")
+
+    choice = Prompt.ask("\n[cyan]>[/]")
+    if choice.lower() in ("q", "quit"):
+        console.print("\n[yellow]Cancelled — changes not pushed.[/yellow]\n")
+        # Unstage everything
+        sync_manager._run_git("reset", "HEAD", "--")
+        return
+
+    # User confirmed — commit and push
+    try:
+        sync_manager._run_git("add", ".")
+        sync_manager._run_git("commit", "-m", commit_msg)
+        sync_manager._run_git("push", "origin", "main")
+        sync_manager._save_state("pushed", sync_manager.config.repo_url)
+        console.print("\n[green]✓ Pushed![/green]\n")
+    except subprocess.CalledProcessError as e:
+        console.print(f"\n[red]✗ Push failed:[/red] {e.stderr or e}")
 
 
 # =============================================================================

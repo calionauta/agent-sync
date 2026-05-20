@@ -246,9 +246,9 @@ class SkillsManager:
             console.print(table)
             console.print(f"\n[dim]{len(items)} skills | {len(selected)} selecionadas[/]")
             console.print("[dim]────────────────────────────────────────────────────────[/]")
-            console.print("  [cyan][1-N][/] select    [cyan][a][/] all    [cyan][n][/] none    [cyan][r][/] remove    [cyan][Enter][/] done")
+            console.print("  [cyan][1-N][/]=select    [cyan][a][/]=all    [cyan][n][/]=none    [cyan][r][/]=remove    [cyan][Enter][/]=select")
 
-            choice = Prompt.ask("\n[cyan]>[/]", default="")
+            choice = Prompt.ask("\n[cyan]>[/]")
 
             # Parse shortcuts
             if choice.lower() == "a":
@@ -256,25 +256,20 @@ class SkillsManager:
             elif choice.lower() == "n":
                 selected = set()
             elif choice.lower() == "r":
-                # Remove: toggle to none and break
-                selected = set()
-                break
+                # Remove: clear selection and exit
+                return set(), True
+            elif choice.lower() == "r":
+                # Remove: clear selection and exit
+                return set(), True
             elif choice == "":
+                # Enter: confirm current selection
                 break
             else:
                 result = parse_multiselect_input(choice, all_orphan_names, selected)
                 if result is not None:
                     selected = result
 
-        # Post-selection: keep or remove unselected?
-        should_remove = False
-        if len(selected) < len(all_orphan_names):
-            unselected_count = len(all_orphan_names) - len(selected)
-            # If user chose r, all were removed
-            if unselected_count > 0:
-                should_remove = self._post_selection_prompt(unselected_count, all_orphan_names)
-
-        return selected, should_remove
+        return selected, False
 
     @staticmethod
     def _post_selection_prompt(unselected_count: int, agent_names: list[str]) -> bool:
