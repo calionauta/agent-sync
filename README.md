@@ -80,8 +80,8 @@ Use these standard names for consistency:
 | Purpose | Repository Name | Example |
 |---------|----------------|---------|
 | **CLI Tool** | `agent-sync` | `renatocaliari/agent-sync` |
-| **Private Configs** | `agent-sync-private-configs` | `renatocaliari/agent-sync-private-configs` |
-| **Public Skills** | `agent-sync-public-skills` | `renatocaliari/agent-sync-public-skills` |
+| **Private Configs** | `agent-sync-configs` | `renatocaliari/agent-sync-configs` |
+| **Public Skills** | `agent-sync-public` | `renatocaliari/agent-sync-public` |
 
 **Why these names?**
 - ✅ **Consistent** - All start with `agent-sync-`
@@ -92,13 +92,13 @@ Use these standard names for consistency:
 **Example Setup:**
 ```bash
 # Initialize private configs (first machine)
-agent-sync init --name agent-sync-private-configs
+agent-sync init --name agent-sync-configs
 
 # Link on additional machines
-agent-sync link https://github.com/YOUR_USERNAME/agent-sync-private-configs.git
+agent-sync link https://github.com/YOUR_USERNAME/agent-sync-configs.git
 
 # Publish skills to public repo
-agent-sync skills publish --repo https://github.com/YOUR_USERNAME/agent-sync-public-skills
+agent-sync publish --repo https://github.com/YOUR_USERNAME/agent-sync-public.git
 ```
 
 ---
