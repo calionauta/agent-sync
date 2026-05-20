@@ -158,12 +158,12 @@ def push(message: Optional[str], skills_only: bool, configs_only: bool):
     
     sync_manager = SyncManager(config)
     
-    commit_msg = message or Prompt.ask("Commit message", default="Update configs")
+    commit_msg = message or "chore: sync config updates"
     
     do_skills = skills_only or (not configs_only)
     do_configs = configs_only or (not skills_only)
     
-    success = sync_manager.push(message=commit_msg, skills=do_skills, configs=do_configs)
+    success = sync_manager.push(message=commit_msg, skills_only=do_skills, configs_only=do_configs)
     
     if success:
         console.print("\n[green]✓ Pushed![/green]")
@@ -191,7 +191,7 @@ def pull(force: bool, skills_only: bool, configs_only: bool):
     do_skills = skills_only or (not configs_only)
     do_configs = configs_only or (not skills_only)
     
-    success = sync_manager.pull(force=force, skills=do_skills, configs=do_configs)
+    success = sync_manager.pull(force=force, skills_only=do_skills, configs_only=do_configs)
     
     if success:
         console.print("\n[green]✓ Pulled![/green]")
@@ -511,15 +511,12 @@ def diff(skills: bool, configs: bool):
 def status():
     """Show sync status."""
     config = Config()
-    sync_manager = SyncManager(config)
-    config = Config()
     
     console.print("\n[bold cyan]agent-sync Status[/bold cyan]\n")
     
     if config.repo_url:
         console.print("[green]✓ Initialized[/green]")
-        repo = sync_manager.config.get("repo_url", "Not set")
-        console.print(f"  Repository: {repo}")
+        console.print(f"  Repository: {config.repo_url}")
     else:
         console.print("[yellow]⚠ Not initialized[/yellow]")
         console.print("  Run 'agent-sync init' to setup")
