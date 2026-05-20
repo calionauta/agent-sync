@@ -402,41 +402,6 @@ class SkillsManager:
         self.conflicts = conflicts
         return conflicts
 
-    def resolve_conflicts(
-        self, conflicts: list[dict] | None = None, auto: bool = True
-    ) -> dict[str, str]:
-        """Resolve conflicts by renaming duplicates.
-
-        Args:
-            conflicts: List of conflicts (uses self.conflicts if None)
-            auto: If True, auto-rename with agent prefix. If False, would prompt user.
-
-        Returns:
-            dict mapping original name to resolved name
-        """
-        if conflicts is None:
-            conflicts = self.conflicts
-
-        resolved = {}
-
-        for conflict in conflicts:
-            skill_name = conflict["name"]
-            agents = conflict["agents"]
-
-            if auto:
-                # Auto-rename: keep first as-is, prefix others
-                resolved[skill_name] = skill_name  # First keeps name
-
-                for i, agent in enumerate(agents[1:], start=1):
-                    new_name = f"{skill_name}-{agent}"
-                    resolved[f"{skill_name}_{agent}"] = new_name
-            else:
-                # Would prompt user (not implemented, auto always)
-                resolved[skill_name] = skill_name
-
-        self.resolved_conflicts = resolved
-        return resolved
-
     def _sync_from_repo(self) -> int:
         """Sync skills from git repo to global skills directory.
 
@@ -463,47 +428,98 @@ class SkillsManager:
 
         return synced
 
-    def centralize(self, dry_run: bool = False, move: bool = True,
-                   skip_orphans: bool = False,
-                   import_all: bool = False) -> dict:
-        """Centralize all skills to ~/.agents/skills/.
+    @staticmethod
+    def _pick_best_source(info: dict) -> tuple[str | None, Path | None]:
+        """Pick the best source for an orphan skill.
+
+        If content differs across agents, pick the newest by mtime.
+        Otherwise pick the first agent's copy.
+
+        Returns: (agent_name, path) or (None, None) if no valid source
+        """
+        agents = info.get("agents", [])
+        if not agents:
+            return None, None
+
+        # If only one agent, use it
+        if len(agents) == 1:
+            return agents[0]
+
+        # If content is same, use first
+        if not info.get("content_differs"):
+            return agents[0]
+
+        # Pick newest by mtime
+        best_agent, best_path = None, None
+        best_mtime = 0
+
+        for agent_name, path in agents:
+            try:
+                if path.is_dir():
+                    # Use newest file in the directory
+                    files = list(path.rglob("*"))
+                    if files:
+                        mtime = max(f.stat().st_mtime for f in files if f.is_file())
+                elif path.is_file():
+                    mtime = path.stat().st_mtime
+                else:
+                    continue
+
+                if mtime > best_mtime:
+                    best_mtime = mtime
+                    best_agent, best_path = agent_name, path
+            except OSError:
+                continue
+
+        return best_agent, best_path
+
+    def centralize(
+        self,
+        dry_run: bool = False,
+        move: bool = True,
+    ) -> dict:
+        """Centralize all skills into ~/.agents/skills/.
+
+        Pipeline (no interaction needed):
+          Phase 1: Scan agents
+          Phase 2: Sync from repo → hub (authoritative)
+          Phase 3: Find orphans → in agents but not in hub
+          Phase 4: Auto-import orphans → hub (pick newest if diverge)
+          Phase 5: Configure all agents to use hub
+          Phase 6: Clean up user symlinks
 
         Args:
-            dry_run: If True, don't actually move files
-            move: If True, move skills (delete from source). If False, copy.
-            skip_orphans: If True, skip all orphan skills (--yes mode)
-            import_all: If True, import all orphans without TUI (old behavior)
+            dry_run: Preview without modifying anything
+            move: Move (delete from agents) vs copy (keep originals)
 
         Returns:
-            dict with stats: moved, copied, skipped, conflicts_resolved
+            dict with stats: moved, copied, skipped, errors, orphans_found,
+                           orphans_imported, diverge_warnings
         """
         stats = {
             "moved": 0,
             "copied": 0,
             "skipped": 0,
-            "conflicts_resolved": 0,
-            "imported": 0,
             "errors": 0,
             "symlinks_removed": 0,
             "orphans_found": 0,
             "orphans_imported": 0,
-            "orphans_removed": 0,
+            "diverge_warnings": 0,
         }
 
-        # Ensure global skills directory exists
         if not dry_run:
             self.global_skills_dir.mkdir(parents=True, exist_ok=True)
 
-        # ----------------------------------------------------------------
-        # PHASE 1: Scan agents (inventory - no moves yet)
-        # ----------------------------------------------------------------
-        console.print("[bold]📚 Scanning agents for skills...[/]\n")
+        # ─────────────────────────────────────────────────────────────────────
+        # Phase 1: Scan agents
+        # ─────────────────────────────────────────────────────────────────────
+        console.print("\n[bold]📚 Scanning agents for skills...[/]\n")
         skills_found = self.scan_all_agents()
 
         if not skills_found:
             console.print("[yellow]No skills found in agent directories.[/yellow]\n")
         else:
-            for agent_name, skill_data in skills_found.items():
+            for agent_name, skill_data in sorted(skills_found.items()):
                 if isinstance(skill_data, dict):
                     paths = skill_data.get("paths", [])
                     is_ext = skill_data.get("is_extension", False)
@@ -512,27 +528,11 @@ class SkillsManager:
                     is_ext = False
                 suffix = " [dim](extension)[/dim]" if is_ext else ""
                 console.print(f"  • {agent_name}: [green]{len(paths)}[/green] skills{suffix}")
-
         console.print()
 
-        # ----------------------------------------------------------------
-        # PHASE 2: Check if hub is empty (fresh setup detection)
-        # ----------------------------------------------------------------
-        hub_skills_before_sync = set()
-        if self.global_skills_dir.exists():
-            hub_skills_before_sync = {
-                item.name for item in self.global_skills_dir.iterdir()
-                if not item.name.startswith(".")
-            }
-
-        is_fresh_setup = len(hub_skills_before_sync) == 0
-
-        if is_fresh_setup:
-            console.print("[bold green]🆕 Fresh setup detected[/] — hub está vazio.\n")
-
-        # ----------------------------------------------------------------
-        # PHASE 3: Sync from repo → hub (NOW, after fresh setup check)
-        # ----------------------------------------------------------------
+        # ─────────────────────────────────────────────────────────────────────
+        # Phase 2: Sync from repo → hub (authoritative source)
+        # ─────────────────────────────────────────────────────────────────────
         console.print("[bold]📥 Syncing skills from repo to ~/.agents/skills/...[/]\n")
         repo_synced = self._sync_from_repo()
         if repo_synced > 0:
@@ -540,108 +540,83 @@ class SkillsManager:
         else:
             console.print("  [dim]Nothing to sync from repo[/dim]\n")
 
-        # ----------------------------------------------------------------
-        # PHASE 4: Categorize — what's in hub vs orphans
-        # ----------------------------------------------------------------
-        hub_skills_after_sync = set()
+        # ─────────────────────────────────────────────────────────────────────
+        # Phase 3: Find orphans
+        # ─────────────────────────────────────────────────────────────────────
+        hub_skills = set()
         if self.global_skills_dir.exists():
-            hub_skills_after_sync = {
+            hub_skills = {
                 item.name for item in self.global_skills_dir.iterdir()
                 if not item.name.startswith(".")
             }
 
-        orphans = self._find_orphans(hub_skills_after_sync, skills_found)
+        orphans = self._find_orphans(hub_skills, skills_found)
         stats["orphans_found"] = len(orphans)
 
-        if orphans:
-            console.print(f"[bold]Found [cyan]{len(orphans)}[/] orphan skill(s)[/] "
-                         f"(in agents but not in hub):\n")
+        if not orphans:
+            console.print("[green]✓ All skills are centralized.[/green]\n")
+        else:
+            console.print(f"[bold]Found [cyan]{len(orphans)}[/] orphan skill(s)[/]:\n")
             for name, info in sorted(orphans.items()):
                 agents_str = ", ".join(a for a, _ in info["agents"])
-                diverge = " ⚠️" if info.get("content_differs") else ""
-                console.print(f"  • {name} [dim]({agents_str})[/]{diverge}")
+                diverge = " [yellow]⚠ diverge[/yellow]" if info.get("content_differs") else ""
+                console.print(f"  • {name} [dim]({agents_str})[/dim]{diverge}")
             console.print()
-        else:
-            console.print("[green]✓ No orphan skills found[/green]\n")
 
-        # ----------------------------------------------------------------
-        # PHASE 5: Select which orphans to import
-        # ----------------------------------------------------------------
-        # Initialize orphan action flag
-        orphan_action: str | None = None  # "move", "distribute", or None
-
+        # ─────────────────────────────────────────────────────────────────────
+        # Phase 4: Auto-import orphans to hub
+        # ─────────────────────────────────────────────────────────────────────
         if orphans:
-            if is_fresh_setup:
-                # Fresh setup: import all automatically
-                selected_orphans = set(orphans.keys())
-                console.print("[bold green]🆕 Fresh setup: importing all orphan skills...[/]\n")
-            elif import_all:
-                selected_orphans = set(orphans.keys())
-                console.print("[bold]--import-all: importing all orphan skills[/]\n")
-            elif skip_orphans:
-                selected_orphans = set()
-                console.print("[yellow]--yes: skipping all orphan skills[/yellow]\n")
-            else:
-                # Interactive TUI
-                try:
-                    import sys
-                    if not sys.stdout.isatty():
-                        console.print("[red]✗ Terminal not interactive.[/red] "
-                                     "Use [green]--yes[/] to skip orphans or "
-                                     "[green]--import-all[/] to import all.\n")
-                        selected_orphans = set()
-                    else:
-                        selected_orphans, orphan_action = self._orphan_selection_tui(orphans)
-                except Exception as e:
-                    console.print(f"[red]✗ TUI error: {e}[/red]. Falling back to --yes mode.\n")
-                    selected_orphans = set()
-
-        stats["orphans_imported"] = len(selected_orphans)
-        unselected = set(orphans.keys()) - selected_orphans
-
-        # ----------------------------------------------------------------
-        # PHASE 6: Import selected orphans (move/copy to hub)
-        # ----------------------------------------------------------------
-        if selected_orphans:
             action = "Moving" if move else "Copying"
-            console.print(f"[bold]{action} selected skills to ~/.agents/skills/...[/]\n")
+            console.print(f"[bold]{action} orphan skills to hub...[/]\n")
 
-            for skill_name in selected_orphans:
+            for skill_name in sorted(orphans.keys()):
                 info = orphans[skill_name]
-                # Pick first agent's copy
-                agent_name, skill_path = info["agents"][0]
                 dest_path = self.global_skills_dir / skill_name
 
+                # Skip if already in hub (repo version is authoritative)
                 if dest_path.exists():
                     stats["skipped"] += 1
                     continue
 
+                # Pick best source (newest by mtime if diverge)
+                source_agent, source_path = self._pick_best_source(info)
+                if source_agent is None:
+                    stats["errors"] += 1
+                    console.print(f"  [red]✗[/] {skill_name} - no valid source found")
+                    continue
+
+                if info.get("content_differs"):
+                    console.print(f"  [yellow]⚠[/] {skill_name} [dim](content differs — used {source_agent})[/]")
+                    stats["diverge_warnings"] += 1
+
                 try:
                     if not dry_run:
-                        if skill_path.is_dir():
+                        if source_path.is_dir():
                             if move:
-                                shutil.move(str(skill_path), str(dest_path))
+                                shutil.move(str(source_path), str(dest_path))
                             else:
-                                shutil.copytree(skill_path, dest_path)
+                                shutil.copytree(source_path, dest_path)
                         else:
                             if move:
-                                shutil.move(str(skill_path), str(dest_path))
+                                shutil.move(str(source_path), str(dest_path))
                             else:
-                                shutil.copy2(skill_path, dest_path)
+                                shutil.copy2(source_path, dest_path)
 
-                        if move and skill_path.is_dir():
+                        # Clean up empty source dir
+                        if move and source_path.is_dir():
                             try:
-                                skill_path.parent.rmdir()
+                                source_path.parent.rmdir()
                             except OSError:
                                 pass
 
                     if move:
                         stats["moved"] += 1
-                        console.print(f"  [green]✓[/] {skill_name} [dim](moved from {agent_name})[/]")
+                        console.print(f"  [green]✓[/] {skill_name} [dim](moved from {source_agent})[/]")
                     else:
                         stats["copied"] += 1
-                        stats["imported"] += 1
-                        console.print(f"  [green]✓[/] {skill_name} [dim](copied from {agent_name})[/]")
+                        console.print(f"  [green]✓[/] {skill_name} [dim](copied from {source_agent})[/]")
+                    stats["orphans_imported"] += 1
 
                 except Exception as e:
                     stats["errors"] += 1
@@ -649,87 +624,39 @@ class SkillsManager:
 
             console.print()
 
-        # ----------------------------------------------------------------
-        # PHASE 7: Handle [m] move to hub or [d] distribute shortcuts
-        # ----------------------------------------------------------------
-        if orphan_action == "move" and unselected:
-            # [m] pressed in TUI: move ALL orphans to hub, remove from agents
-            console.print()
-            self._centralize_orphans(unselected, orphans, stats, remove_from_agents=True)
-            console.print()
-            unselected = set()  # Skip post-selection
+        # ─────────────────────────────────────────────────────────────────────
+        # Phase 5: Configure all agents to use hub
+        # ─────────────────────────────────────────────────────────────────────
+        console.print("[bold]⚙️  Configuring agents to use ~/.agents/skills/...[/]\n")
+        self.configure_agents()
 
-        elif orphan_action == "distribute" and unselected:
-            # [d] pressed in TUI: import to hub AND distribute to agents
-            console.print()
-            self._centralize_orphans(unselected, orphans, stats, remove_from_agents=False)
-            dist = self.distribute_to_all_agents()
-            console.print(f"  [green]✓ Distributed {dist['distributed']} skills to {dist['agents_configured']} agents[/]\n")
-            console.print()
-            unselected = set()
-
-        # ----------------------------------------------------------------
-        # PHASE 8: Keep or Remove unselected orphans (via post-selection prompt)
-        # ----------------------------------------------------------------
-        if unselected and not dry_run:
-            if skip_orphans:
-                console.print(f"  [yellow]--yes: keeping {len(unselected)} unselected skill(s) in agents[/yellow]\n")
-            elif import_all:
-                pass  # With import_all, everything was selected and imported in Phase 6
-            else:
-                agent_names = []
-                for name in unselected:
-                    for a, _ in orphans[name]["agents"]:
-                        agent_names.append(a)
-                action = self._post_selection_prompt(len(unselected), agent_names)
-                # action is "move" or "keep"
-                if action == "move":
-                    console.print()
-                    self._centralize_orphans(unselected, orphans, stats, remove_from_agents=True)
-                else:
-                    console.print("  [green]✓ Keeping unselected skills in agents[/green]\n")
-
-        # ----------------------------------------------------------------
-        # PHASE 9: Clean up user symlinks
-        # ----------------------------------------------------------------
+        # ─────────────────────────────────────────────────────────────────────
+        # Phase 6: Clean up user symlinks
+        # ─────────────────────────────────────────────────────────────────────
         console.print("[bold]🧹 Cleaning up user symlinks...[/]\n")
         stats["symlinks_removed"] = self._cleanup_user_symlinks()
-
         if stats["symlinks_removed"] > 0:
-            console.print(f"  Removed [yellow]{stats['symlinks_removed']}[/yellow] user symlinks\n")
+            console.print(f"  [yellow]Removed {stats['symlinks_removed']} symlinks[/yellow]\n")
         else:
-            console.print("  [green]✓[/] No user symlinks found\n")
+            console.print("  [dim]No user symlinks to clean[/dim]\n")
 
-        # ----------------------------------------------------------------
-        # PHASE 10: Configure agents (if not already handled by [m] or [d])
-        # ----------------------------------------------------------------
-        # Skip if orphan_action was "move" (already removed from agents)
-        # Skip if orphan_action was "distribute" (already distributed to agents)
-        if orphan_action is None:
-            console.print("[bold]⚙️  Configuring agents to use global skills...[/]\n")
-            self.configure_agents()
-
-        # ----------------------------------------------------------------
-        # SUMMARY
-        # ----------------------------------------------------------------
+        # ─────────────────────────────────────────────────────────────────────
+        # Summary
+        # ─────────────────────────────────────────────────────────────────────
         console.print("[bold]📊 Summary:[/]\n")
         if move:
-            console.print(f"  [green]✓ Moved {stats['moved']} skills[/green] to ~/.agents/skills/")
+            console.print(f"  [green]✓ Moved {stats['moved']} skills[/green] to hub")
         else:
-            console.print(f"  [green]✓ Copied {stats['copied']} skills[/green] to ~/.agents/skills/")
-
-        if stats["orphans_found"] > 0:
-            console.print(f"  [cyan]📦 Found {stats['orphans_found']} orphans[/cyan], "
-                         f"imported {stats['orphans_imported']}")
-        if stats["orphans_removed"] > 0:
-            console.print(f"  [yellow]🗑 Removed {stats['orphans_removed']} from agents[/yellow]")
-        if stats["conflicts_resolved"] > 0:
-            console.print(f"  [yellow]⚠ Resolved {stats['conflicts_resolved']} conflicts[/yellow]")
+            console.print(f"  [green]✓ Copied {stats['copied']} skills[/green] to hub")
+        if stats["orphans_imported"] > 0:
+            console.print(f"  [cyan]📦 Imported {stats['orphans_imported']} orphan(s)[/cyan]")
+        if stats["skipped"] > 0:
+            console.print(f"  [dim]  {stats['skipped']} already in hub[/dim]")
+        if stats["diverge_warnings"] > 0:
+            console.print(f"  [yellow]⚠ {stats['diverge_warnings']} had content conflicts[/yellow]")
         if stats["errors"] > 0:
             console.print(f"  [red]✗ {stats['errors']} errors[/red]")
-
-        console.print("\n[green]✨ All skills are now centralized in ~/.agents/skills/[/green]")
-        console.print("[dim]  This is the single source of truth for all your skills.[/dim]\n")
+        console.print()
 
         return stats
 
@@ -753,78 +680,6 @@ class SkillsManager:
                         console.print(f"  [yellow]🗑[/] {name} [dim](from {agent_name})[/]")
                     except Exception as e:
                         console.print(f"  [red]✗ Failed to remove {name} from {agent_name}: {e}[/]")
-
-    def _centralize_orphans(
-        self,
-        skill_names: set,
-        orphans: dict,
-        stats: dict,
-        remove_from_agents: bool = True,
-    ) -> None:
-        """Centralize orphans: copy to hub, optionally remove from agents.
-
-        Priority for which copy to use:
-        1. If skill already in hub → use hub version (repo sync is authoritative)
-        2. If skill in multiple agents → pick the first one (deterministic)
-
-        Args:
-            skill_names: Set of skill names to centralize
-            orphans: Orphan info dict with agent paths
-            stats: Stats dict to update
-            remove_from_agents: If True, remove from agents after hub backup
-        """
-        hub = self.global_skills_dir
-        hub.mkdir(parents=True, exist_ok=True)
-
-        moved = 0
-        skipped = 0
-        removed = 0
-
-        for name in sorted(skill_names):
-            if name not in orphans:
-                continue
-
-            hub_path = hub / name
-
-            # Step 1: ensure skill is in hub (if not already)
-            if hub_path.exists():
-                skipped += 1
-            else:
-                info = orphans[name]
-                agent_name, skill_path = info["agents"][0]
-                try:
-                    if skill_path.is_dir():
-                        shutil.copytree(skill_path, hub_path)
-                    else:
-                        shutil.copy2(skill_path, hub_path)
-                    console.print(f"  [green]✓[/] {name} [dim](centralized from {agent_name})[/]")
-                    moved += 1
-                except Exception as e:
-                    console.print(f"  [red]✗[/] {name} - {e}")
-
-            # Step 2: remove from agents (if requested)
-            if remove_from_agents:
-                for agent_name, skill_path in orphans[name]["agents"]:
-                    if skill_path.exists():
-                        try:
-                            if skill_path.is_dir():
-                                shutil.rmtree(skill_path)
-                            else:
-                                skill_path.unlink()
-                            console.print(f"  [yellow]🗑[/] {name} [dim](removed from {agent_name})[/]")
-                            removed += 1
-                        except Exception as e:
-                            console.print(f"  [red]✗[/] {name} - {e}")
-
-        if moved > 0:
-            console.print(f"  [green]✓ Centralized {moved} skill(s) to hub[/green]")
-        if skipped > 0:
-            console.print(f"  [dim]  {skipped} skill(s) already in hub[/dim]")
-        if removed > 0:
-            console.print(f"  [yellow]🗑 Removed {removed} copy(ies) from agents[/yellow]")
-
-        stats["orphans_imported"] = stats.get("orphans_imported", 0) + moved
-        stats["orphans_removed"] = stats.get("orphans_removed", 0) + removed
 
     def _cleanup_user_symlinks(self, preserve_extension_symlinks: bool = True) -> int:
         """

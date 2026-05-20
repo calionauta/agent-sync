@@ -468,18 +468,8 @@ def list_skills():
 @skills_group.command("centralize")
 @click.option("--copy", is_flag=True, help="Copy skills (keep originals in agent directories)")
 @click.option("--push", is_flag=True, help="Push to GitHub after centralizing")
-@click.option("--distribute", is_flag=True, help="Copy all skills to all agent directories")
-@click.option("--yes", "skip_orphans", is_flag=True, help="Skip orphan skills")
-@click.option("--import-all", is_flag=True, help="Import all orphan skills without TUI")
-@click.option("--dry-run", is_flag=True, help="Preview changes without modifying anything")
-def centralize_skills(
-    copy: bool,
-    push: bool,
-    distribute: bool,
-    skip_orphans: bool,
-    import_all: bool,
-    dry_run: bool,
-):
+@click.option("--dry-run", is_flag=True, help="Preview without modifying anything")
+def centralize_skills(copy: bool, push: bool, dry_run: bool):
     """Centralize skills from all agents to ~/.agents/skills/.
 
     Scans agent directories for scattered skills and consolidates them into the
@@ -501,35 +491,26 @@ def centralize_skills(
     from .centralize.handlers.dot_agents_handler import DotAgentsHandler
     from .skills import SkillsManager
 
-    move = not copy
-    action = "Copying" if copy else "Moving"
+    """Centralize all skills from agents into ~/.agents/skills/.
+    Pipeline: scan agents → sync from repo → import orphans → configure agents.
+    No interaction needed — auto-centralizes everything.
+    """
+    from .centralize.handlers.dot_agents_handler import DotAgentsHandler
+    from .skills import SkillsManager
 
-    # Ensure DotAgents structure
+    # Ensure DotAgents structure exists
     handler = DotAgentsHandler()
     handler.ensure_structure(dry_run=dry_run)
 
-    console.print(f"\n[bold]📁 {action} Skills to ~/.agents/skills/[/]\n")
-
     skills_mgr = SkillsManager()
-    stats = skills_mgr.centralize(
-        move=move,
-        skip_orphans=skip_orphans,
-        import_all=import_all,
-        dry_run=dry_run,
-    )
+    stats = skills_mgr.centralize(dry_run=dry_run, move=not copy)
 
     if dry_run:
         console.print("\n[dim]Dry run — no changes made.[/dim]\n")
         return
 
-    # Distribute to all agents
-    if distribute:
-        console.print("\n[bold]📤 Distributing skills to all agents...[/]\n")
-        dist = skills_mgr.distribute_to_all_agents()
-        console.print(f"  [green]✓ Distributed {dist['distributed']} skills to {dist['agents_configured']} agents[/]\n")
-
     # Push to GitHub
-    if push or Confirm.ask("\n[bold]Push to GitHub?[/]", default=True):
+    if push or Confirm.ask("\n[bold]Push to GitHub?[/]", default=False):
         console.print("\n[bold]📤 Pushing to GitHub...[/]\n")
         try:
             subprocess.run(["git", "add", "."], check=True, capture_output=True, timeout=30)
