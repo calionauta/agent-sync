@@ -950,6 +950,44 @@ transition: opacity 400ms ease-out, transform 400ms ease-out, border-color 200ms
             <div class="terminal-prompt">$ agent-sync --help</div>
             <pre class="terminal-output">Usage: agent-sync [OPTIONS] COMMAND [ARGS]...
 
+
+  agent-sync Commands
+
+  Sync &amp; Backup:
+    init
+    link
+    push
+    pull
+    status
+    diff
+    sync
+
+  Repositories:
+    repos             list | target (private | public | remove | list) | source 
+(add | list | remove)
+    publish           add | list | remove | run
+
+  Configuration:
+    config            show | repo | edit | reset
+    generate-config
+
+  Skills:
+    skills           list | centralize
+
+  Agents:
+    agents           list
+    enable
+    disable
+    export
+
+  System:
+    secrets          list | edit | enable | disable
+    mcp
+    update
+    version
+
+  Run 'agent-sync &lt;command&gt; --help' for more details on a command.</pre>
+
   🔄 agent-sync - Sync configs and skills across multiple AI agents.
 
   Supported agents: opencode, claude-code, gemini-cli, pi.dev, qwen-code

@@ -37,7 +37,51 @@ from .skills_delete import SkillsDeleter
 console = Console()
 
 
+def print_full_help(ctx, param, value):
+    if not value:
+        return
+    
+    from rich.console import Console
+    from rich.table import Table
+    console = Console()
+    
+    console.print("\n[bold cyan]agent-sync Commands[/bold cyan]\n")
+    
+    # Group commands by category
+    categories = {
+        "Sync & Backup": ["init", "link", "push", "pull", "status", "diff", "sync"],
+        "Repositories": ["repos", "publish"],
+        "Configuration": ["config", "generate-config"],
+        "Skills": ["skills"],
+        "Agents": ["agents", "enable", "disable", "export"],
+        "System": ["secrets", "mcp", "update", "version"],
+    }
+    
+    for cat_name, cmds in categories.items():
+        console.print(f"[bold]{cat_name}:[/]")
+        for cmd in cmds:
+            if cmd == "repos":
+                console.print(f"  [cyan]repos[/cyan]             list | target (private | public | remove | list) | source (add | list | remove)")
+            elif cmd == "publish":
+                console.print(f"  [cyan]publish[/cyan]           add | list | remove | run")
+            elif cmd == "config":
+                console.print(f"  [cyan]config[/cyan]            show | repo | edit | reset")
+            elif cmd == "skills":
+                console.print(f"  [cyan]skills[/cyan]           list | centralize")
+            elif cmd == "secrets":
+                console.print(f"  [cyan]secrets[/cyan]          list | edit | enable | disable")
+            elif cmd == "agents":
+                console.print(f"  [cyan]agents[/cyan]           list")
+            else:
+                console.print(f"  [cyan]{cmd}[/cyan]")
+        console.print()
+    
+    console.print("[dim]Run 'agent-sync <command> --help' for more details on a command.[/dim]\n")
+    ctx.exit()
+
+
 @click.group()
+@click.option('-h', '--help', is_flag=True, callback=print_full_help, expose_value=False, is_eager=True)
 @click.version_option(version=__version__)
 def main():
     """agent-sync - Sync configs and skills across multiple AI agents."""
@@ -459,91 +503,245 @@ def skills_group():
 
 @main.group("repos")
 def repos_group():
-    """Manage repositories (sync and publish)."""
+    """Manage repositories (sync, publish, and sources).
+    
+    Subcommands:
+      list     Show all target repositories (sync + publish)
+      target   Configure sync and publish targets
+      source   Manage skill sources (external repos to import from)
+    
+    Examples:
+      agent-sync repos list
+      agent-sync repos target private https://github.com/user/private.git
+      agent-sync repos source add https://github.com/user/skills
+    """
     pass
 
 
 @repos_group.command("list")
 def repos_list():
-    """List all configured repositories with status.
+    """Show all configured target repositories.
     
-    Shows both sync repository (used by sync/push) and publish repositories
-    (used by publish command).
+    Shows sync repository and publish destination.
+    For skill sources, use 'agent-sync repos source list'.
     """
-    from .publish.config import get_published_repo, load_config
-    from .publish.base import SourceStatus
+    from .publish.config import get_published_repo
     from rich.table import Table
     from rich.box import ROUNDED
-
-    console.print("\n[bold]📦 Repositories[/]\n")
     
-    # ─── Sync Repo (config.yaml) ───────────────────────────────────────────────
-    config = Config()
-    sync_repo = config.repo_url
+    console.print("\n[bold]Repositories[/]\n")
     
     table = Table(box=ROUNDED, show_header=True, header_style="bold dim")
     table.add_column("Purpose", width=20)
     table.add_column("Repository", width=45)
     table.add_column("Status", width=12)
     
-    # Sync repo
+    # Sync Repo
+    config = Config()
+    sync_repo = config.repo_url
     if sync_repo:
         sync_name = sync_repo.replace("https://github.com/", "").replace(".git", "")
-        table.add_row(
-            "sync / push",
-            sync_name,
-            "[green]✓ active[/green]",
-        )
+        table.add_row("sync / push", sync_name, "[green]active[/green]")
     else:
-        table.add_row(
-            "sync / push",
-            "[dim]not configured[/dim]",
-            "[yellow]⚠[/yellow]",
-        )
+        table.add_row("sync / push", "[dim]not configured[/dim]", "[yellow]missing[/yellow]")
     
-    # ─── Publish Repos (publish.yaml) ──────────────────────────────────────
-    pub_config = load_config()
-    published_repo = pub_config.published_repo
-    sources = pub_config.skill_sources
-    
+    # Publish Repo
+    published_repo = get_published_repo()
     if published_repo:
         pub_name = published_repo.replace("https://github.com/", "").replace(".git", "")
-        table.add_row(
-            "publish (main)",
-            pub_name,
-            "[green]✓ active[/green]",
-        )
+        table.add_row("publish", pub_name, "[green]active[/green]")
     else:
-        table.add_row(
-            "publish (main)",
-            "[dim]not configured[/dim]",
-            "[yellow]⚠[/yellow]",
-        )
-    
-    # Show sources
-    for src in sources:
-        if src.url != published_repo:
-            src_name = src.url.replace("https://github.com/", "").replace(".git", "")
-            src_status = src.status.value if hasattr(src, 'status') else "unknown"
-            status_color = "green" if src_status == "active" else "yellow"
-            table.add_row(
-                "publish (source)",
-                src_name,
-                f"[{status_color}]{src_status}[/{status_color}]",
-            )
+        table.add_row("publish", "[dim]not configured[/dim]", "[yellow]missing[/yellow]")
     
     console.print(table)
     console.print()
-    
-    # ─── Help ─────────────────────────────────────────────────────────────
     console.print("[bold]Change repositories:[/]")
-    console.print("  sync/push:    [cyan]agent-sync config repo <url>[/cyan]")
-    console.print("  publish add:  [cyan]agent-sync publish add <url>[/cyan]")
-    console.print("  publish list: [cyan]agent-sync publish list[/cyan]")
-    console.print()
+    console.print("  [cyan]agent-sync repos target private <url>[/cyan]  Set sync repository")
+    console.print("  [cyan]agent-sync repos target public <url>[/cyan]   Set publish repository")
+    console.print("  [cyan]agent-sync repos source list[/cyan]          View skill sources\n")
 
 
 # =============================================================================
+# REPOS TARGET COMMAND
+# =============================================================================
+
+@repos_group.group("target")
+def repos_target_group():
+    """Configure sync and publish target repositories.
+    
+    
+    """
+    pass
+
+
+@repos_target_group.command("list")
+def repos_target_list():
+    """Show configured target repositories."""
+    from .publish.config import get_published_repo
+    from rich.table import Table
+    from rich.box import ROUNDED
+    
+    console.print("\n[bold]Target Repositories[/]\n")
+    
+    table = Table(box=ROUNDED, show_header=True, header_style="bold dim")
+    table.add_column("Type", width=15)
+    table.add_column("Repository", width=50)
+    
+    config = Config()
+    sync_repo = config.repo_url
+    if sync_repo:
+        sync_name = sync_repo.replace("https://github.com/", "").replace(".git", "")
+        table.add_row("[cyan]private[/cyan]", sync_name)
+    else:
+        table.add_row("[cyan]private[/cyan]", "[dim]not configured[/dim]")
+    
+    published_repo = get_published_repo()
+    if published_repo:
+        pub_name = published_repo.replace("https://github.com/", "").replace(".git", "")
+        table.add_row("[cyan]public[/cyan]", pub_name)
+    else:
+        table.add_row("[cyan]public[/cyan]", "[dim]not configured[/dim]")
+    
+    console.print(table)
+    console.print()
+    console.print("[dim]Set: agent-sync repos target private|public <url>[/dim]\n")
+
+
+@repos_target_group.command("private")
+@click.argument("url")
+def repos_target_private(url: str):
+    """Set sync/push repository (private)."""
+    from .validators import validate_github_url
+    
+    if not validate_github_url(url):
+        console.print(f"[red]Invalid URL: {url}[/red]")
+        return
+    
+    config.set_repo_url(url)
+    console.print(f"\n[green]Private repo set to: {url}[/green]")
+    console.print(f"\n[dim]View: agent-sync repos target list[/dim]\n")
+
+
+@repos_target_group.command("public")
+@click.argument("url")
+def repos_target_public(url: str):
+    """Set publish destination repository (public)."""
+    from .validators import validate_github_url
+    from .publish.config import set_published_repo
+    
+    if not validate_github_url(url):
+        console.print(f"[red]Invalid URL: {url}[/red]")
+        return
+    
+    set_published_repo(url)
+    console.print(f"\n[green]Public repo set to: {url}[/green]")
+    console.print(f"\n[dim]View: agent-sync repos target list[/dim]\n")
+
+
+@repos_target_group.command("remove")
+def repos_target_remove():
+    """Remove all configured target repositories."""
+    from rich.prompt import Confirm
+    from .publish.config import get_published_repo, load_config, save_config
+    
+    config = Config()
+    sync_repo = config.repo_url
+    published_repo = get_published_repo()
+    
+    if not sync_repo and not published_repo:
+        console.print("[yellow]No targets configured.[/yellow]\n")
+        return
+    
+    if not Confirm.ask("[bold]Remove all targets?[/]", default=False):
+        console.print("[dim]Cancelled.[/dim]\n")
+        return
+    
+    if sync_repo:
+        config.set_repo_url("")
+    
+    if published_repo:
+        pub_config = load_config()
+        pub_config.published_repo = ""
+        save_config(pub_config)
+    
+    console.print("[green]All targets removed.[/green]\n")
+
+
+# =============================================================================
+# REPOS SOURCE COMMAND
+# =============================================================================
+
+@repos_group.group("source")
+def repos_source_group():
+    """Manage skill sources (external repositories to import from).
+    
+    """
+    pass
+
+
+@repos_source_group.command("list")
+def repos_source_list():
+    """List configured skill sources."""
+    from .publish.config import load_config
+    from rich.table import Table
+    from rich.box import ROUNDED
+    
+    config_data = load_config()
+    sources = config_data.skill_sources
+    
+    if not sources:
+        console.print("\n[yellow]No skill sources configured.[/yellow]")
+        console.print("\n[dim]Add: agent-sync repos source add <url>[/dim]\n")
+        return
+    
+    table = Table(box=ROUNDED, show_header=True, header_style="bold dim")
+    table.add_column("#", width=3, justify="right")
+    table.add_column("Repository", width=55)
+    table.add_column("Status", width=10)
+    
+    for i, src in enumerate(sources, 1):
+        status = src.status.value if hasattr(src, 'status') else "unknown"
+        status_color = "green" if status == "active" else "yellow"
+        name = src.url.replace("https://github.com/", "")
+        table.add_row(f"[dim]{i}[/dim]", name, f"[{status_color}]{status}[/{status_color}]")
+    
+    console.print(f"\n[bold]Skill Sources ({len(sources)})[/]\n")
+    console.print(table)
+    console.print("\n[dim]Add/remove: agent-sync repos source add|remove <url>[/dim]\n")
+
+
+@repos_source_group.command("add")
+@click.argument("url")
+def repos_source_add(url: str):
+    """Add a skill source repository."""
+    from .publish.config import add_source
+    from .validators import validate_github_url
+    
+    if not validate_github_url(url):
+        console.print(f"[red]Invalid URL: {url}[/red]")
+        return
+    
+    try:
+        add_source(url)
+        console.print(f"\n[green]Added skill source: {url}[/green]")
+        console.print(f"\n[dim]List: agent-sync repos source list[/dim]\n")
+    except Exception as e:
+        console.print(f"[red]Failed: {e}[/red]")
+
+
+@repos_source_group.command("remove")
+@click.argument("url")
+def repos_source_remove(url: str):
+    """Remove a skill source repository."""
+    from .publish.config import remove_source
+    
+    success = remove_source(url)
+    if success:
+        console.print(f"\n[green]Removed: {url}[/green]\n")
+    else:
+        console.print(f"[yellow]Not found: {url}[/yellow]\n")
+
+
 # PUBLISH REPOS COMMAND
 # =============================================================================
 
@@ -624,11 +822,14 @@ def publish_group():
       add <url>     Add a publish repository
       list          List all configured repositories
       remove <url>  Remove a repository
+      run           Run interactive publish flow
     
     Examples:
       agent-sync publish add https://github.com/user/repo
       agent-sync publish list
       agent-sync publish remove https://github.com/user/repo
+      agent-sync publish run
+    
     """
     pass
 
@@ -934,7 +1135,7 @@ def centralize_skills(copy: bool, push: bool, dry_run: bool):
             console.print(f"\n[dim]Manage repos: agent-sync repos list[/dim]\n")
         else:
             console.print(f"\n[dim]Nothing to push to {cfg.repo_url}[/dim]\n")
-@main.command("publish run")
+@publish_group.command("run")
 @click.option("--dry-run", is_flag=True, help="Show what would be published")
 @click.option("--repo", "repo_url", help="Set GitHub repository URL")
 @click.option("--add-source", "add_source_url", help="Add external skill source")

@@ -101,10 +101,21 @@ No interaction needed — centralizes everything automatically.
 ### `agent-sync publish`
 Publish skills and agents to a public GitHub repository.
 
-Run without options to select and publish interactively.
+**Subcommands:**
+- `add <url>` — Add a publish repository (validates GitHub access)
+- `list` — List all configured publish repositories
+- `remove <url>` — Remove a publish repository
+- `run` — Run interactive publish flow (select skills/agents)
 
-**Options:**
-- `--dry-run` — Preview without publishing
+**Examples:**
+```bash
+agent-sync publish add https://github.com/user/repo
+agent-sync publish list
+agent-sync publish remove https://github.com/user/repo
+agent-sync publish run
+```
+
+**Legacy Options (use subcommands instead):**
 - `--repo <URL>` — Set GitHub repository URL
 - `--add-source <URL>` — Add external skill source
 - `--remove-source <URL>` — Remove external skill source
@@ -114,10 +125,20 @@ Run without options to select and publish interactively.
 
 ---
 
-## Agents
+### `agent-sync repos`
+Show all configured repositories (sync + publish).
 
-### `agent-sync agents`
-List supported agents and their sync status.
+**Subcommands:**
+- `list` — Display all repos with status
+
+**Examples:**
+```bash
+agent-sync repos list
+```
+
+---
+
+## Agents
 
 ---
 

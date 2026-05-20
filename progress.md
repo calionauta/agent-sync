@@ -1,61 +1,27 @@
-# Progress
+# Progress: Agent Type Detection Investigation
 
-## Status
-In Progress
+## Status: COMPLETE - Root Cause Found
 
-## Tasks
+### Issue
+The `agent-sync agents list` command shows "unknown" for all agent types because:
+1. CLI code looks for `type` field in registry YAML
+2. Registry YAML has no `type` field - only `method` (native/config/copy)
+3. BaseAgent class has no `type` property to derive from
 
-### CLI Analysis - Data Flow & YAML Schema
+### Root Cause
+`cli.py` line 394:
+```python
+agent_type = agent_data.get("type", "unknown")  # Always returns "unknown"
+```
 
-**Completed:** Comprehensive analysis of agent-sync CLI commands and data flow.
+### Files Analyzed
+- `src/agent_sync/cli.py` - agents list command
+- `src/agent_sync/agent_registry.yaml` - registry definitions (no type field)
+- `src/agent_sync/agents/base.py` - BaseAgent (no type property)
+- `src/agent_sync/agents/__init__.py` - agent factory
+- `src/agent_sync/agents/registry_loader.py` - YAML loader
 
-**Files Analyzed:**
-- `src/agent_sync/cli.py` (~1900 lines)
-- `src/agent_sync/sync.py` (~1500 lines)
-- `src/agent_sync/skills.py` (~1000 lines)
-- `src/agent_sync/config.py` (~300 lines)
-- `src/agent_sync/agent_registry.yaml` (~200 lines)
-
-**Key Findings:**
-
-| YAML File | Purpose | Schema |
-|-----------|---------|--------|
-| `config.yaml` | User preferences | repo_url, agents, sync settings |
-| `agent_registry.yaml` | Agent definitions | method, paths, patterns (shipped, not user) |
-
-**Commands & Data Flow:**
-- `push` → stages configs + skills + agents → git commit + push
-- `pull` → git fetch + pull → apply configs/skills/agents
-- `centralize` → scan agents → detect orphans → move/copy to ~/.agents/skills/
-- `config` → read/write `~/.config/agent-sync/config.yaml`
-
-**GitAgent Gap Identified:**
-- ❌ `agent.yaml`, `SOUL.md`, `RULES.md`, `DUTIES.md` NOT backed up
-- ❌ `memory/`, `knowledge/` NOT backed up
-- ⚠️ These files don't exist on user's system (using DotAgents, not GitAgent)
-
-**Full Analysis:** `/tmp/scouts/cli-analysis.md`
-
-### High Priority Tests to Add (from analysis)
-
-1. **`push` with mock** - Test correct files staged
-2. **`pull` with mock** - Test correct files restored
-3. **`skills centralize`** - Test orphan detection
-4. **`config repo`** - Test repo_url saved correctly
-
-### Protocol Documentation
-
-**Completed:** `docs/protocol-comparison.md` comparing:
-- DotAgents Protocol (agent-sync's hub)
-- GitAgent Protocol (comprehensive agent definition)
-
-**Key insight:** Protocols are complementary, not competing.
-
-## Files Changed
-
-## Notes
-
-**Questions for user:**
-1. Should agent-sync track GitAgent files (agent.yaml, SOUL.md, etc.)?
-2. Should agent-sync have its own manifest or reference existing standards?
-3. What YAML schema makes sense for backup/restore purposes?
+### Next Steps (pending decision)
+1. Add `type` field to registry YAML entries
+2. OR add `type` property to BaseAgent class with derivation logic
+3. Test fix with `agent-sync agents list`
