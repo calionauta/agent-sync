@@ -158,39 +158,49 @@ def publish_agents(
 ) -> bool:
     """Publish selected agents to the target repository."""
     import subprocess
-    
+
     agents_to_publish = selected.get("agents", [])
-    
+
     if not agents_to_publish:
         console.print("[yellow]⚠ No agents selected to publish[/]")
         return False
-    
-    # Find agent paths
-    all_agents = {a.name: a for a in discover_local_agents()}
-    
+
+    # Build lookup: name -> AgentSource (handles both simple and path-based names)
+    all_sources = {a.name: a for a in discover_local_agents()}
+
     # Create temp directory
     tmp_dir = Path(tempfile.mkdtemp(prefix="agent-sync-agents-"))
     try:
         agents_dir = tmp_dir / "agents"
         agents_dir.mkdir(parents=True)
-        
+
+        published_count = 0
         for agent_name in agents_to_publish:
-            agent = all_agents.get(agent_name)
+            agent = all_sources.get(agent_name)
             if agent:
-                dest = agents_dir / f"{agent_name}.md"
+                # Use the name as filename, sanitized
+                safe_name = agent_name.replace("/", "_").replace(" ", "_")
+                dest = agents_dir / f"{safe_name}.md"
                 shutil.copy2(Path(agent.path), dest)
-        
+                published_count += 1
+            else:
+                console.print(f"[dim]  ⚠ Not found: {agent_name}[/dim]")
+
+        if published_count == 0:
+            console.print("[red]✗ No agents found to publish[/]")
+            return False
+
         # Git operations
         subprocess.run(["git", "init"], cwd=tmp_dir, capture_output=True, timeout=10)
         subprocess.run(["git", "branch", "-M", "main"], cwd=tmp_dir, capture_output=True, timeout=10)
         subprocess.run(["git", "add", "."], cwd=tmp_dir, capture_output=True, timeout=30)
         subprocess.run(
-            ["git", "commit", "-m", f"feat: publish {len(agents_to_publish)} agents"],
+            ["git", "commit", "-m", f"feat: publish {published_count} agents"],
             cwd=tmp_dir,
             capture_output=True,
             timeout=30,
         )
-        
+
         subprocess.run(
             ["git", "remote", "add", "origin", published_repo],
             cwd=tmp_dir,
@@ -204,13 +214,13 @@ def publish_agents(
             capture_output=True,
             timeout=120,
         )
-        
-        console.print(f"\n[green]✓ Published {len(agents_to_publish)} agents![/]")
+
+        console.print(f"\n[green]✓ Published {published_count} agents![/]")
         return True
-        
+
     except Exception as e:
         console.print(f"\n[red]✗ Error publishing agents: {e}[/]")
         return False
-        
+
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)

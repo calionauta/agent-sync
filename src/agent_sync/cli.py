@@ -160,12 +160,17 @@ def push(message: Optional[str], skills_only: bool, configs_only: bool):
     
     commit_msg = message or "chore: sync config updates"
     
-    do_skills = skills_only or (not configs_only)
-    do_configs = configs_only or (not skills_only)
+    # Default: push both (unless explicit --skills-only or --configs-only)
+    do_skills = not configs_only  # True unless --configs-only
+    do_configs = not skills_only  # True unless --skills-only
+    # If neither flag, do both
+    if not skills_only and not configs_only:
+        do_skills = True
+        do_configs = True
     
     success = sync_manager.push(message=commit_msg, skills_only=do_skills, configs_only=do_configs)
     
-    if success:
+    if success is not False:  # Success if not explicitly False (empty list is success)
         console.print("\n[green]✓ Pushed![/green]")
     else:
         console.print("\n[red]✗ Push failed.[/red]")
@@ -188,12 +193,17 @@ def pull(force: bool, skills_only: bool, configs_only: bool):
         console.print("[red]✗ Not initialized.[/red]")
         return
     
-    do_skills = skills_only or (not configs_only)
-    do_configs = configs_only or (not skills_only)
+    # Default: pull both (unless explicit --skills-only or --configs-only)
+    do_skills = not configs_only  # True unless --configs-only
+    do_configs = not skills_only  # True unless --skills-only
+    # If neither flag, do both
+    if not skills_only and not configs_only:
+        do_skills = True
+        do_configs = True
     
     success = sync_manager.pull(force=force, skills_only=do_skills, configs_only=do_configs)
     
-    if success:
+    if success is not False:  # Success if not explicitly False (empty list is success)
         console.print("\n[green]✓ Pulled![/green]")
     else:
         console.print("\n[red]✗ Pull failed.[/red]")

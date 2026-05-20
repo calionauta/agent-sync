@@ -34,6 +34,10 @@ def discover_agent_instructions(
     """
     Scan config_patterns from registry and find .md instruction files.
 
+    Finds two types of agent files:
+    1. Agent instruction files in config_dir root (AGENTS.md, GEMINI.md, etc.)
+    2. Custom agent definitions in agents/ subdirectories (agent.agents_path)
+
     Args:
         include_agents: Optional list of agent names to include. If None, include all.
         exclude_agents: Optional list of agent names to exclude (applied after include).
@@ -74,6 +78,7 @@ def discover_agent_instructions(
             # Config directory doesn't exist, skip
             continue
 
+        # === Type 1: Agent instruction files in config_dir root (AGENTS.md, GEMINI.md, etc.) ===
         # Build patterns list (config_patterns + config_filename if it ends with .md)
         all_patterns = list(config_patterns)
         if config_filename and config_filename.endswith(".md"):
@@ -95,6 +100,37 @@ def discover_agent_instructions(
                         ))
             except OSError:
                 # Permission denied or other OS error, skip this pattern
+                continue
+
+        # === Type 2: Custom agent definitions in agents/ subdirectories ===
+        # These are .md files in agents_path or agents_path_global subdirs
+        # (e.g., ~/.claude/agents/test-reviewer.md, ~/.config/opencode/agents/*.md)
+        agents_dirs = []
+        agents_dir_name = agent_data.get("agents_dir_name")
+        agents_dir_global_raw = agent_data.get("agents_dir_global", "")
+        if agents_dir_name and (config_dir / agents_dir_name).exists():
+            agents_dirs.append(config_dir / agents_dir_name)
+        if agents_dir_global_raw:
+            agents_dir_global = Path(agents_dir_global_raw).expanduser()
+            if agents_dir_global.exists() and agents_dir_global not in agents_dirs:
+                agents_dirs.append(agents_dir_global)
+
+        for agents_dir in agents_dirs:
+            try:
+                for md_file in agents_dir.rglob("*.md"):
+                    if md_file.is_file() and not md_file.name.startswith("."):
+                        # Use relative path from agents_dir as the "filename"
+                        rel_path = md_file.relative_to(agents_dir)
+                        # Include agent name in the agent_name for disambiguation
+                        # e.g., "claude-code/agents/test-reviewer.md"
+                        display_name = f"{agent_name}/{rel_path}"
+                        results.append(AgentInstructionFile(
+                            agent_name=display_name,
+                            filename=str(rel_path),
+                            full_path=md_file,
+                            exists=True,
+                        ))
+            except OSError:
                 continue
 
     # Deduplicate by (agent_name, filename) — keep first occurrence
