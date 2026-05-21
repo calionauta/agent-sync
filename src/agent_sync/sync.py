@@ -1325,7 +1325,8 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             # Handle directory patterns (e.g., "history/")
             if pattern.endswith('/'):
                 dir_name = pattern.rstrip('/')
-                if f"/{dir_name}/" in filename or filename.endswith(f"/{dir_name}") or just_name == dir_name:
+                # Check if filename starts with dir_name/ or contains /dir_name/
+                if filename.startswith(f"{dir_name}/") or f"/{dir_name}/" in filename or filename.endswith(f"/{dir_name}") or just_name == dir_name:
                     return True
             # Handle file patterns
             elif fnmatch.fnmatch(filename, pattern):
