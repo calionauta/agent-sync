@@ -294,6 +294,14 @@ class SyncManager:
 
         # Repo doesn't exist - create it
         visibility = "private" if private else "public"
+        
+        # Inform user about what we're creating
+        if private:
+            console.print(f"\n[green]🔒 Creating PRIVATE repository: {repo_name}[/green]\n")
+            console.print("[dim]   Private repos keep your configs, API keys, and credentials secure.[/dim]\n")
+        else:
+            console.print(f"\n[yellow]🌐 Creating PUBLIC repository: {repo_name}[/yellow]\n")
+            console.print("[dim]   ⚠️  Warning: Configs may contain API keys and credentials![/dim]\n")
 
         # Create repository on GitHub
         result = subprocess.run(
