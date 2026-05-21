@@ -297,11 +297,12 @@ class SyncManager:
         
         # Inform user about what we're creating
         if private:
-            console.print(f"\n[green]🔒 Creating PRIVATE repository: {repo_name}[/green]\n")
-            console.print("[dim]   Private repos keep your configs, API keys, and credentials secure.[/dim]\n")
+            console.print(f"\n[green]🔒 Creating PRIVATE repository: {repo_name}[/green]")
+            console.print("[dim]   Contains: configs, skills, agents[/dim]")
+            console.print("[dim]   ⚠️  Warning: Will store API keys and credentials![/dim]\n")
         else:
-            console.print(f"\n[yellow]🌐 Creating PUBLIC repository: {repo_name}[/yellow]\n")
-            console.print("[dim]   ⚠️  Warning: Configs may contain API keys and credentials![/dim]\n")
+            console.print(f"\n[yellow]🌐 Creating PUBLIC repository: {repo_name}[/yellow]")
+            console.print("[dim]   Contains: skills, agents (NO configs with secrets)[/dim]\n")
 
         # Create repository on GitHub
         result = subprocess.run(
