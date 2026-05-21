@@ -268,21 +268,33 @@ class TestDryRun:
         """Test that --dry-run shows preview without applying changes."""
         from click.testing import CliRunner
         from agent_sync.cli import main
-        from unittest.mock import patch
+        from unittest.mock import patch, MagicMock
         from agent_sync.sync import SyncManager, PullSummary
         
         runner = CliRunner()
         
-        # Mock the SyncManager.pull to return without actually running git
-        with patch.object(SyncManager, 'pull') as mock_pull:
-            mock_pull.return_value = ([], PullSummary())
+        # Create a mock config with repo_url set
+        mock_config = MagicMock()
+        mock_config.repo_url = "https://github.com/test/repo"
+        mock_config.app_dir = tmp_path / "app"
+        mock_config.app_dir.mkdir(parents=True, exist_ok=True)
+        mock_config.state_file = tmp_path / "state.json"
+        mock_config.is_agent_enabled.return_value = False
+        
+        # Mock Config() to return our mock
+        with patch('agent_sync.cli.Config') as mock_config_cls:
+            mock_config_cls.return_value = mock_config
             
-            result = runner.invoke(main, ["pull", "--dry-run"])
-            
-            # Check that pull was called with dry_run=True
-            mock_pull.assert_called_once()
-            call_kwargs = mock_pull.call_args[1]
-            assert call_kwargs.get('dry_run') is True
+            # Mock the SyncManager.pull to return without actually running git
+            with patch.object(SyncManager, 'pull') as mock_pull:
+                mock_pull.return_value = ([], PullSummary())
+                
+                result = runner.invoke(main, ["pull", "--dry-run"])
+                
+                # Check that pull was called with dry_run=True
+                mock_pull.assert_called_once()
+                call_kwargs = mock_pull.call_args[1]
+                assert call_kwargs.get('dry_run') is True
 
 class TestLinkRepoSafety:
     """Tests for link_repo safety improvements."""
