@@ -97,13 +97,14 @@ agent-sync init --name agent-sync-configs
 # Link on additional machines
 agent-sync link https://github.com/YOUR_USERNAME/agent-sync-configs.git
 
-# Manage repositories
-agent-sync repos list              # See all configured repos
-agent-sync publish add https://github.com/YOUR_USERNAME/agent-sync-public.git
-agent-sync publish list             # List publish repos
+# Publish your skills (share with community)
+# Note: agent-sync publish is for CREATING a public repo, not installing from one.
+# To install skills from a public repo, use npx skills:
+#
+#   npx skills add renatocaliari/agent-sync-public
+#   npx skills add https://github.com/user/skill-repo
 
-# Run interactive publish
-agent-sync publish run              # Select skills/agents to share
+agent-sync publish add https://github.com/YOUR_USERNAME/agent-sync-public.git
 ```
 
 ---
@@ -141,9 +142,11 @@ agent-sync publish run              # Select skills/agents to share
 
 #### 📤 Publish
 - `publish run` - Run interactive publish flow (select skills/agents to share)
-- `publish add <url>` - Add a publish repository (validates + confirms)
+- `publish add <url>` - Add a publish repository (where YOU will publish your skills)
 - `publish list` - List configured publish repositories
 - `publish remove <url>` - Remove a publish repository
+
+> 💡 **Install skills from public repos**: Use `npx skills add <source>` from [vercel-labs/skills](https://github.com/vercel-labs/skills). Example: `npx skills add renatocaliari/agent-sync-public`
 
 #### 📦 Repositories
 - `repos list` - Show ALL repositories (sync + publish) with status
