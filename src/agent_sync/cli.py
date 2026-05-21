@@ -1334,21 +1334,41 @@ def status():
 @main.command()
 @click.option("--check", is_flag=True, help="Check for updates only")
 def update(check: bool):
-    """Update agent-sync to the latest version."""
-    console.print("\n[cyan]Checking for updates...[/cyan]\n")
+    """Update agent-sync to the latest version.
+    
+    Shows before/after version to confirm the upgrade worked.
+    """
+    from . import __version__ as current_version
+    console.print(f"\n[cyan]Current version: {current_version}[/cyan]")
+    
+    if check:
+        console.print("[yellow]Check mode - use without --check to upgrade[/yellow]\n")
+        return
+    
+    console.print("[cyan]Upgrading...[/cyan]\n")
     
     try:
         result = subprocess.run(
             ["pipx", "upgrade", "agent-sync"],
             capture_output=True,
             text=True,
+            timeout=300,
         )
         
         if result.returncode == 0:
-            console.print("[green]✓ Updated![/green]")
+            # Get new version after upgrade
+            try:
+                from importlib.metadata import version
+                new_version = version("agent-sync")
+                console.print(f"\n[green]✓ Updated from {current_version} → {new_version}[/green]\n")
+            except Exception:
+                console.print("\n[green]✓ Updated![/green]\n")
         else:
-            console.print("[yellow]⚠ Update check failed[/yellow]")
-            console.print(result.stderr)
+            console.print("[yellow]⚠ Update failed[/yellow]")
+            if result.stderr:
+                console.print(result.stderr)
+    except subprocess.TimeoutExpired:
+        console.print("[red]✗ Update timed out (took >5 minutes)[/red]")
     except Exception as e:
         console.print(f"[red]✗ Error: {e}[/red]")
 
