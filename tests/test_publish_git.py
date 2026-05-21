@@ -110,7 +110,7 @@ class TestGenerateSkillsReadme:
         readme_path = tmp_dir / "README.md"
         content = readme_path.read_text()
         
-        assert "agent-sync publish" in content
+        assert "npx skills add https://github.com/test/repo" in content
 
 
 class TestGenerateAgentsReadme:
