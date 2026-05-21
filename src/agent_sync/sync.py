@@ -714,6 +714,10 @@ class SyncManager:
         skills_only: bool = False,
         configs_only: bool = False,
         agents_only: bool = False,
+        skills_filter: Optional[list[str]] = None,
+        agents_filter: Optional[list[str]] = None,
+        skills_exclude: Optional[list[str]] = None,
+        agents_exclude: Optional[list[str]] = None,
     ) -> list[dict]:
         """Stage files and return changed files list WITHOUT committing or pushing.
 
@@ -1096,7 +1100,11 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         # Create skills directory (always)
         (self.repo_dir / "skills").mkdir(parents=True, exist_ok=True)
 
-    def _stage_agent_configs(self) -> None:
+    def _stage_agent_configs(
+        self,
+        agents_filter: Optional[list[str]] = None,
+        agents_exclude: Optional[list[str]] = None,
+    ) -> None:
         """Stage agent configurations for commit."""
         import subprocess
         from .agents import get_all_agents
@@ -1726,7 +1734,11 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
         return copied
 
-    def _stage_all_agent_files(self) -> None:
+    def _stage_all_agent_files(
+        self,
+        agents_filter: Optional[list[str]] = None,
+        agents_exclude: Optional[list[str]] = None,
+    ) -> None:
         """Stage all agent files for backup.
 
         Calls _stage_agent_configs() ONCE (it handles all agents internally)
@@ -1735,7 +1747,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         from .agents import get_all_agents
 
         # Stage configs once for ALL agents (avoids O(n2) redundant copies)
-        self._stage_agent_configs()
+        self._stage_agent_configs(agents_filter=agents_filter, agents_exclude=agents_exclude)
 
         for agent in get_all_agents():
             if self.config.is_agent_enabled(agent.name):
