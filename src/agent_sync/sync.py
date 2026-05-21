@@ -443,8 +443,12 @@ class SyncManager:
             summary.conflicts = []  # Cleared after resolution
         
         # Check for local changes in repo (unstaged)
+        # Ignore manifest file which is auto-generated
         status = self._run_git("status", "--porcelain")
-        if status and not force:
+        # Filter out manifest file (it's auto-generated, not user content)
+        relevant_changes = [line for line in status.split('\n') 
+                         if line and '.agent-sync-manifest.json' not in line]
+        if relevant_changes and not force:
             raise RuntimeError(
                 "You have local changes. Commit them first or use --force"
             )
