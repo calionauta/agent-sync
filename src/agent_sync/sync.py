@@ -39,15 +39,38 @@ class SyncManager:
     STATE_FILE = DATA_DIR / "sync-state.json"
     MANIFEST_FILE = DATA_DIR / "repo" / ".agent-sync-manifest.json"
 
-    # Files to NEVER sync (sensitive or local-only)
+    # Files to NEVER sync (sensitive, local-only, or transient)
     EXCLUDE_PATTERNS = [
+        # Secrets
         "*auth*.json",
         "*accounts*.json",
         "*overrides*.json*",
+        "*credentials*.json",
+        
+        # Lock files
         "*.lock",
-        ".DS_Store",
         "package-lock.json",
         "bun.lock",
+        
+        # System files
+        ".DS_Store",
+        
+        # Agent session state (not configuration)
+        "history/",
+        "tmp/",
+        "state.json",
+        "projects.json",
+        "installation_id",
+        
+        # Transient files
+        "*.bak",
+        "*.log",
+        "*.log.*",
+        
+        # Database files
+        "*.db",
+        "*.mdb",
+        "*.ldb",
     ]
 
     def __init__(self, config):
@@ -747,6 +770,28 @@ Thumbs.db
 *.swo
 *~
 
+# Lock files
+*.lock
+package-lock.json
+bun.lock
+
+# Agent session state (not configuration)
+*/history/
+*/tmp/
+*state.json
+*projects.json
+*installation_id
+
+# Transient files
+*.bak
+*.log
+*.log.*
+
+# Database files
+*.db
+*.mdb
+*.ldb
+
 # Pi.dev git clones (cache, not configuration)
 configs/pi.dev/git/
 """
@@ -1256,6 +1301,39 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             return False
 
     def _should_exclude(self, filename: str, exclude_patterns: list[str] | None = None) -> bool:
+        """Check if a file should be excluded from sync.
+
+        Args:
+            filename: Name or relative path of the file
+            exclude_patterns: Optional list of glob patterns to exclude
+        """
+        import fnmatch
+
+        # Get just the filename for pattern matching
+        just_name = Path(filename).name
+
+        # Check custom exclude patterns first
+        if exclude_patterns:
+            for pattern in exclude_patterns:
+                if fnmatch.fnmatch(filename, pattern):
+                    return True
+                if fnmatch.fnmatch(just_name, pattern):
+                    return True
+
+        # Check default exclude patterns
+        for pattern in self.EXCLUDE_PATTERNS:
+            # Handle directory patterns (e.g., "history/")
+            if pattern.endswith('/'):
+                dir_name = pattern.rstrip('/')
+                if f"/{dir_name}/" in filename or filename.endswith(f"/{dir_name}") or just_name == dir_name:
+                    return True
+            # Handle file patterns
+            elif fnmatch.fnmatch(filename, pattern):
+                return True
+            elif fnmatch.fnmatch(just_name, pattern):
+                return True
+
+        return False
         """Check if a file should be excluded from sync.
 
         Args:
