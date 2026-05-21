@@ -30,7 +30,7 @@ from .sync import SyncManager
 from .validators import validate_github_url
 from .mcp_merger import MCPMerger
 from .secrets import SecretsManager
-from ._tui import print_footer
+from ._tui import print_footer, build_footer_commands
 from .skills_delete import SkillsDeleter
 
 
