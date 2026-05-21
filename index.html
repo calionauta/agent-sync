@@ -988,64 +988,6 @@ transition: opacity 400ms ease-out, transform 400ms ease-out, border-color 200ms
 
   Run 'agent-sync &lt;command&gt; --help' for more details on a command.</pre>
 
-  🔄 agent-sync - Sync configs and skills across multiple AI agents.
-
-  Supported agents: opencode, claude-code, gemini-cli, pi.dev, qwen-code
-
-Options:
-  --version  Show the version and exit.
-  --help     Show this message and exit.
-
-🔄 Sync Commands:
-  push    Commit and push local changes. [-m, --skills-only, --configs-only,
-          --agents-only]
-  pull    Fetch and apply remote configuration. [--force, --skills-only,
-          --configs-only, --agents-only]
-  status  Show sync status and last sync times.
-
-🤖 Agent Management:
-  agents   List supported agents and their status.
-  enable   Enable sync for a specific agent.
-  disable  Disable sync for a specific agent.
-
-⚙️  Configuration:
-  setup            Run the interactive setup wizard to...
-  init             Initialize a new sync repository (first... [--name,
-                   --agents, --no-wizard, --force]
-  link             Link to an existing sync repository...
-  config           Manage configuration (view, edit, reset).
-    ├── edit       Open configuration file in editor.
-    ├── export     Export configuration to DotAgents JSON... [--dry-run,
-                   --output]
-    ├── repo       View or set the GitHub repository URL. [--remove]
-    ├── reset      Reset configuration to defaults (keeps... [--yes]
-    └── show       Show current configuration.
-  generate-config  Generate initial configuration file. [--agent]
-
-📚 Skills &amp; Agents:
-  skills            Manage global skills.
-    ├── centralize  Centralize skills from all agents to... [--copy, --push,
-                    --distribute, --yes, --import-all, --dry-run]
-    ├── delete      Delete skills from hub and all agent... [--dry-run,
-                    --push, --interactive]
-    ├── diff        Show differences between local and remote...
-    ├── list        List all centralized skills.
-    ├── publish     [DEPRECATED] Use 'agent-sync publish... [--repo, --dry-
-                    run, --interactive]
-    └── reconcile   Reconcile differences between local and... [--auto, --dry-
-                    run]
-  custom-agents     Manage custom agents (.claude/agents/,...
-    └── list        List custom agents for all supported agents.
-
-🛠️  System:
-  update         Check for available updates and install them.
-  version        Show version information.
-  secrets        Manage secrets and environment variables.
-    ├── disable  Disable secrets synchronization.
-    ├── edit     Edit secrets in your $EDITOR.
-    ├── enable   Enable secrets synchronization.
-    └── list     List all secrets and environment variables.
-</pre>
           </div>
         </div>
       </div>
