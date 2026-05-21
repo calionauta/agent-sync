@@ -286,9 +286,11 @@ def push(message: Optional[str], skills_only: bool, configs_only: bool):
 
     total = len(changed_files)
     console.print(f"\n[dim]{total} item(s)[/dim]\n")
-    console.print("[dim]────────────────────────────────────────────────────────[/]")
-    print_footer([("Enter", "[cyan]push[/cyan]"), ("q", "[cyan](q)[/cyan] cancel")], default_key="Enter")
-    choice = Prompt.ask("\n> ")
+
+    # Build footer with standardized format
+    footer_cmds = build_footer_commands([("Enter", "push"), ("q", "cancel")], default_key="Enter")
+    print_footer(footer_cmds)
+    choice = Prompt.ask(r"[Enter] push (default), [q] quit: ")
     if choice.lower() in ("q", "quit"):
         console.print("\n[yellow]Cancelled — changes not pushed.[/yellow]\n")
         # Unstage everything

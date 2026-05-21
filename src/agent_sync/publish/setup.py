@@ -17,6 +17,7 @@ from .config import get_published_repo, load_config, save_selected_skills, Publi
 from .discovery import discover_skills_sources, skills_to_source_infos, discover_agents_sources, load_saved_selection
 from .git_publish import publish_skills, publish_agents, publish_all
 from .models import SelectionState, SourceInfo
+from .._tui import print_footer, build_footer_commands
 
 
 console = Console()
@@ -414,10 +415,8 @@ def _print_tui_sources(state: SelectionState, sources: list[SourceInfo]) -> None
 
 
 def _print_tui_footer(commands: list[tuple[str, str]]) -> None:
-    """Print TUI footer."""
-    console.print("[dim]────────────────────────────────────────────────────────[/]")
-    cmd_parts = [f"[cyan][{k}][/]{desc}" for k, desc in commands]
-    console.print("  " + "  ".join(cmd_parts))
+    """Print TUI footer - delegates to shared helper."""
+    print_footer(commands)
 
 
 def _handle_number_input(state: SelectionState, input_str: str) -> None:
