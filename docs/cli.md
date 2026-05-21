@@ -13,6 +13,18 @@ Backs up global skills, configs, and custom agents automatically.
 - `-m, --message <STRING>` — Commit message [default: chore: sync config updates]
 - `--skills-only` — Push only skills (not configs)
 - `--configs-only` — Push only configs (not skills)
+- `-s, --skill <NAME>` — Specific skill to push (can repeat)
+- `-a, --agent <NAME>` — Specific agent config to push (can repeat)
+- `--exclude-skill <NAME>` — Skill to exclude (can repeat)
+- `--exclude-agent <NAME>` — Agent to exclude (can repeat)
+
+**Examples:**
+```bash
+agent-sync push                    # Push all
+agent-sync push --skill dogfood   # Specific skill
+agent-sync push --agent pi.dev    # Specific agent config
+agent-sync push --exclude-skill deprecated-skill  # Exclude skill
+```
 
 ---
 
@@ -22,19 +34,48 @@ Fetch and apply remote configuration.
 Restores global skills, configs, symlinks, and custom agents automatically.
 
 **Options:**
-- `--force` — Force pull even with local changes
+- `--force` — Apply all remote (no confirmation)
+- `--dry-run` — Show what would change
+- `--interactive/--no-interactive` — Interactive conflict resolution [default: interactive]
 - `--skills-only` — Pull only skills (not configs)
 - `--configs-only` — Pull only configs (not skills)
+- `-s, --skill <NAME>` — Specific skill to pull (can repeat)
+- `-a, --agent <NAME>` — Specific agent config to pull (can repeat)
+- `--exclude-skill <NAME>` — Skill to exclude (can repeat)
+- `--exclude-agent <NAME>` — Agent to exclude (can repeat)
+
+**Examples:**
+```bash
+agent-sync pull                    # Pull all
+agent-sync pull --skill cali-product-workflow   # Specific skill
+agent-sync pull --exclude-skill deprecated-skill  # Exclude skill
+```
 
 ---
 
-### `agent-sync link`
-Link to an existing sync repository (additional machines).
+### `agent-sync sync`
+Sync changes bidirectionally (pull then push).
+
+**Options:**
+- `--force` — Apply all remote (no confirmation)
+- `--dry-run` — Show what would change
+- `--skills-only` — Sync only skills (not configs)
+- `--configs-only` — Sync only configs (not skills)
 
 ---
 
-### `agent-sync status`
-Show sync status and last sync times.
+### `agent-sync repos target`
+Manage sync repositories (auto-detected from `gh auth` + `agent-sync-private`/`agent-sync-public`).
+
+**Subcommands:**
+- `list` — Display configured repos with auto-detected status
+- `remove` — Remove a target repository
+
+**Examples:**
+```bash
+agent-sync repos target list
+agent-sync repos target remove private
+```
 
 ---
 
@@ -43,21 +84,33 @@ Show sync status and last sync times.
 ### `agent-sync init`
 Initialize a new sync repository (first machine).
 
+Uses `gh auth` to auto-detect defaults: `{gh_user}/agent-sync-private.git`
+
 **Options:**
-- `--name <STRING>` — Repository name
+- `--name <STRING>` — Repository name [auto-detected from gh auth]
 - `--agents <STRING>` — Agents to sync
 - `--no-wizard` — Skip interactive wizard
 - `--force` — Force initialization even if already configured
 
 ---
 
-### `agent-sync setup`
-Run the interactive setup wizard.
+### `agent-sync repos source`
+Manage external skill/agent sources for publish.
+
+**Subcommands:**
+- `add <url>` — Add an external source
+- `list` — List all configured sources
+- `remove <url>` — Remove an external source
 
 ---
 
 ### `agent-sync config`
-Manage configuration (view, edit, reset).
+Manage configuration (view, repo, reset).
+
+**Subcommands:**
+- `show` — Display current configuration
+- `repo` — Show configured repository URL
+- `reset` — Reset configuration (requires confirmation)
 
 ---
 

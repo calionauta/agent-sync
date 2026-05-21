@@ -195,9 +195,29 @@ def sync(force: bool, skills_only: bool, configs_only: bool, agents_only: bool):
 @click.option("--message", "-m", default=None, help="Commit message")
 @click.option("--skills-only", is_flag=True, help="Only push skills")
 @click.option("--configs-only", is_flag=True, help="Only push configs")
-def push(message: Optional[str], skills_only: bool, configs_only: bool):
-    """Push local changes to the remote repository."""
-    from ._tui import print_footer
+@click.option("--skill", "-s", multiple=True, help="Specific skill to push (can repeat)")
+@click.option("--agent", "-a", multiple=True, help="Specific agent config to push (can repeat)")
+@click.option("--exclude-skill", multiple=True, help="Skill to exclude (can repeat)")
+@click.option("--exclude-agent", multiple=True, help="Agent to exclude (can repeat)")
+def push(
+    message: Optional[str],
+    skills_only: bool,
+    configs_only: bool,
+    skill: tuple,
+    agent: tuple,
+    exclude_skill: tuple,
+    exclude_agent: tuple,
+):
+    """Push local changes to the remote repository.
+
+    Examples:
+      agent-sync push                    # Push all
+      agent-sync push --skill dogfood   # Specific skill
+      agent-sync push --agent pi.dev    # Specific agent config
+      agent-sync push --exclude-skill deprecated-skill  # Exclude skill
+      agent-sync push --dry-run         # Preview changes
+    """
+    from ._tui import print_footer, build_footer_commands
 
     config = Config()
 
@@ -218,6 +238,10 @@ def push(message: Optional[str], skills_only: bool, configs_only: bool):
     # Stage and get changed files (don't commit yet)
     changed_files = sync_manager._push_stage_and_get_changes(
         message=commit_msg,
+        skills_filter=list(skill) if skill else None,
+        agents_filter=list(agent) if agent else None,
+        exclude_skills=list(exclude_skill) if exclude_skill else None,
+        exclude_agents=list(exclude_agent) if exclude_agent else None,
         skills_only=do_skills,
         configs_only=do_configs,
     )

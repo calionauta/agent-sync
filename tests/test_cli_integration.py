@@ -59,6 +59,8 @@ def test_cli_mcp_help():
     assert "--dry-run" in result.output
     assert "--force" in result.output
     assert "--conflicts" in result.output
+    assert "--source" in result.output
+    assert "--output" in result.output
 
 
 def test_cli_mcp_dry_run():
@@ -79,6 +81,11 @@ def test_cli_mcp_conflicts():
 def test_cli_push_help():
     result = runner.invoke(main, ["push", "--help"])
     assert result.exit_code == 0
+    # Verify new filter flags are present
+    assert "--skill" in result.output
+    assert "--agent" in result.output
+    assert "--exclude-skill" in result.output
+    assert "--exclude-agent" in result.output
     assert "--skills-only" in result.output
     assert "--configs-only" in result.output
 
@@ -86,6 +93,11 @@ def test_cli_push_help():
 def test_cli_pull_help():
     result = runner.invoke(main, ["pull", "--help"])
     assert result.exit_code == 0
+    # Verify new filter flags are present
+    assert "--skill" in result.output
+    assert "--agent" in result.output
+    assert "--exclude-skill" in result.output
+    assert "--exclude-agent" in result.output
     assert "--skills-only" in result.output
     assert "--configs-only" in result.output
 
@@ -95,6 +107,8 @@ def test_cli_sync_help():
     assert result.exit_code == 0
     assert "--skills-only" in result.output
     assert "--configs-only" in result.output
+    assert "--agents-only" in result.output
+    assert "--force" in result.output
 
 
 # =============================================================================
@@ -107,7 +121,6 @@ def test_cli_skills_centralize_help():
     assert "--copy" in result.output
     assert "--push" in result.output
     assert "--dry-run" in result.output
-    # Simplified: no --distribute, --yes, --import-all anymore
 
 
 def test_cli_skills_centralize_dry_run():
@@ -117,7 +130,6 @@ def test_cli_skills_centralize_dry_run():
     assert "Traceback" not in result.output
 
 
-# =============================================================================
 def test_cli_skills_list_help():
     """skills list --help should describe interactive TUI."""
     result = runner.invoke(main, ["skills", "list", "--help"])

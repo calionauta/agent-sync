@@ -53,7 +53,8 @@ class TestCLISmoke:
 
         # These should be in the signature
         expected = {
-            "skills_only", "configs_only", "message"
+            "skills_only", "configs_only", "message",
+            "skill", "agent", "exclude_skill", "exclude_agent"
         }
 
         missing = expected - params
