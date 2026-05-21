@@ -192,6 +192,7 @@ def sync(force: bool, skills_only: bool, configs_only: bool, agents_only: bool):
 # =============================================================================
 
 @main.command()
+@click.option("--dry-run", is_flag=True, help="Show what would be pushed without pushing")
 @click.option("--message", "-m", default=None, help="Commit message")
 @click.option("--skills-only", is_flag=True, help="Only push skills")
 @click.option("--configs-only", is_flag=True, help="Only push configs")
@@ -200,6 +201,7 @@ def sync(force: bool, skills_only: bool, configs_only: bool, agents_only: bool):
 @click.option("--exclude-skill", multiple=True, help="Skill to exclude (can repeat)")
 @click.option("--exclude-agent", multiple=True, help="Agent to exclude (can repeat)")
 def push(
+    dry_run: bool,
     message: Optional[str],
     skills_only: bool,
     configs_only: bool,
@@ -310,6 +312,11 @@ def push(
 
     total = len(changed_files)
     console.print(f"\n[dim]{total} item(s)[/dim]\n")
+
+    # Dry run - stop here after preview
+    if dry_run:
+        console.print("[dim]Dry run — no changes made.[/dim]\n")
+        return
 
     # Build footer with standardized format
     footer_cmds = build_footer_commands([("Enter", "push"), ("q", "cancel")], default_key="Enter")

@@ -75,7 +75,7 @@ def test_cli_mcp_conflicts():
 
 
 # =============================================================================
-# PUSH / PULL - flag presence
+# PUSH / PULL - flag presence and basic execution
 # =============================================================================
 
 def test_cli_push_help():
@@ -88,6 +88,16 @@ def test_cli_push_help():
     assert "--exclude-agent" in result.output
     assert "--skills-only" in result.output
     assert "--configs-only" in result.output
+    assert "--dry-run" in result.output
+
+
+def test_cli_push_dry_run():
+    """push --dry-run should be a valid option (not crash with NoSuchOption)."""
+    result = runner.invoke(main, ["push", "--dry-run"])
+    # Should NOT have --dry-run error - that's the bug we're catching
+    assert "No such option: --dry-run" not in result.output
+    # Should not have traceback from option parsing
+    assert "NoSuchOption" not in result.output
 
 
 def test_cli_pull_help():
