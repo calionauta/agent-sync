@@ -377,7 +377,7 @@ def generate_skills_readme(skills_dir: Path, selected: list, repo_url: str) -> N
         for skill in sorted(skills):
             lines.append(f"- {skill}\n")
     
-    lines.append(f"\n## Install All\n\n```bash\nagent-sync publish --add-source {repo_url}\n```\n")
+    lines.append(f"\n## Install All\n\n```bash\nnpx skills add {repo_url}\n```\n")
     
     readme_path = skills_dir / "README.md"
     readme_path.write_text("".join(lines))
