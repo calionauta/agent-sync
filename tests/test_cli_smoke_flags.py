@@ -21,65 +21,79 @@ class TestPushFlags:
     """Every push flag must be recognized by click."""
 
     def test_push_dry_run(self):
-        """--dry-run must be accepted without NoSuchOption."""
+        """--dry-run must be accepted and run without errors."""
         result = runner.invoke(main, ["push", "--dry-run"])
         assert "No such option: --dry-run" not in result.output
         assert "NoSuchOption" not in result.output
+        # Also check for runtime errors
+        assert "TypeError" not in result.output
+        assert "Traceback" not in result.output or result.exit_code == 0
 
     def test_push_skill(self):
-        """--skill must be accepted."""
+        """--skill must be accepted without errors."""
         result = runner.invoke(main, ["push", "--skill", "dogfood"])
         assert "No such option: --skill" not in result.output
+        assert "TypeError" not in result.output
 
     def test_push_skill_short(self):
         """-s (short for --skill) must be accepted."""
         result = runner.invoke(main, ["push", "-s", "dogfood"])
         assert "No such option: -s" not in result.output
+        assert "TypeError" not in result.output
 
     def test_push_agent(self):
-        """--agent must be accepted."""
+        """--agent must be accepted without errors."""
         result = runner.invoke(main, ["push", "--agent", "pi.dev"])
         assert "No such option: --agent" not in result.output
+        assert "TypeError" not in result.output
 
     def test_push_agent_short(self):
         """-a (short for --agent) must be accepted."""
         result = runner.invoke(main, ["push", "-a", "pi.dev"])
         assert "No such option: -a" not in result.output
+        assert "TypeError" not in result.output
 
     def test_push_exclude_skill(self):
-        """--exclude-skill must be accepted."""
+        """--exclude-skill must be accepted without errors."""
         result = runner.invoke(main, ["push", "--exclude-skill", "deprecated"])
         assert "No such option: --exclude-skill" not in result.output
+        assert "TypeError" not in result.output
 
     def test_push_exclude_agent(self):
-        """--exclude-agent must be accepted."""
+        """--exclude-agent must be accepted without errors."""
         result = runner.invoke(main, ["push", "--exclude-agent", "old-agent"])
         assert "No such option: --exclude-agent" not in result.output
+        assert "TypeError" not in result.output
 
     def test_push_skills_only(self):
-        """--skills-only must be accepted."""
+        """--skills-only must be accepted without errors."""
         result = runner.invoke(main, ["push", "--skills-only"])
         assert "No such option: --skills-only" not in result.output
+        assert "TypeError" not in result.output
 
     def test_push_configs_only(self):
-        """--configs-only must be accepted."""
+        """--configs-only must be accepted without errors."""
         result = runner.invoke(main, ["push", "--configs-only"])
         assert "No such option: --configs-only" not in result.output
+        assert "TypeError" not in result.output
 
     def test_push_message(self):
-        """--message/-m must be accepted."""
+        """--message/-m must be accepted without errors."""
         result = runner.invoke(main, ["push", "--message", "test commit"])
         assert "No such option: --message" not in result.output
+        assert "TypeError" not in result.output
 
     def test_push_message_short(self):
         """-m (short for --message) must be accepted."""
         result = runner.invoke(main, ["push", "-m", "test commit"])
         assert "No such option: -m" not in result.output
+        assert "TypeError" not in result.output
 
     def test_push_multiple_skills(self):
-        """Multiple --skill flags must work."""
+        """Multiple --skill flags must work without errors."""
         result = runner.invoke(main, ["push", "--skill", "dogfood", "--skill", "cali-product-workflow"])
         assert "No such option: --skill" not in result.output
+        assert "TypeError" not in result.output
 
 
 # =============================================================================

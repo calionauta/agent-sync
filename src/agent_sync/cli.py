@@ -242,8 +242,8 @@ def push(
         message=commit_msg,
         skills_filter=list(skill) if skill else None,
         agents_filter=list(agent) if agent else None,
-        exclude_skills=list(exclude_skill) if exclude_skill else None,
-        exclude_agents=list(exclude_agent) if exclude_agent else None,
+        skills_exclude=list(exclude_skill) if exclude_skill else None,
+        agents_exclude=list(exclude_agent) if exclude_agent else None,
         skills_only=do_skills,
         configs_only=do_configs,
     )
