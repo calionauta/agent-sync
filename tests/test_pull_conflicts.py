@@ -181,14 +181,94 @@ class TestDetectConflicts:
             assert conflicts == []
 
 
+class TestSelectivePull:
+    """Tests for selective pull with filters."""
+    
+    def test_pull_accepts_skill_filter(self):
+        """Test pull command accepts --skill flag."""
+        from click.testing import CliRunner
+        from agent_sync.cli import main
+        
+        runner = CliRunner()
+        result = runner.invoke(main, ["pull", "--help"])
+        assert "--skill" in result.output
+    
+    def test_pull_accepts_agent_filter(self):
+        """Test pull command accepts --agent flag."""
+        from click.testing import CliRunner
+        from agent_sync.cli import main
+        
+        runner = CliRunner()
+        result = runner.invoke(main, ["pull", "--help"])
+        assert "--agent" in result.output
+    
+    def test_pull_accepts_exclude_skill(self):
+        """Test pull command accepts --exclude-skill flag."""
+        from click.testing import CliRunner
+        from agent_sync.cli import main
+        
+        runner = CliRunner()
+        result = runner.invoke(main, ["pull", "--help"])
+        assert "--exclude-skill" in result.output
+    
+    def test_pull_accepts_exclude_agent(self):
+        """Test pull command accepts --exclude-agent flag."""
+        from click.testing import CliRunner
+        from agent_sync.cli import main
+        
+        runner = CliRunner()
+        result = runner.invoke(main, ["pull", "--help"])
+        assert "--exclude-agent" in result.output
+    
+    def test_apply_configs_accepts_filter_param(self, tmp_path):
+        """Test _apply_synced_configs accepts agents_filter parameter."""
+        from agent_sync.sync import SyncManager
+        from unittest.mock import Mock
+        
+        mock_config = Mock()
+        mock_config.repo_url = "https://github.com/test/repo"
+        mock_config.app_dir = tmp_path
+        
+        manager = SyncManager(mock_config)
+        
+        # Just check the method accepts the parameter (signature test)
+        import inspect
+        sig = inspect.signature(manager._apply_synced_configs)
+        params = list(sig.parameters.keys())
+        
+        assert "agents_filter" in params, "agents_filter parameter missing"
+        assert "agents_exclude" in params, "agents_exclude parameter missing"
+    
+    def test_apply_skills_accepts_filter_param(self, tmp_path):
+        """Test _apply_synced_skills accepts skills_filter parameter."""
+        from agent_sync.sync import SyncManager
+        from unittest.mock import Mock
+        
+        mock_config = Mock()
+        mock_config.repo_url = "https://github.com/test/repo"
+        mock_config.app_dir = tmp_path
+        
+        manager = SyncManager(mock_config)
+        
+        # Check method signature
+        import inspect
+        sig = inspect.signature(manager._apply_synced_skills)
+        params = list(sig.parameters.keys())
+        
+        assert "skills_filter" in params, "skills_filter parameter missing"
+        assert "skills_exclude" in params, "skills_exclude parameter missing"
+
+
+
+
 class TestDryRun:
     """Tests for dry-run functionality."""
     
-    def test_dry_run_shows_preview(self, tmp_path, monkeypatch):
+    def test_dry_run_shows_preview(self, tmp_path):
         """Test that --dry-run shows preview without applying changes."""
         from click.testing import CliRunner
         from agent_sync.cli import main
-        from unittest.mock import patch, Mock
+        from unittest.mock import patch
         from agent_sync.sync import SyncManager, PullSummary
         
         runner = CliRunner()
@@ -203,6 +283,29 @@ class TestDryRun:
             mock_pull.assert_called_once()
             call_kwargs = mock_pull.call_args[1]
             assert call_kwargs.get('dry_run') is True
+
+class TestLinkRepoSafety:
+    """Tests for link_repo safety improvements."""
+    
+    def test_link_repo_uses_temp_directory(self, tmp_path):
+        """Test that link_repo uses tempfile.TemporaryDirectory for safety."""
+        from agent_sync.sync import SyncManager
+        from unittest.mock import Mock, patch
+        
+        mock_config = Mock()
+        mock_config.repo_url = "https://github.com/test/repo"
+        mock_config.app_dir = tmp_path
+        
+        manager = SyncManager(mock_config)
+        manager.repo_dir = tmp_path / "repo"
+        manager.repo_dir.mkdir()
+        
+        # Verify the link_repo code uses tempfile
+        import inspect
+        source = inspect.getsource(manager.link_repo)
+        
+        # Check that TemporaryDirectory is used
+        assert "TemporaryDirectory" in source, "link_repo should use tempfile.TemporaryDirectory"
 
 
 class TestInteractiveConflictResolution:
