@@ -313,10 +313,12 @@ def push(message: Optional[str], skills_only: bool, configs_only: bool):
 # =============================================================================
 
 @main.command()
-@click.option("--force", is_flag=True, help="Overwrite local changes")
+@click.option("--force", is_flag=True, help="Apply all remote (no confirmation)")
+@click.option("--dry-run", is_flag=True, help="Show what would change")
+@click.option("--interactive/--no-interactive", "interactive", default=True, help="Interactive conflict resolution")
 @click.option("--skills-only", is_flag=True, help="Only pull skills")
 @click.option("--configs-only", is_flag=True, help="Only pull configs")
-def pull(force: bool, skills_only: bool, configs_only: bool):
+def pull(force: bool, dry_run: bool, interactive: bool, skills_only: bool, configs_only: bool):
     """Pull changes from the remote repository."""
     config = Config()
     sync_manager = SyncManager(config)
@@ -333,12 +335,28 @@ def pull(force: bool, skills_only: bool, configs_only: bool):
         do_skills = True
         do_configs = True
     
-    success = sync_manager.pull(force=force, skills_only=do_skills, configs_only=do_configs)
-    
-    if success is not False:  # Success if not explicitly False (empty list is success)
-        console.print("\n[green]✓ Pulled![/green]")
-    else:
-        console.print("\n[red]✗ Pull failed.[/red]")
+    try:
+        changes, summary = sync_manager.pull(
+            force=force,
+            dry_run=dry_run,
+            interactive=interactive,
+            skills_only=do_skills,
+            configs_only=do_configs,
+        )
+        
+        if dry_run:
+            return  # Preview already shown
+        
+        if summary.has_conflicts:
+            console.print("\n[yellow]⚠️  Some conflicts kept local.[/yellow]")
+        
+        if changes:
+            console.print(f"\n[green]✓ Pulled {len(changes)} file(s)![/green]")
+        else:
+            console.print("\n[dim]No changes to pull.[/dim]")
+    except RuntimeError as e:
+        console.print(f"\n[red]✗ {e}[/red]")
+        return
 
 
 # =============================================================================

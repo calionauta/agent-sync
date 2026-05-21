@@ -5,8 +5,10 @@ import json
 import os
 import shutil
 import subprocess
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 from platformdirs import user_data_dir
 from rich.console import Console
@@ -16,6 +18,59 @@ from .skills import MANIFEST_FILENAME
 from .validators import validate_github_url
 
 console = Console()
+
+
+# =============================================================================
+# DATA CLASSES
+# =============================================================================
+
+
+@dataclass
+class PullConflict:
+    """Represents a file conflict between local and remote versions."""
+    
+    agent_name: str  # e.g., "pi.dev", "gemini-cli"
+    filename: str  # e.g., "AGENTS.md", "settings.json"
+    local_path: Path  # Local file path
+    remote_path: Path  # Path in repo (relative to repo root)
+    local_modified: Optional[datetime] = None
+    remote_modified: Optional[datetime] = None
+    diff_stats: dict = field(default_factory=lambda: {"added": 0, "removed": 0})  # Lines added/removed
+    
+    @property
+    def display_name(self) -> str:
+        """Display name for UI."""
+        return f"{self.agent_name}/{self.filename}"
+    
+    @property
+    def diff_summary(self) -> str:
+        """Short summary of changes for display."""
+        added = self.diff_stats.get("added", 0)
+        removed = self.diff_stats.get("removed", 0)
+        if added and removed:
+            return f"{added} +l / {removed} -l"
+        elif added:
+            return f"{added} +l"
+        elif removed:
+            return f"{removed} -l"
+        return ""
+
+
+@dataclass
+class PullSummary:
+    """Summary of a pull operation."""
+    conflicts: list[PullConflict] = field(default_factory=list)
+    new_files: int = 0
+    updated_files: int = 0
+    deleted_files: int = 0
+    
+    @property
+    def has_conflicts(self) -> bool:
+        return len(self.conflicts) > 0
+    
+    @property
+    def total_changes(self) -> int:
+        return len(self.conflicts) + self.new_files + self.updated_files + self.deleted_files
 
 
 def _get_app_name() -> str:
@@ -305,18 +360,30 @@ class SyncManager:
 
         self._save_state("linked", repo_url)
 
-    def pull(self, force: bool = False, skills_only: bool = False, configs_only: bool = False, agents_only: bool = False) -> list[str]:
+    def pull(
+        self,
+        force: bool = False,
+        dry_run: bool = False,
+        interactive: bool = True,
+        skills_only: bool = False,
+        configs_only: bool = False,
+        agents_only: bool = False,
+        conflict_resolver: Optional[callable] = None,
+    ) -> tuple[list[str], PullSummary]:
         """
-        Fetch and apply remote configuration.
+        Fetch and apply remote configuration with conflict detection.
 
         Args:
-            force: Force pull even with local changes
+            force: Apply all remote changes without confirmation
+            dry_run: Show what would change without applying
+            interactive: Show interactive prompts for conflicts
             skills_only: Pull only skills (not configs)
             configs_only: Pull only configs (not skills)
             agents_only: Pull only custom agents (not configs or skills)
+            conflict_resolver: Optional callback to resolve conflicts
 
         Returns:
-            List of applied changes
+            Tuple of (applied changes, pull summary)
         """
         # If repo doesn't exist or is not a valid git repo, clone it automatically
         is_valid_git_repo = self.repo_dir.exists() and (self.repo_dir / ".git").exists()
@@ -328,16 +395,35 @@ class SyncManager:
             console.print("\n[bold]📥 Cloning repository...[/]\n")
             self.link_repo(self.config.repo_url)
 
-        # Check for local changes
-        if not force:
-            status = self._run_git("status", "--porcelain")
-            if status:
-                raise RuntimeError(
-                    "You have local changes. Commit them first or use --force"
-                )
-
-        # Fetch and pull
+        # Fetch latest
         self._run_git("fetch", "origin")
+        
+        # Detect conflicts before pulling
+        conflicts = self._detect_conflicts(skills_only, configs_only, agents_only)
+        summary = PullSummary(conflicts=conflicts)
+        
+        # Dry run: show what would change
+        if dry_run:
+            self._show_pull_preview(summary)
+            return ([], summary)
+        
+        # Handle conflicts
+        if conflicts and interactive and not force:
+            if conflict_resolver:
+                conflict_resolver(conflicts)
+            else:
+                self._handle_conflicts_interactive(conflicts)
+            # Mark conflicts as resolved (local version kept)
+            summary.conflicts = []  # Cleared after resolution
+        
+        # Check for local changes in repo (unstaged)
+        status = self._run_git("status", "--porcelain")
+        if status and not force:
+            raise RuntimeError(
+                "You have local changes. Commit them first or use --force"
+            )
+
+        # Pull changes
         self._run_git("pull", "origin", "main")
 
         changes = []
@@ -364,7 +450,240 @@ class SyncManager:
 
         self._save_state("pulled", self.config.repo_url)
 
-        return changes
+        return (changes, summary)
+    
+    def _detect_conflicts(
+        self,
+        skills_only: bool = False,
+        configs_only: bool = False,
+        agents_only: bool = False,
+    ) -> list[PullConflict]:
+        """Detect files that have been modified both locally and remotely.
+        
+        A conflict occurs when:
+        1. The file exists locally
+        2. The file has been modified locally (unstaged changes in git)
+        3. The remote version is different from the local version
+        
+        Args:
+            skills_only: Only check skills
+            configs_only: Only check configs
+            agents_only: Only check agents
+            
+        Returns:
+            List of conflicts detected
+        """
+        from .agents import get_all_agents
+        
+        conflicts = []
+        
+        # Check unstaged changes in the repo
+        status_output = self._run_git("status", "--porcelain")
+        unstaged_files = set()
+        
+        for line in status_output.strip().split("\n"):
+            if line and line[1] == " " and not line.startswith("?"):  # Unstaged changes (not untracked)
+                # Format: XY filename, XY is status (M = modified, D = deleted, etc.)
+                parts = line.split(" ", 1)
+                if len(parts) >= 2:
+                    unstaged_files.add(parts[1])
+        
+        # Get list of files in HEAD (what's in the repo)
+        try:
+            head_files = self._run_git("ls-tree", "-r", "--name-only", "HEAD").strip().split("\n")
+        except subprocess.CalledProcessError:
+            head_files = []  # Empty repo
+        
+        # Check configs
+        if not skills_only and not agents_only:
+            for agent in get_all_agents():
+                # Skip if agent sync is disabled
+                if not self.config.is_agent_enabled(agent.name):
+                    continue
+                
+                synced_config_dir = self.repo_dir / "configs" / agent.name
+                if not synced_config_dir.exists():
+                    continue
+                    
+                for config_file in synced_config_dir.glob("*"):
+                    if not config_file.is_file():
+                        continue
+                        
+                    relative_path = str(config_file.relative_to(self.repo_dir))
+                    
+                    # Check if this file is in unstaged changes
+                    if relative_path in unstaged_files:
+                        # Get diff stats
+                        diff_stats = self._get_file_diff_stats(relative_path)
+                        
+                        local_path = agent.config_path.parent / config_file.name
+                        
+                        conflict = PullConflict(
+                            agent_name=agent.name,
+                            filename=config_file.name,
+                            local_path=local_path,
+                            remote_path=Path(relative_path),
+                            diff_stats=diff_stats,
+                        )
+                        conflicts.append(conflict)
+        
+        # Check skills
+        if not configs_only and not agents_only:
+            synced_skills_dir = self.repo_dir / "skills"
+            if synced_skills_dir.exists():
+                for skill_item in synced_skills_dir.glob("*"):
+                    if skill_item.name.startswith(".") or not skill_item.is_dir():
+                        continue
+                        
+                    for skill_file in skill_item.rglob("*"):
+                        if skill_file.is_file() and skill_file.name != MANIFEST_FILENAME:
+                            relative_path = str(skill_file.relative_to(self.repo_dir))
+                            
+                            if relative_path in unstaged_files:
+                                diff_stats = self._get_file_diff_stats(relative_path)
+                                
+                                conflict = PullConflict(
+                                    agent_name="skills",
+                                    filename=f"{skill_item.name}/{skill_file.name}",
+                                    local_path=skill_file,
+                                    remote_path=Path(relative_path),
+                                    diff_stats=diff_stats,
+                                )
+                                conflicts.append(conflict)
+        
+        return conflicts
+    
+    def _get_file_diff_stats(self, file_path: str) -> dict:
+        """Get diff statistics (added/removed lines) for a file."""
+        try:
+            result = self._run_git("diff", "--stat", "--", file_path)
+            # Parse output like: " 1 file changed, 2 insertions(+), 3 deletions(-)"
+            stats = {"added": 0, "removed": 0}
+            if "insertion" in result:
+                import re
+                match = re.search(r"(\d+) insertion", result)
+                if match:
+                    stats["added"] = int(match.group(1))
+            if "deletion" in result:
+                import re
+                match = re.search(r"(\d+) deletion", result)
+                if match:
+                    stats["removed"] = int(match.group(1))
+            return stats
+        except subprocess.CalledProcessError:
+            return {"added": 0, "removed": 0}
+    
+    def _show_pull_preview(self, summary: PullSummary) -> None:
+        """Show a preview of what would be pulled."""
+        from rich.console import Console
+        from rich.panel import Panel
+        from rich.table import Table
+        
+        console = Console()
+        
+        console.print("\n[bold cyan]Pull Preview[/bold cyan]\n")
+        
+        if summary.has_conflicts:
+            console.print(f"[yellow]⚠️  {len(summary.conflicts)} conflict(s):[/yellow]")
+            for conflict in summary.conflicts:
+                console.print(f"  • {conflict.display_name} ({conflict.diff_summary})")
+            console.print()
+        
+        if summary.total_changes > len(summary.conflicts):
+            non_conflict = summary.total_changes - len(summary.conflicts)
+            console.print(f"[green]+ {non_conflict} file(s) to update (auto-apply)[/green]")
+        
+        if not summary.has_conflicts and summary.total_changes == 0:
+            console.print("[dim]No changes to pull.[/dim]")
+        
+        console.print("\n[dim]Run without --dry-run to apply changes.[/dim]")
+    
+    def _handle_conflicts_interactive(self, conflicts: list[PullConflict]) -> None:
+        """Handle conflicts interactively with user prompts."""
+        from rich.console import Console
+        from rich.prompt import Prompt
+        
+        console = Console()
+        
+        console.print("\n[bold yellow]⚠️  Conflicts Detected[/bold yellow]\n")
+        console.print("[dim]Your local changes differ from remote.[/dim]\n")
+        
+        for i, conflict in enumerate(conflicts, 1):
+            console.print(f"{i}. {conflict.display_name} ({conflict.diff_summary})")
+        
+        console.print()
+        console.print("[Enter] Keep local version (default)")
+        console.print("[a] Apply all conflicts (use remote version)")
+        console.print("[v] View diff")
+        console.print("[q] Abort")
+        console.print()
+        
+        while True:
+            choice = Prompt.ask(
+                "[cyan]Choose action[/cyan]",
+                choices=["a", "v", "q", ""],
+                default="",
+            )
+            
+            if choice == "a":
+                # Apply all remote - discard local changes
+                self._run_git("checkout", "--", ".")
+                console.print("[green]✓ Applied all remote versions[/green]")
+                return
+            elif choice == "v":
+                self._show_conflict_diff(conflicts[0] if conflicts else None)
+            elif choice == "q":
+                raise RuntimeError("Pull aborted by user")
+            elif choice == "":
+                # Keep local - just return, changes will be preserved
+                console.print("[dim]Keeping local versions.[/dim]")
+                return
+    
+    def _show_conflict_diff(self, conflict: PullConflict | None) -> None:
+        """Show diff for a conflict using pager."""
+        import os
+        import subprocess
+        import tempfile
+        
+        if not conflict:
+            return
+            
+        from rich.console import Console
+        console = Console()
+        
+        # Get remote version to temp file
+        try:
+            remote_content = self._run_git("show", f"origin/main:{conflict.remote_path}")
+        except subprocess.CalledProcessError:
+            remote_content = ""
+        
+        # Read local version
+        try:
+            local_content = conflict.local_path.read_text()
+        except (FileNotFoundError, PermissionError):
+            local_content = ""
+        
+        # Create temp files for diff
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.local', delete=False) as local_file:
+            local_file.write(local_content)
+            local_temp = local_file.name
+        
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.remote', delete=False) as remote_file:
+            remote_file.write(remote_content)
+            remote_temp = remote_file.name
+        
+        try:
+            # Show diff using pager
+            pager = os.environ.get('PAGER', 'less')
+            subprocess.run(
+                [pager, '-d', '-c', 
+                 f'--- Local: {conflict.display_name}\n+++ Remote: {conflict.display_name}',
+                 local_temp, remote_temp],
+                stdin=subprocess.DEVNULL
+            )
+        finally:
+            os.unlink(local_temp)
+            os.unlink(remote_temp)
 
     def _push_stage_and_get_changes(
         self,
