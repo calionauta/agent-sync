@@ -300,12 +300,12 @@ class TestLinkRepoSafety:
         manager.repo_dir = tmp_path / "repo"
         manager.repo_dir.mkdir()
         
-        # Verify the link_repo code uses tempfile
+        # Verify the _clone_to_repo helper uses tempfile (DRY safety)
         import inspect
-        source = inspect.getsource(manager.link_repo)
+        source = inspect.getsource(manager._clone_to_repo)
         
         # Check that TemporaryDirectory is used
-        assert "TemporaryDirectory" in source, "link_repo should use tempfile.TemporaryDirectory"
+        assert "TemporaryDirectory" in source, "_clone_to_repo should use tempfile.TemporaryDirectory"
 
 
 class TestInteractiveConflictResolution:

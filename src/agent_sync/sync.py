@@ -338,37 +338,41 @@ class SyncManager:
 
         return repo_url
 
-    def link_repo(self, repo_url: str) -> None:
-        """
-        Link to an existing sync repository.
+    def _clone_to_repo(self, repo_url: str) -> None:
+        """Clone repository to self.repo_dir using temp directory for safety.
+
+        Uses temp directory to prevent data loss if clone fails.
+        Reusable helper for init_repo and link_repo.
 
         Args:
-            repo_url: GitHub repository URL
+            repo_url: GitHub repository URL to clone
         """
         import tempfile
-        
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_repo = Path(temp_dir) / "repo"
+
+            subprocess.run(
+                ["git", "clone", repo_url, str(temp_repo)],
+                check=True,
+                timeout=120,
+            )
+
+            # Only after successful clone, replace existing repo
+            if self.repo_dir.exists():
+                shutil.rmtree(self.repo_dir)
+
+            shutil.move(str(temp_repo), str(self.repo_dir))
+
+    def link_repo(self, repo_url: str) -> None:
+        """Link to an existing sync repository."""
         if not validate_github_url(repo_url):
             raise ValueError(f"Invalid repository URL: {repo_url}")
 
         if not self._check_git_installed():
             raise RuntimeError("Git is required")
 
-        # Clone to temp directory FIRST, then move to final location
-        # This prevents data loss if clone fails
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_repo = Path(temp_dir) / "repo"
-            
-            subprocess.run(
-                ["git", "clone", repo_url, str(temp_repo)],
-                check=True,
-                timeout=120,
-            )
-            
-            # Only after successful clone, replace existing repo
-            if self.repo_dir.exists():
-                shutil.rmtree(self.repo_dir)
-            
-            shutil.move(str(temp_repo), str(self.repo_dir))
+        self._clone_to_repo(repo_url)
 
         # Update config
         self.config.repo_url = repo_url
