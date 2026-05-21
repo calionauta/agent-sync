@@ -200,7 +200,7 @@ class SyncManager:
         """Check if GitHub CLI is installed."""
         return shutil.which("gh") is not None
 
-    def init_repo(self, name: str, private: bool = True, agents: tuple[str, ...] = ()) -> str:
+    def init_repo(self, name: str = None, private: bool = True, agents: tuple[str, ...] = ()) -> str:
         """
         Initialize a new sync repository or link to existing one.
 
@@ -222,6 +222,12 @@ class SyncManager:
 
         # Ensure repo directory exists
         self.repo_dir.mkdir(parents=True, exist_ok=True)
+
+        # If name is None, use default from gh auth
+        if name is None:
+            gh_user = self._get_github_user()
+            name = "agent-sync-private"
+            console.print(f"[dim]Using default repo: {gh_user}/agent-sync-private[/dim]\n")
 
         # Check if repo already exists on GitHub
         # Support both simple names and slugs
@@ -402,8 +408,11 @@ class SyncManager:
         is_valid_git_repo = self.repo_dir.exists() and (self.repo_dir / ".git").exists()
 
         if not is_valid_git_repo:
+            # Use default repo if not configured
             if not self.config.repo_url:
-                raise RuntimeError("Not linked to a repository. Run 'agent-sync link <url>' or 'agent-sync config repo <url>' first")
+                gh_user = self._get_github_user()
+                self.config.repo_url = f"https://github.com/{gh_user}/agent-sync-private.git"
+                console.print(f"\n[dim]Using default repo: {self.config.repo_url}[/dim]\n")
 
             console.print("\n[bold]📥 Cloning repository...[/]\n")
             self.link_repo(self.config.repo_url)
