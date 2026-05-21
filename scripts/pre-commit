@@ -1,0 +1,21 @@
+#!/bin/bash
+# Pre-commit hook - runs before each commit
+# Auto-installed by: ./scripts/install-hooks.sh
+
+echo "Running pre-commit checks..."
+
+# Run tests
+echo "Running tests..."
+python3 -m pytest tests/ -x -q --tb=short
+if [ $? -ne 0 ]; then
+    echo "Tests failed! Commit aborted."
+    exit 1
+fi
+
+# Check for merge conflicts
+if grep -r "<<<<<<< HEAD" --include="*.py" src/ tests/ 2>/dev/null; then
+    echo "ERROR: Merge conflicts found!"
+    exit 1
+fi
+
+echo "Pre-commit checks passed!"
