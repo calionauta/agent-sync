@@ -302,7 +302,7 @@ class SyncManager:
             console.print("[dim]   ⚠️  Warning: Will store API keys and credentials![/dim]\n")
         else:
             console.print(f"\n[yellow]🌐 Creating PUBLIC repository: {repo_name}[/yellow]")
-            console.print("[dim]   Contains: skills, agents (NO configs with secrets)[/dim]\n")
+            console.print("[dim]   Contains: skills, agents[/dim]\n")
 
         # Create repository on GitHub
         result = subprocess.run(
