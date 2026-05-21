@@ -29,16 +29,6 @@ def test_cli_config_reset_help():
 
 
 # =============================================================================
-# LINK command
-# =============================================================================
-
-def test_cli_link_invalid_url():
-    result = runner.invoke(main, ["link", "not-a-url"])
-    assert result.exit_code == 1
-    assert "Invalid" in result.output
-
-
-# =============================================================================
 # SECRETS - list, edit, enable, disable
 # =============================================================================
 
@@ -148,7 +138,7 @@ def test_all_restored_commands_in_help():
     result = runner.invoke(main, ["--help"])
     output = result.output
     assert "config" in output
-    assert "link" in output
+    assert "repos" in output
     assert "mcp" in output
     assert "secrets" in output
     assert "publish" in output

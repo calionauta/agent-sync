@@ -49,7 +49,7 @@ def print_full_help(ctx, param, value):
     
     # Group commands by category
     categories = {
-        "Sync & Backup": ["init", "link", "push", "pull", "status", "diff", "sync"],
+        "Sync & Backup": ["init", "push", "pull", "status", "diff", "sync"],
         "Repositories": ["repos", "publish"],
         "Configuration": ["config", "generate-config"],
         "Skills": ["skills"],
@@ -1362,32 +1362,6 @@ def version():
     console.print("  Config: ~/.config/agent-sync/")
     console.print("  Skills: ~/.agents/skills/")
     console.print("  Cache: ~/.cache/agent-sync/")
-
-
-
-# =============================================================================
-# LINK COMMAND
-# =============================================================================
-
-@main.command("link")
-@click.argument("repo_url")
-def link(repo_url: str):
-    """Link to an existing sync repository (additional machines)."""
-    if not validate_github_url(repo_url):
-        console.print(f"\n✗ Invalid repository URL\n   Expected: https://github.com/user/repo.git\n   Got: {repo_url}\n")
-        raise click.Abort()
-
-    console.print(f"\n🔗 Linking to repository: {repo_url}")
-
-    config = Config()
-    sync_manager = SyncManager(config)
-
-    try:
-        sync_manager.link_repo(repo_url)
-        console.print("\n✅ Successfully linked to repository")
-        console.print("\n📥 Run 'agent-sync pull' to download configs")
-    except Exception as e:
-        console.print(f"\n❌ Error: {e}")
 
 
 
