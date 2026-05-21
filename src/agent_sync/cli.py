@@ -61,7 +61,7 @@ def print_full_help(ctx, param, value):
         console.print(f"[bold]{cat_name}:[/]")
         for cmd in cmds:
             if cmd == "repos":
-                console.print(f"  [cyan]repos[/cyan]             list | target (private | public | remove | list) | source (add | list | remove)")
+                console.print(f"  [cyan]repos[/cyan]             list | target (list | remove) | source (add | list | remove)")
             elif cmd == "publish":
                 console.print(f"  [cyan]publish[/cyan]           add | list | remove | run")
             elif cmd == "config":
@@ -601,9 +601,9 @@ def repos_list():
 
 @repos_group.group("target")
 def repos_target_group():
-    """Configure sync and publish target repositories.
+    """Show or remove target repositories.
     
-    
+    Repos are auto-detected from gh auth + defaults (agent-sync-private, agent-sync-public).
     """
     pass
 
@@ -638,38 +638,7 @@ def repos_target_list():
     
     console.print(table)
     console.print()
-    console.print("[dim]Set: agent-sync repos target private|public <url>[/dim]\n")
-
-
-@repos_target_group.command("private")
-@click.argument("url")
-def repos_target_private(url: str):
-    """Set sync/push repository (private)."""
-    from .validators import validate_github_url
-    
-    if not validate_github_url(url):
-        console.print(f"[red]Invalid URL: {url}[/red]")
-        return
-    
-    config.set_repo_url(url)
-    console.print(f"\n[green]Private repo set to: {url}[/green]")
-    console.print(f"\n[dim]View: agent-sync repos target list[/dim]\n")
-
-
-@repos_target_group.command("public")
-@click.argument("url")
-def repos_target_public(url: str):
-    """Set publish destination repository (public)."""
-    from .validators import validate_github_url
-    from .publish.config import set_published_repo
-    
-    if not validate_github_url(url):
-        console.print(f"[red]Invalid URL: {url}[/red]")
-        return
-    
-    set_published_repo(url)
-    console.print(f"\n[green]Public repo set to: {url}[/green]")
-    console.print(f"\n[dim]View: agent-sync repos target list[/dim]\n")
+    console.print("[dim]Repos are auto-detected from gh auth + agent-sync-private/agent-sync-public[/dim]\n")
 
 
 @repos_target_group.command("remove")
