@@ -92,12 +92,15 @@ def test_cli_push_help():
 
 
 def test_cli_push_dry_run():
-    """push --dry-run should be a valid option (not crash with NoSuchOption)."""
+    """push --dry-run should work without errors."""
     result = runner.invoke(main, ["push", "--dry-run"])
-    # Should NOT have --dry-run error - that's the bug we're catching
+    # Should NOT have option parsing errors
     assert "No such option: --dry-run" not in result.output
-    # Should not have traceback from option parsing
     assert "NoSuchOption" not in result.output
+    # Should NOT have runtime errors (TypeError, AttributeError, etc)
+    assert "TypeError" not in result.output
+    assert "AttributeError" not in result.output
+    assert "Traceback" not in result.output or result.exit_code == 0
 
 
 def test_cli_pull_help():
