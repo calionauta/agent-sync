@@ -318,8 +318,20 @@ def push(message: Optional[str], skills_only: bool, configs_only: bool):
 @click.option("--interactive/--no-interactive", "interactive", default=True, help="Interactive conflict resolution")
 @click.option("--skills-only", is_flag=True, help="Only pull skills")
 @click.option("--configs-only", is_flag=True, help="Only pull configs")
-def pull(force: bool, dry_run: bool, interactive: bool, skills_only: bool, configs_only: bool):
-    """Pull changes from the remote repository."""
+@click.option("--skill", "-s", multiple=True, help="Specific skill to pull (can repeat)")
+@click.option("--agent", "-a", multiple=True, help="Specific agent config to pull (can repeat)")
+@click.option("--exclude-skill", multiple=True, help="Skill to exclude (can repeat)")
+@click.option("--exclude-agent", multiple=True, help="Agent to exclude (can repeat)")
+def pull(force: bool, dry_run: bool, interactive: bool, skills_only: bool, configs_only: bool, skill: tuple, agent: tuple, exclude_skill: tuple, exclude_agent: tuple):
+    """Pull changes from the remote repository.
+    
+    Examples:
+      agent-sync pull                    # Pull all
+      agent-sync pull --skill cali-product-workflow   # Specific skill
+      agent-sync pull --agent pi.dev     # Specific agent config
+      agent-sync pull --exclude-skill deprecated-skill # Exclude skill
+      agent-sync pull --dry-run          # Preview changes
+    """
     config = Config()
     sync_manager = SyncManager(config)
     
@@ -342,6 +354,10 @@ def pull(force: bool, dry_run: bool, interactive: bool, skills_only: bool, confi
             interactive=interactive,
             skills_only=do_skills,
             configs_only=do_configs,
+            skills_filter=list(skill) if skill else None,
+            agents_filter=list(agent) if agent else None,
+            skills_exclude=list(exclude_skill) if exclude_skill else None,
+            agents_exclude=list(exclude_agent) if exclude_agent else None,
         )
         
         if dry_run:

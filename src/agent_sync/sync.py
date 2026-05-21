@@ -339,21 +339,30 @@ class SyncManager:
         Args:
             repo_url: GitHub repository URL
         """
+        import tempfile
+        
         if not validate_github_url(repo_url):
             raise ValueError(f"Invalid repository URL: {repo_url}")
 
         if not self._check_git_installed():
             raise RuntimeError("Git is required")
 
-        # Clone repository
-        if self.repo_dir.exists():
-            shutil.rmtree(self.repo_dir)
-
-        subprocess.run(
-            ["git", "clone", repo_url, str(self.repo_dir)],
-            check=True,
-            timeout=120,
-        )
+        # Clone to temp directory FIRST, then move to final location
+        # This prevents data loss if clone fails
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_repo = Path(temp_dir) / "repo"
+            
+            subprocess.run(
+                ["git", "clone", repo_url, str(temp_repo)],
+                check=True,
+                timeout=120,
+            )
+            
+            # Only after successful clone, replace existing repo
+            if self.repo_dir.exists():
+                shutil.rmtree(self.repo_dir)
+            
+            shutil.move(str(temp_repo), str(self.repo_dir))
 
         # Update config
         self.config.repo_url = repo_url
@@ -369,6 +378,10 @@ class SyncManager:
         configs_only: bool = False,
         agents_only: bool = False,
         conflict_resolver: Optional[callable] = None,
+        skills_filter: Optional[list[str]] = None,
+        agents_filter: Optional[list[str]] = None,
+        skills_exclude: Optional[list[str]] = None,
+        agents_exclude: Optional[list[str]] = None,
     ) -> tuple[list[str], PullSummary]:
         """
         Fetch and apply remote configuration with conflict detection.
@@ -430,7 +443,7 @@ class SyncManager:
 
         # Apply configs (or skip based on flags)
         if not skills_only and not agents_only:
-            changes.extend(self._apply_synced_configs())
+            changes.extend(self._apply_synced_configs(agents_filter=agents_filter, agents_exclude=agents_exclude))
         else:
             console.print("[dim]Skipping configs (skills/agents-only mode)[/dim]")
 
@@ -626,8 +639,9 @@ class SyncManager:
             )
             
             if choice == "a":
-                # Apply all remote - discard local changes
-                self._run_git("checkout", "--", ".")
+                # Apply all remote - discard local changes in repo
+                # git pull will merge remote over our cleaned state
+                self._run_git("checkout", "HEAD", "--", ".")
                 console.print("[green]✓ Applied all remote versions[/green]")
                 return
             elif choice == "v":
@@ -635,7 +649,7 @@ class SyncManager:
             elif choice == "q":
                 raise RuntimeError("Pull aborted by user")
             elif choice == "":
-                # Keep local - just return, changes will be preserved
+                # Keep local - just return, local changes in repo will be preserved
                 console.print("[dim]Keeping local versions.[/dim]")
                 return
     
@@ -1186,6 +1200,12 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         for agent in get_all_agents():
             # Skip if agent sync is disabled
             if not self.config.is_agent_enabled(agent.name):
+                continue
+            
+            # Apply filter/exclude logic
+            if agents_filter and agent.name not in agents_filter:
+                continue
+            if agents_exclude and agent.name in agents_exclude:
                 continue
 
             # Skip agents not available locally
@@ -1861,8 +1881,17 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                     preserve_symlinks=True,
                 )
 
-    def _apply_synced_configs(self) -> list[str]:
-        """Apply synced configurations to local agent directories."""
+    def _apply_synced_configs(
+        self,
+        agents_filter: Optional[list[str]] = None,
+        agents_exclude: Optional[list[str]] = None,
+    ) -> list[str]:
+        """Apply synced configurations to local agent directories.
+        
+        Args:
+            agents_filter: Only apply configs for these agents (None = all)
+            agents_exclude: Skip configs for these agents
+        """
         from .agents import get_all_agents
 
         changes = []
@@ -1968,7 +1997,11 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
         return changes
 
-    def _apply_synced_skills(self) -> list[str]:
+    def _apply_synced_skills(
+        self,
+        skills_filter: Optional[list[str]] = None,
+        skills_exclude: Optional[list[str]] = None,
+    ) -> list[str]:
         """
         Apply synced skills to local directories.
 
@@ -1976,6 +2009,10 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         1. Restore extension skills to their original locations
         2. Restore symlinks
         3. Restore global skills to ~/.agents/skills/
+
+        Args:
+            skills_filter: Only apply these specific skills (None = all)
+            skills_exclude: Exclude these skills from being applied
         """
         changes = []
         synced_skills_dir = self.repo_dir / "skills"
@@ -2015,6 +2052,12 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
                 # Skip extension skills (they were restored above)
                 if skill_item.name in extension_skill_names:
+                    continue
+                
+                # Apply filter/exclude logic
+                if skills_filter and skill_item.name not in skills_filter:
+                    continue
+                if skills_exclude and skill_item.name in skills_exclude:
                     continue
 
                 dest = global_skills_dir / skill_item.name
