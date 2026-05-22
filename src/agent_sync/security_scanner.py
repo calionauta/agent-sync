@@ -1,8 +1,8 @@
-r"""
+"""
 Security scanner for agent instruction files.
 
 Detects potentially sensitive content before public publishing:
-- Absolute paths (/Users/, /home/, /root/, C:\\)
+- Absolute paths (/Users/, /home/, /root/, C:\)
 - API tokens and keys (sk-, ghp_, api_, secret)
 - Internal commands (/skill:, /ctx-, ctx_batch_execute)
 - Server paths (server., .renatocaliari.com)
@@ -118,12 +118,63 @@ PATTERNS: list[tuple[str, str, re.Pattern, str]] = [
      "Contains Windows absolute path"),
 
     # REAL tokens - these are NEVER false positives (real key format)
+    # OpenAI
     ("TOKEN_OPENAI", "critical", re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"),
      "OpenAI API key detected - NEVER publish this!"),
+
+    # OpenRouter (sk-or- prefix)
+    ("TOKEN_OPENROUTER", "critical", re.compile(r"\bsk-or-[A-Za-z0-9_-]{20,}\b"),
+     "OpenRouter API key detected - NEVER publish this!"),
+    ("TOKEN_OPENROUTER_BEARER", "critical", re.compile(r"Bearer\s+sk-or-[A-Za-z0-9_-]{20,}\b", re.IGNORECASE),
+     "OpenRouter Bearer token detected - NEVER publish this!"),
+
+    # Google AI (Gemini)
+    ("TOKEN_GOOGLE_AI", "critical", re.compile(r"\bAIza[A-Za-z0-9_-]{35}\b"),
+     "Google AI API key detected - NEVER publish this!"),
+
+    # Anthropic (Claude)
+    ("TOKEN_ANTHROPIC", "critical", re.compile(r"\bsk-ant-[A-Za-z0-9_-]{20,}\b"),
+     "Anthropic API key detected - NEVER publish this!"),
+
+    # Cohere
+    ("TOKEN_COHERE", "critical", re.compile(r"\bcohere-[A-Za-z0-9_-]{20,}\b"),
+     "Cohere API key detected - NEVER publish this!"),
+
+    # Groq
+    ("TOKEN_GROQ", "critical", re.compile(r"\bgsk_[A-Za-z0-9_-]{20,}\b"),
+     "Groq API key detected - NEVER publish this!"),
+
+    # Hugging Face
+    ("TOKEN_HUGGINGFACE", "critical", re.compile(r"\bhf_[A-Za-z0-9_-]{20,}\b"),
+     "HuggingFace token detected - NEVER publish this!"),
+
+    # Perplexity
+    ("TOKEN_PERPLEXITY", "critical", re.compile(r"\bpplx-[A-Za-z0-9_-]{20,}\b"),
+     "Perplexity API key detected - NEVER publish this!"),
+
+    # AWS
+    ("TOKEN_AWS", "critical", re.compile(r"\bAKIA[A-Z0-9]{16}\b"),
+     "AWS Access Key detected - NEVER publish this!"),
+    ("TOKEN_AWS_STS", "critical", re.compile(r"\bASIA[A-Z0-9]{16}\b"),
+     "AWS STS temporary key detected - NEVER publish this!"),
+
+    # Stripe
+    ("TOKEN_STRIPE_LIVE", "critical", re.compile(r"\bsk_live_[A-Za-z0-9]{20,}\b"),
+     "Stripe live API key detected - NEVER publish this!"),
+    ("TOKEN_STRIPE_TEST", "high", re.compile(r"\bsk_test_[A-Za-z0-9]{20,}\b"),
+     "Stripe test API key detected - review before publish!"),
+
+    # GitHub
+    ("TOKEN_GITHUB_PAT", "critical", re.compile(r"\bgithub_pat_[A-Za-z0-9_]{82}\b"),
+     "GitHub fine-grained PAT detected - NEVER publish this!"),
     ("TOKEN_GITHUB", "critical", re.compile(r"\bghp_[A-Za-z0-9]{36}\b"),
      "GitHub personal access token - NEVER publish this!"),
     ("TOKEN_GITHUB_ALT", "critical", re.compile(r"\bgho_[A-Za-z0-9]{36}\b"),
      "GitHub OAuth token detected - NEVER publish this!"),
+
+    # Telegram
+    ("TOKEN_TELEGRAM", "critical", re.compile(r"\b\d{8,10}:[A-Za-z0-9_-]{35}\b"),
+     "Telegram Bot Token detected - NEVER publish this!"),
 
     # Internal commands - these reveal private tooling (NOT /skill: which are public agent commands)
     # /skill: commands are legitimate - they are how agents call skills
