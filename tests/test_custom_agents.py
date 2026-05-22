@@ -166,6 +166,7 @@ class TestCustomAgentsRestore:
             config = Config()
             sync_mgr = SyncManager(config)
             sync_mgr.repo_dir = temp_repo_with_agents
+            sync_mgr.config.get_sync_mode = lambda agent_name: "always"
 
             changes = sync_mgr._apply_synced_agents()
 
@@ -183,6 +184,7 @@ class TestCustomAgentsRestore:
             config = Config()
             sync_mgr = SyncManager(config)
             sync_mgr.repo_dir = temp_repo_with_agents
+            sync_mgr.config.get_sync_mode = lambda agent_name: "always"
 
             changes = sync_mgr._apply_synced_agents()
 
@@ -205,6 +207,7 @@ class TestCustomAgentsRestore:
             config = Config()
             sync_mgr = SyncManager(config)
             sync_mgr.repo_dir = temp_repo_with_agents
+            sync_mgr.config.get_sync_mode = lambda agent_name: "always"
 
             sync_mgr._apply_synced_agents()
 
