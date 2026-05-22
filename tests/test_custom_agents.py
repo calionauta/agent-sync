@@ -38,8 +38,8 @@ class TestCustomAgentsBackup:
         yield temp_repo, temp_home, claude_agents, opencode_agents
 
         # Cleanup
-        shutil.rmtree(temp_repo)
-        shutil.rmtree(temp_home)
+        shutil.rmtree(temp_repo, ignore_errors=True)
+        shutil.rmtree(temp_home, ignore_errors=True)
 
     def test_stage_agents_creates_directory_structure(self, temp_dirs):
         """Test that _stage_agents creates correct directory structure."""
@@ -49,9 +49,10 @@ class TestCustomAgentsBackup:
             config = Config()
             sync_mgr = SyncManager(config)
             sync_mgr.repo_dir = temp_repo
+
+            # Force sync_mode='always' so _stage_agents processes all agents
             sync_mgr.config.get_sync_mode = lambda agent_name: "always"
 
-            # Run staging
             sync_mgr._stage_agents()
 
             # Check directory structure
@@ -116,6 +117,82 @@ class TestCustomAgentsBackup:
 
             # Verify agent is removed from repo
             assert not (temp_repo / "agents" / "claude-code" / "project" / "test-reviewer.md").exists()
+
+    def test_sync_mode_installed_skips_unavailable_agents(self, temp_dirs):
+        """Test that sync_mode='installed' skips agents that are not available."""
+        temp_repo, temp_home, claude_agents, opencode_agents = temp_dirs
+
+        # Create a local agent file
+        (claude_agents / "test.md").write_text("---\nname: test\n---\nContent")
+
+        with patch.dict("os.environ", {"HOME": str(temp_home)}):
+            config = Config()
+            sync_mgr = SyncManager(config)
+            sync_mgr.repo_dir = temp_repo
+
+            # Force sync_mode='installed' (default) - agents without binary should be skipped
+            sync_mgr.config.get_sync_mode = lambda agent_name: "installed"
+
+            sync_mgr._stage_agents()
+
+            # Agent should NOT be staged because claude binary doesn't exist
+            staged_file = temp_repo / "agents" / "claude-code" / "project" / "test.md"
+            assert not staged_file.exists()
+
+    def test_sync_mode_all_stages_even_without_binary(self, temp_dirs):
+        """Test that sync_mode='all' stages agents even without the binary."""
+        temp_repo, temp_home, claude_agents, opencode_agents = temp_dirs
+
+        # Create a local agent file
+        (claude_agents / "test.md").write_text("---\nname: test\n---\nContent")
+
+        with patch.dict("os.environ", {"HOME": str(temp_home)}):
+            config = Config()
+            sync_mgr = SyncManager(config)
+            sync_mgr.repo_dir = temp_repo
+
+            # Force sync_mode='all' - should stage even without binary
+            sync_mgr.config.get_sync_mode = lambda agent_name: "always"
+
+            sync_mgr._stage_agents()
+
+            # Agent SHOULD be staged because sync_mode='all'
+            staged_file = temp_repo / "agents" / "claude-code" / "project" / "test.md"
+            assert staged_file.exists()
+
+    def test_sync_mode_all_cleans_repo_when_no_local_files(self):
+        """Test that sync_mode='all' cleans repo when no local files exist."""
+        temp_repo = Path(tempfile.mkdtemp())
+        temp_home = Path(tempfile.mkdtemp())
+
+        try:
+            # Pre-create agent in repo
+            agent_dir = temp_repo / "agents" / "claude-code" / "project"
+            agent_dir.mkdir(parents=True, exist_ok=True)
+            (agent_dir / "orphan.md").write_text("---\nname: orphan\n---\nOld content")
+
+            # Create directories but NO .md files for claude-code
+            claude_dir = temp_home / ".claude" / "agents"
+            claude_dir.mkdir(parents=True, exist_ok=True)
+
+            # Create a file for opencode so it doesn't cause other issues
+            opencode_dir = temp_home / ".config" / "opencode" / "agents"
+            opencode_dir.mkdir(parents=True, exist_ok=True)
+            (opencode_dir / "dummy.md").write_text("---\nname: dummy\n---\nContent")
+
+            with patch.dict("os.environ", {"HOME": str(temp_home)}):
+                config = Config()
+                sync_mgr = SyncManager(config)
+                sync_mgr.repo_dir = temp_repo
+                sync_mgr.config.get_sync_mode = lambda agent_name: "always"
+
+                sync_mgr._stage_agents()
+
+                # Agent dir should be removed because no local files for claude-code
+                assert not (temp_repo / "agents" / "claude-code").exists()
+        finally:
+            shutil.rmtree(temp_repo, ignore_errors=True)
+            shutil.rmtree(temp_home, ignore_errors=True)
 
 
 class TestCustomAgentsRestore:
@@ -214,6 +291,22 @@ class TestCustomAgentsRestore:
             # Check nested structure is preserved
             nested_file = temp_home_dir / ".claude" / "agents" / "subdir" / "nested-agent.md"
             assert nested_file.exists()
+
+    def test_apply_synced_agents_skips_when_not_installed_and_sync_mode_installed(self, temp_repo_with_agents, temp_home_dir):
+        """Test that _apply_synced_agents skips when agent not installed and sync_mode='installed'."""
+        with patch.dict("os.environ", {"HOME": str(temp_home_dir)}):
+            config = Config()
+            sync_mgr = SyncManager(config)
+            sync_mgr.repo_dir = temp_repo_with_agents
+
+            # sync_mode='installed' (default) - should skip agents without binary
+            sync_mgr.config.get_sync_mode = lambda agent_name: "installed"
+
+            changes = sync_mgr._apply_synced_agents()
+
+            # No agents should be restored
+            restored_file = temp_home_dir / ".claude" / "agents" / "restored-agent.md"
+            assert not restored_file.exists()
 
 
 class TestCustomAgentsCLI:

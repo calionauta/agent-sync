@@ -1405,6 +1405,11 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                     shutil.rmtree(agent_repo_subdir)
                     console.print(f"  [dim]Removed unknown agent: {agent_name}[/dim]")
                 continue
+            # Check sync_mode - if 'all', don't remove here (let main loop handle cleanup)
+            sync_mode = self.config.get_sync_mode(agent_name)
+            if sync_mode == "all":
+                continue
+
             # If agent is available, keep (will be updated above)
             if agent.is_available():
                 continue
@@ -1437,14 +1442,16 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             has_project = agent.agents_path and agent.agents_path.exists() and any(agent.agents_path.rglob("*.md"))
             has_global = agent.agents_path_global and agent.agents_path_global.exists() and any(agent.agents_path_global.rglob("*.md"))
 
-            if sync_mode == "all" and not has_project and not has_global:
+            # Define agent_repo_dir here (used for auto-clean)
+            agent_repo_dir = repo_agents_dir / agent.name
+
+            if sync_mode == "always" and not has_project and not has_global:
                 # Clean repo directory for this agent
                 if agent_repo_dir.exists():
                     console.print(f"  [dim]  └─ Cleaning up {agent.name} (no local agents)...[/dim]")
                     shutil.rmtree(agent_repo_dir)
                 continue
 
-            agent_repo_dir = repo_agents_dir / agent.name
 
             # 1. Stage project-level agents (.claude/agents/, .opencode/agents/)
             if has_project:
