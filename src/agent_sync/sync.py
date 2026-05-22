@@ -1432,18 +1432,23 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             if not agent.supports_custom_agents():
                 continue
 
-            # Check sync mode - skip if not installed and sync_mode is 'installed'
+            # Define agent_repo_dir early (used for cleanup)
+            agent_repo_dir = repo_agents_dir / agent.name
+
+            # Check sync mode and availability
             sync_mode = self.config.get_sync_mode(agent.name)
             is_available = agent.is_available()
+
+            # Auto-clean: if agent not installed and sync_mode='installed', clean repo
             if sync_mode == "installed" and not is_available:
+                if agent_repo_dir.exists():
+                    console.print(f"  [dim]  └─ Cleaning up {agent.name} (not installed)...[/dim]")
+                    shutil.rmtree(agent_repo_dir)
                 continue
 
             # Auto-clean: if sync_mode='all' but no local files, clean repo
             has_project = agent.agents_path and agent.agents_path.exists() and any(agent.agents_path.rglob("*.md"))
             has_global = agent.agents_path_global and agent.agents_path_global.exists() and any(agent.agents_path_global.rglob("*.md"))
-
-            # Define agent_repo_dir here (used for auto-clean)
-            agent_repo_dir = repo_agents_dir / agent.name
 
             if sync_mode == "always" and not has_project and not has_global:
                 # Clean repo directory for this agent

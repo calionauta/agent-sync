@@ -118,6 +118,28 @@ class TestCustomAgentsBackup:
             # Verify agent is removed from repo
             assert not (temp_repo / "agents" / "claude-code" / "project" / "test-reviewer.md").exists()
 
+    def test_sync_mode_installed_cleans_repo_when_not_installed(self, temp_dirs):
+        """Test that sync_mode='installed' cleans repo when agent is not installed."""
+        temp_repo, temp_home, claude_agents, opencode_agents = temp_dirs
+
+        # Pre-create agent in repo (old data to be cleaned)
+        agent_dir = temp_repo / "agents" / "claude-code" / "project"
+        agent_dir.mkdir(parents=True, exist_ok=True)
+        (agent_dir / "orphan.md").write_text("---\nname: orphan\n---\nOld content")
+
+        with patch.dict("os.environ", {"HOME": str(temp_home)}):
+            config = Config()
+            sync_mgr = SyncManager(config)
+            sync_mgr.repo_dir = temp_repo
+
+            # sync_mode='installed' (default) - should clean repo when not installed
+            sync_mgr.config.get_sync_mode = lambda agent_name: "installed"
+
+            sync_mgr._stage_agents()
+
+            # Agent dir should be cleaned because claude binary doesn't exist
+            assert not (temp_repo / "agents" / "claude-code").exists()
+
     def test_sync_mode_installed_skips_unavailable_agents(self, temp_dirs):
         """Test that sync_mode='installed' skips agents that are not available."""
         temp_repo, temp_home, claude_agents, opencode_agents = temp_dirs
