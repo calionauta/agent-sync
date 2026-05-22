@@ -49,6 +49,7 @@ class TestCustomAgentsBackup:
             config = Config()
             sync_mgr = SyncManager(config)
             sync_mgr.repo_dir = temp_repo
+            sync_mgr.config.get_sync_mode = lambda agent_name: "always"
 
             # Run staging
             sync_mgr._stage_agents()
@@ -84,6 +85,7 @@ class TestCustomAgentsBackup:
             config = Config()
             sync_mgr = SyncManager(config)
             sync_mgr.repo_dir = temp_repo
+            sync_mgr.config.get_sync_mode = lambda agent_name: "always"
 
             sync_mgr._stage_agents()
 
@@ -98,6 +100,7 @@ class TestCustomAgentsBackup:
             config = Config()
             sync_mgr = SyncManager(config)
             sync_mgr.repo_dir = temp_repo
+            sync_mgr.config.get_sync_mode = lambda agent_name: "always"
 
             # First staging
             sync_mgr._stage_agents()

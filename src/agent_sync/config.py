@@ -215,6 +215,30 @@ class Config:
         agent_config = self.get_agent_config(agent_name)
         return agent_config.get("skills_method")
 
+    def get_sync_mode(self, agent_name: str) -> str:
+        """Get sync mode for a specific agent.
+
+
+        Values:
+        - 'installed': Only sync if agent is installed (is_available=True)
+        - 'always': Always sync regardless of installation status
+        """
+        agent_config = self.get_agent_config(agent_name)
+        return agent_config.get("sync_mode", "installed")
+
+
+    def set_sync_mode(self, agent_name: str, mode: str) -> None:
+        """"Set sync mode for a specific agent."""
+        if mode not in ("installed", "always"):
+            raise ValueError("sync_mode must be 'installed' or 'always'")
+        agent_config = self.get_agent_config(agent_name)
+        agent_config["sync_mode"] = mode
+        self.set_agent_config(agent_name, agent_config)
+    def get_skills_method(self, agent_name: str) -> str | None:
+        """Get skills sync method for a specific agent."""
+        agent_config = self.get_agent_config(agent_name)
+        return agent_config.get("skills_method")
+
     def set_skills_method(self, agent_name: str, method: str) -> None:
         """Set skills sync method for a specific agent."""
         agent_config = self.get_agent_config(agent_name)

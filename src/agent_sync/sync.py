@@ -1427,12 +1427,10 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             if not agent.supports_custom_agents():
                 continue
 
-            # Check if agent is available OR if agents directory exists
+            # Check sync mode - skip if not installed and sync_mode is 'installed'
+            sync_mode = self.config.get_sync_mode(agent.name)
             is_available = agent.is_available()
-            has_agents_dir = (agent.agents_path and agent.agents_path.exists()) or \
-                            (agent.agents_path_global and agent.agents_path_global.exists())
-
-            if not is_available and not has_agents_dir and agent.name != "global-skills":
+            if sync_mode == "installed" and not is_available:
                 continue
 
             agent_repo_dir = repo_agents_dir / agent.name
