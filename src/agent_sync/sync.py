@@ -752,18 +752,18 @@ class SyncManager:
                            if self.config.is_agent_enabled(a.name) and a.is_available()])
         
         if skills_only and not configs_only:
-            console.print(f"  [dim]📦 Staging skills...[/dim]")
+            console.print(f"  [dim]📦 Syncing {skills_count} skills...[/dim]")
             self._stage_skills()
         elif configs_only and not skills_only:
-            console.print(f"  [dim]⚙️  Staging {agents_count} agent configs...[/dim]")
+            console.print(f"  [dim]⚙️  Syncing {agents_count} agent configurations...[/dim]")
             self._stage_all_agent_files()
             self._stage_agents()
         else:
-            console.print(f"  [dim]⚙️  Staging {agents_count} agents...[/dim]")
+            console.print(f"  [dim]⚙️  Syncing {agents_count} agents...[/dim]")
             self._stage_all_agent_files()
-            console.print(f"  [dim]📦 Staging skills...[/dim]")
+            console.print(f"  [dim]📦 Syncing skills...[/dim]")
             self._stage_skills()
-            console.print(f"  [dim]🤖 Staging custom agents...[/dim]")
+            console.print(f"  [dim]🤖 Syncing custom agent definitions...[/dim]")
             self._stage_agents()
 
         # Parse BOTH staged and unstaged changes
@@ -1376,6 +1376,10 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
     def _stage_agents(self) -> None:
         """
+        Stage agent files (.md definitions) to the repo.
+        """
+        console.print(f"  [dim]  └─ Cleaning up unavailable agents...[/dim]")
+        """
         Stage custom agents for commit.
 
         Structure in repo:
@@ -1435,6 +1439,15 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
             # 1. Stage project-level agents (.claude/agents/, .opencode/agents/)
             if agent.agents_path and agent.agents_path.exists():
+                project_agent_count = len(list(agent.agents_path.rglob("*.md")))
+                if project_agent_count > 0:
+                    console.print(f"  [dim]  └─ Syncing {project_agent_count} project agents for {agent.name}...[/dim]")
+
+                project_agents_dir = agent_repo_dir / "project"
+                project_agents_dir.mkdir(parents=True, exist_ok=True)
+                project_agent_count = len(list(agent.agents_path.rglob("*.md")))
+                if project_agent_count > 0:
+                    console.print(f"  [dim]  └─ Syncing {project_agent_count} project agents for {agent.name}...[/dim]")
                 project_agents_dir = agent_repo_dir / "project"
                 project_agents_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1464,6 +1477,9 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
             # 2. Stage global agents (~/.claude/agents/, ~/.config/opencode/agents/)
             if agent.agents_path_global and agent.agents_path_global.exists():
+                global_agent_count = len(list(agent.agents_path_global.rglob("*.md")))
+                if global_agent_count > 0:
+                    console.print(f"  [dim]  └─ Syncing {global_agent_count} global agents for {agent.name}...[/dim]")
                 global_agents_dir = agent_repo_dir / "global"
                 global_agents_dir.mkdir(parents=True, exist_ok=True)
 
