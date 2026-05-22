@@ -11,3 +11,13 @@ build/
 
 # AI coding tool artifacts
 .jules/
+
+# Analysis and investigation files
+publish-investigation.md
+incident-analysis.md
+*-investigation.md
+
+# Session logs and temp files
+*.jsonl
+temp_*.py
+debug_*.md
