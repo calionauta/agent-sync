@@ -1433,6 +1433,83 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             if sync_mode == "installed" and not is_available:
                 continue
 
+            # Auto-clean: if sync_mode='all' but no local files, clean repo
+            has_project = agent.agents_path and agent.agents_path.exists() and any(agent.agents_path.rglob("*.md"))
+            has_global = agent.agents_path_global and agent.agents_path_global.exists() and any(agent.agents_path_global.rglob("*.md"))
+
+            if sync_mode == "all" and not has_project and not has_global:
+                # Clean repo directory for this agent
+                if agent_repo_dir.exists():
+                    console.print(f"  [dim]  └─ Cleaning up {agent.name} (no local agents)...[/dim]")
+                    shutil.rmtree(agent_repo_dir)
+                continue
+
+            agent_repo_dir = repo_agents_dir / agent.name
+
+            # 1. Stage project-level agents (.claude/agents/, .opencode/agents/)
+            if has_project:
+                project_agent_count = len(list(agent.agents_path.rglob("*.md")))
+                console.print(f"  [dim]  └─ Syncing {project_agent_count} project agents for {agent.name}...[/dim]")
+
+                project_agents_dir = agent_repo_dir / "project"
+                project_agents_dir.mkdir(parents=True, exist_ok=True)
+
+                # Remove agents from repo that no longer exist locally
+                if project_agents_dir.exists():
+                    for repo_agent_file in project_agents_dir.rglob("*.md"):
+                        local_file = agent.agents_path / repo_agent_file.relative_to(project_agents_dir)
+                        if not local_file.exists():
+                            repo_agent_file.unlink()
+                    # Clean up empty directories
+                    for dirpath in sorted(project_agents_dir.rglob("*"), reverse=True):
+                        if dirpath.is_dir() and not any(dirpath.iterdir()):
+                            dirpath.rmdir()
+
+                # Copy current project agents to repo
+                for agent_file in agent.agents_path.rglob("*.md"):
+                    if agent_file.is_file():
+                        # Skip excluded files
+                        if self._should_exclude(agent_file.name):
+                            continue
+
+                        # Create relative path structure
+                        rel_path = agent_file.relative_to(agent.agents_path)
+                        dest = project_agents_dir / rel_path
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(agent_file, dest)
+
+            # 2. Stage global agents (~/.claude/agents/, ~/.config/opencode/agents/)
+            if has_global:
+                global_agent_count = len(list(agent.agents_path_global.rglob("*.md")))
+                console.print(f"  [dim]  └─ Syncing {global_agent_count} global agents for {agent.name}...[/dim]")
+                global_agents_dir = agent_repo_dir / "global"
+                global_agents_dir.mkdir(parents=True, exist_ok=True)
+
+                # Remove agents from repo that no longer exist locally
+                if global_agents_dir.exists():
+                    for repo_agent_file in global_agents_dir.rglob("*.md"):
+                        local_file = agent.agents_path_global / repo_agent_file.relative_to(global_agents_dir)
+                        if not local_file.exists():
+                            repo_agent_file.unlink()
+                    # Clean up empty directories
+                    for dirpath in sorted(global_agents_dir.rglob("*"), reverse=True):
+                        if dirpath.is_dir() and not any(dirpath.iterdir()):
+                            dirpath.rmdir()
+
+                # Copy current global agents to repo
+                for agent_file in agent.agents_path_global.rglob("*.md"):
+                    if agent_file.is_file():
+                        # Skip excluded files
+                        if self._should_exclude(agent_file.name):
+                            continue
+
+                        # Create relative path structure
+                        rel_path = agent_file.relative_to(agent.agents_path_global)
+                        dest = global_agents_dir / rel_path
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(agent_file, dest)
+                continue
+
             agent_repo_dir = repo_agents_dir / agent.name
 
             # 1. Stage project-level agents (.claude/agents/, .opencode/agents/)
@@ -1918,6 +1995,22 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
         for agent in get_all_agents():
             # Skip if agent sync is disabled
+            if not self.config.is_agent_enabled(agent.name):
+                continue
+
+            # Skip if agent doesn't support custom agents
+            if not agent.supports_custom_agents():
+                continue
+
+            # Skip if sync_mode='installed' and agent is not installed
+            sync_mode = self.config.get_sync_mode(agent.name)
+            is_available = agent.is_available()
+            if sync_mode == "installed" and not is_available:
+                continue
+
+            repo_agents_dir = self.repo_dir / "agents" / agent.name
+
+            # 1. Apply project-level agents
             if not self.config.is_agent_enabled(agent.name):
                 continue
 
