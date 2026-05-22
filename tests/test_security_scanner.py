@@ -277,10 +277,15 @@ class TestPatterns:
             assert rule in actual_rules, f"Missing rule: {rule}"
 
     def test_all_critical_have_critical_severity(self):
-        """Test that token patterns have critical severity."""
+        """Test that token patterns have critical severity (test tokens are high)."""
         critical_rules = ["TOKEN"]
+        # Exception: TOKEN_STRIPE_TEST is intentionally high (test keys less dangerous)
+        high_severity_ok = {"TOKEN_STRIPE_TEST"}
         for pattern in PATTERNS:
             rule = pattern[0]
             severity = pattern[1]
             if any(cr in rule for cr in critical_rules):
-                assert severity == "critical", f"Rule {rule} should be critical, not {severity}"
+                if rule in high_severity_ok:
+                    assert severity == "high", f"Rule {rule} should be high"
+                else:
+                    assert severity == "critical", f"Rule {rule} should be critical, not {severity}"

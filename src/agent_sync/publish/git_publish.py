@@ -8,10 +8,42 @@ DRY: Single _do_git_publish() used by both skills and agents.
 """
 
 import shutil
+import re
 import subprocess
 import tempfile
 from pathlib import Path
 from typing import Callable, Optional
+
+
+# Default patterns to exclude from publish (private data)
+DEFAULT_IGNORE_PATTERNS = [
+    '.git', '.gitignore', '.github',
+    # Session and cache data
+    'sessions', 'blob', 'cache', '.cache',
+    '*.jsonl', '*.log', '*.sqlite', '*.db',
+    # Configuration with personal data
+    'models.json', 'models.yaml', 'config_local.json',
+    # Environment files
+    '.env', '.env.*', '*.pem', '*.key',
+]
+
+
+def _ignore_func(*patterns):
+    """Create a callable that returns a list of filenames to ignore."""
+    def _ignore(path, names):
+        ignored = []
+        for name in names:
+            for pattern in patterns:
+                if pattern.startswith('*.'):
+                    if name.endswith(pattern[1:]):
+                        ignored.append(name)
+                        break
+                elif pattern.startswith('.'):
+                    if name == pattern or name.startswith(pattern.rstrip('/') + '/'):
+                        ignored.append(name)
+                        break
+        return ignored
+    return _ignore
 
 from rich.console import Console
 
@@ -59,7 +91,8 @@ def do_git_publish(
         for src_path, dest_name in items:
             dest = items_dir / dest_name
             if src_path.is_dir():
-                shutil.copytree(src_path, dest, dirs_exist_ok=True)
+                shutil.copytree(src_path, dest, dirs_exist_ok=True,
+                               ignore=_ignore_func(*DEFAULT_IGNORE_PATTERNS))
             else:
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src_path, dest)
@@ -129,7 +162,8 @@ def publish_all(
                             dest_name = f"{source_id}/{skill_name}"
                             dest = skills_dir / dest_name
                             if skill.path.is_dir():
-                                shutil.copytree(skill.path, dest, dirs_exist_ok=True)
+                                shutil.copytree(skill.path, dest, dirs_exist_ok=True,
+                                               ignore=_ignore_func(*DEFAULT_IGNORE_PATTERNS))
                             else:
                                 dest.parent.mkdir(parents=True, exist_ok=True)
                                 shutil.copy2(skill.path, dest)
