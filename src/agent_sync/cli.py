@@ -937,6 +937,9 @@ def list_skills():
     remove_mode = False
 
     while True:
+        # ─── Clear screen for clean display ───────────────────────────────────
+        console.clear()
+        
         # ─── Header ───────────────────────────────────────────────────────────
         n = len(skills)
         s = len(selected)
@@ -947,17 +950,6 @@ def list_skills():
             header += "  [red]│ REMOVE MODE[/red]"
 
         console.print(f"\n{header}\n")
-
-        # ─── Preview panel ────────────────────────────────────────────────────
-        if preview_skill:
-            skill_path = skills_dir / preview_skill
-            console.print(f"  [dim]⚡ Preview:[/dim] [cyan]{preview_skill}[/cyan]")
-            desc_lines = _skill_description_lines(skill_path)
-            for line in desc_lines[:5]:
-                console.print(f"  [dim]{line}[/dim]")
-            if len(desc_lines) > 5:
-                console.print(f"  [dim]... ({len(desc_lines)-5} more lines)[/dim]")
-            console.print()
 
         # ─── Table ────────────────────────────────────────────────────────────
         table = Table(box=ROUNDED, show_header=True, header_style="bold dim")
@@ -983,6 +975,12 @@ def list_skills():
 
         console.print(table)
         console.print()
+
+        # ─── Preview Panel ────────────────────────────────────────────────────
+        preview_panel = _build_skill_preview_panel(preview_skill, skills_dir, selected)
+        if preview_panel:
+            console.print(preview_panel)
+            console.print()
 
         # ─── Footer ───────────────────────────────────────────────────────────
         if remove_mode:
@@ -1011,10 +1009,16 @@ def list_skills():
         choice = Prompt.ask("[cyan]›[/cyan]", default="", show_default=False).strip()
 
         if not choice:
-            if selected:
-                break
+            if preview_skill:
+                # Cycle preview through selected skills (or all if none selected)
+                sel_list = sorted(selected) if selected else skills
+                cur_idx = sel_list.index(preview_skill) + 1 if preview_skill in sel_list else 0
+                preview_skill = sel_list[cur_idx % len(sel_list)]
+            elif selected:
+                preview_skill = sorted(selected)[0]
+            elif skills:
+                preview_skill = skills[0]
             continue
-
         if choice.lower() in ("q", "quit"):
             console.print("[dim]Cancelled.[/dim]\n")
             return
@@ -1102,6 +1106,66 @@ def list_skills():
     if stats["errors"]:
         console.print(f"  [red]✗ {stats['errors']} errors[/red]")
     console.print()
+
+
+def _build_skill_preview_panel(skill_name: str | None, skills_dir: Path, selected: set[str]) -> Panel | None:
+    from rich.box import ROUNDED
+    
+    """Build a rich preview panel for a skill showing full description."""
+    if not skill_name:
+        return None
+    
+    skill_path = skills_dir / skill_name
+    s_list = sorted(selected) if selected else []
+    
+    if s_list:
+        pos_idx = s_list.index(skill_name) + 1 if skill_name in s_list else 1
+        total = len(s_list)
+        pos_str = f' ({pos_idx}/{total})' if total > 1 else ''
+    else:
+        pos_str = ''
+    
+    lines = []
+    skill_md = skill_path / 'SKILL.md'
+    if skill_md.exists():
+        try:
+            md_content = skill_md.read_text()
+            if md_content.startswith('---'):
+                parts = md_content.split('---', 2)
+                if len(parts) >= 3:
+                    fm = yaml.safe_load(parts[1])
+                    if fm:
+                        name = fm.get('name', skill_name)
+                        lines.append(f'[bold cyan]{name}[/bold cyan]')
+                        desc = fm.get('description', '')
+                        if desc:
+                            lines.append(desc)
+                        tools = fm.get('allowed-tools', '')
+                        if tools:
+                            lines.append(f'[dim]tools:[/dim] [yellow]{tools}[/yellow]')
+        except:
+            pass
+    
+    try:
+        files = sorted([f.name for f in skill_path.iterdir() if f.is_file() and f.name != 'SKILL.md'])
+        if files:
+            lines.append('')
+            lines.append(f'[dim]files ({len(files)}):[/dim]')
+            for f in files[:5]:
+                lines.append(f'  [dim]  • {f}[/dim]')
+            if len(files) > 5:
+                lines.append(f'  [dim]  ... (+{len(files)-5} more)[/dim]')
+    except:
+        pass
+    
+    return Panel(
+        '\n'.join(lines) if lines else '[dim]No preview available[/dim]',
+        box=ROUNDED,
+        padding=(0, 1, 0, 1),
+        title=f'[cyan]{skill_name}[/cyan]{pos_str}',
+        title_align='left',
+        border_style='dim',
+    )
 
 
 def _skill_description_lines(skill_path: Path) -> list[str]:
