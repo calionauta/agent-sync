@@ -97,3 +97,84 @@ def test_skills_deleter_path_traversal_blocking(tmp_path, monkeypatch):
     stats = deleter.delete_skills([".."])
     assert stats["errors"] == 1
     assert hub_dir.exists()
+
+
+# ---------------------------------------------------------------------------
+# Token sanitization tests
+# ---------------------------------------------------------------------------
+
+import subprocess
+from unittest.mock import patch, MagicMock
+
+from agent_sync.sync import _sanitize_git_output
+
+
+def test_sanitize_masks_url_with_token():
+    """Verify tokens in remote URLs are masked."""
+    text = "fatal: https://ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh@github.com/u/r.git not found"
+    result = _sanitize_git_output(text)
+    assert "ghp_" not in result
+    assert "https://***@github.com" in result
+
+
+def test_sanitize_masks_bare_token():
+    """Verify bare tokens (not in URL) are masked."""
+    text = "Token leaked: ghp_aB3dE5gH7iJ9kL1mN3oP5qR7sT9uV1wX3yZ"
+    result = _sanitize_git_output(text)
+    assert "ghp_" not in result
+    assert "***" in result
+
+
+def test_sanitize_preserves_clean_errors():
+    """Verify non-token text passes through unchanged."""
+    text = "fatal: 'origin' does not appear to be a git repository"
+    assert _sanitize_git_output(text) == text
+
+
+def test_sanitize_handles_none_and_empty():
+    """Verify edge cases don't crash."""
+    assert _sanitize_git_output(None) is None
+    assert _sanitize_git_output("") == ""
+
+
+def test_sanitize_short_token_not_masked():
+    """Verify tokens <20 chars are NOT masked (avoid false positives)."""
+    text = "short: ghp_abc"
+    assert _sanitize_git_output(text) == text
+
+
+def test_run_git_sanitizes_stderr_on_failure(tmp_path):
+    """Integration: _run_git must sanitize CalledProcessError stderr.
+
+    This is the real security contract — when git fails and its stderr
+    contains a token, the exception must NOT expose it.
+    """
+    from agent_sync.sync import SyncManager
+
+    # Create a fake repo so _run_git has somewhere to run
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, capture_output=True)
+
+    sm = SyncManager.__new__(SyncManager)
+    sm.repo_dir = repo
+    sm.config = MagicMock()
+    sm.state_file = tmp_path / "state.json"
+
+    # Mock subprocess.run to simulate git failure with token in stderr
+    fake_result = MagicMock()
+    fake_result.returncode = 128
+    fake_result.stdout = ""
+    fake_result.stderr = "fatal: https://ghp_SECRET_TOKEN_XXXXXXXXXXXXXXXX@github.com/u/r.git not found"
+
+    with patch("agent_sync.sync.subprocess.run", return_value=fake_result):
+        try:
+            sm._run_git("remote", "update")
+            assert False, "Should have raised CalledProcessError"
+        except subprocess.CalledProcessError as e:
+            assert "ghp_SECRET_TOKEN" not in e.stderr, (
+                "Token leaked through CalledProcessError.stderr!"
+            )
+            assert "***" in e.stderr, (
+                "Sanitization marker missing — stderr was not sanitized"
+            )

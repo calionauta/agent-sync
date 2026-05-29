@@ -338,7 +338,8 @@ def push(
         sync_manager._save_state("pushed", sync_manager.config.repo_url)
         console.print(f"\n[green]✓ Pushed to {config.repo_url.split('/')[-1]}[/green]\n")
     except subprocess.CalledProcessError as e:
-        console.print(f"\n[red]✗ Push failed:[/red] {e.stderr or e}")
+        from .sync import _sanitize_git_output
+        console.print(f"\n[red]✗ Push failed:[/red] {_sanitize_git_output(e.stderr) or e}")
 
 
 # =============================================================================

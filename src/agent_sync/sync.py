@@ -3,6 +3,7 @@
 import fnmatch
 import json
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -18,6 +19,35 @@ from .skills import MANIFEST_FILENAME
 from .validators import validate_github_url
 
 console = Console()
+
+
+# ---------------------------------------------------------------------------
+# Token sanitization
+# ---------------------------------------------------------------------------
+
+# Patterns for tokens that could appear in git remote URLs or error output.
+_TOKEN_PATTERNS = [
+    # GitHub PATs, OAuth, App tokens (ghp_, gho_, ghu_, ghs_, ghr_)
+    re.compile(r'gh[pousr]_[A-Za-z0-9_]{20,}'),
+    # Generic token-like strings in URLs: https://<token>@github.com
+    re.compile(r'(https?://)[^@/\s]+(@github\.com)'),
+    # x-access-token: <token>@github.com
+    re.compile(r'(https?://x-access-token:)[^@/\s]+(@github\.com)'),
+]
+
+
+def _sanitize_git_output(text: str) -> str:
+    """Strip potential authentication tokens from git output.
+
+    Git error messages can contain remote URLs with embedded tokens.
+    This function redacts them before the text reaches logs, terminals,
+    or exception messages.
+    """
+    if not text:
+        return text
+    for pattern in _TOKEN_PATTERNS:
+        text = pattern.sub(r'\1***\2' if pattern in _TOKEN_PATTERNS[1:] else '***', text)
+    return text
 
 
 # =============================================================================
@@ -188,7 +218,11 @@ class SyncManager:
             ) from e
 
         if result.returncode != 0:
-            raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
+            raise subprocess.CalledProcessError(
+                result.returncode, cmd,
+                _sanitize_git_output(result.stdout),
+                _sanitize_git_output(result.stderr),
+            )
 
         return result.stdout.strip()
 
@@ -277,12 +311,19 @@ class SyncManager:
                 if not validate_github_url(repo_url_to_clone):
                     raise ValueError(f"Invalid repository name resulted in invalid URL: {repo_url_to_clone}")
 
-                subprocess.run(
+                result = subprocess.run(
                     ["git", "clone", repo_url_to_clone, str(self.repo_dir)],
-                    check=True,
+                    check=False,
                     capture_output=True,
+                    text=True,
                     timeout=120,
                 )
+                if result.returncode != 0:
+                    raise subprocess.CalledProcessError(
+                        result.returncode, result.args,
+                        _sanitize_git_output(result.stdout),
+                        _sanitize_git_output(result.stderr),
+                    )
 
             # Update config
             self.config.repo_url = repo_url
@@ -315,13 +356,19 @@ class SyncManager:
 
         if result.returncode != 0:
             # Try alternative approach
-            subprocess.run(
+            alt_result = subprocess.run(
                 ["gh", "repo", "create", f"--{visibility}", "--", name],
                 capture_output=True,
                 text=True,
-                check=True,
+                check=False,
                 timeout=120,
             )
+            if alt_result.returncode != 0:
+                raise subprocess.CalledProcessError(
+                    alt_result.returncode, alt_result.args,
+                    _sanitize_git_output(alt_result.stdout),
+                    _sanitize_git_output(alt_result.stderr),
+                )
 
             # Initialize local git
             self._run_git("init")
@@ -361,11 +408,19 @@ class SyncManager:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_repo = Path(temp_dir) / "repo"
 
-            subprocess.run(
+            result = subprocess.run(
                 ["git", "clone", repo_url, str(temp_repo)],
-                check=True,
+                check=False,
+                capture_output=True,
+                text=True,
                 timeout=120,
             )
+            if result.returncode != 0:
+                raise subprocess.CalledProcessError(
+                    result.returncode, result.args,
+                    _sanitize_git_output(result.stdout),
+                    _sanitize_git_output(result.stderr),
+                )
 
             # Only after successful clone, replace existing repo
             if self.repo_dir.exists():
@@ -2325,9 +2380,15 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             ["gh", "api", "user", "--jq", ".login"],
             capture_output=True,
             text=True,
-            check=True,
+            check=False,
             timeout=30,
         )
+        if result.returncode != 0:
+            raise subprocess.CalledProcessError(
+                result.returncode, result.args,
+                _sanitize_git_output(result.stdout),
+                _sanitize_git_output(result.stderr),
+            )
         return result.stdout.strip()
 
     def _save_state(self, action: str, repo_url: str | None = None) -> None:
