@@ -194,11 +194,31 @@ class TestApplyGitignoreGlobal:
         assert not local.exists()
 
         with patch.object(sm, "_get_global_gitignore_path", return_value=None):
-            with patch.object(Path, "home", classmethod(lambda cls: tmp_path)):
-                changes = sm._apply_gitignore_global(force=True)
+            with patch.object(sm, "_run_git") as mock_git:
+                with patch.object(Path, "home", classmethod(lambda cls: tmp_path)):
+                    changes = sm._apply_gitignore_global(force=True)
 
         assert local.exists()
         assert local.read_text() == remote
+        mock_git.assert_called_once()
+
+    def test_dry_run_creates_when_missing(self, tmp_path):
+        """Dry run + force + missing: reports without writing."""
+        sm = self._make_sm_with_repo(tmp_path)
+
+        remote = "*.log\n.env\n"
+        (sm.repo_dir / "configs" / "gitignore_global").write_text(remote)
+
+        local = tmp_path / ".gitignore_global"
+        assert not local.exists()
+
+        with patch.object(sm, "_get_global_gitignore_path", return_value=None):
+            with patch.object(Path, "home", classmethod(lambda cls: tmp_path)):
+                changes = sm._apply_gitignore_global(force=True, dry_run=True)
+
+        assert not local.exists()  # Not written in dry-run
+        assert len(changes) == 1
+        assert "created" in changes[0]
 
     def test_dry_run_does_not_write(self, tmp_path):
         """Dry run mode: computes changes but doesn't write files."""
@@ -231,3 +251,120 @@ class TestApplyGitignoreGlobal:
             changes = sm._apply_gitignore_global(force=True)
 
         assert changes == []
+
+
+class TestGitignoreGlobalConflictDetection:
+    """Tests for _detect_conflicts including gitignore_global."""
+
+    def test_detect_conflicts_includes_gitignore_global(self, tmp_path):
+        """When local gitignore_global differs from repo, conflict is detected."""
+        sm = SyncManager.__new__(SyncManager)
+        sm.repo_dir = tmp_path / "repo"
+        sm.repo_dir.mkdir()
+        configs = sm.repo_dir / "configs"
+        configs.mkdir()
+        (configs / "gitignore_global").write_text("*.log\n.env\n")
+
+        # Create local gitignore_global with different content
+        local = tmp_path / ".gitignore_global"
+        local.write_text("*.log\n.DS_Store\n")
+
+        sm.config = MagicMock()
+        sm.config.is_agent_enabled.return_value = True
+
+        with patch.object(sm, "_get_global_gitignore_path", return_value=local):
+            with patch.object(sm, "_run_git", return_value="M configs/gitignore_global"):
+                with patch.object(sm, "_get_file_diff_stats", return_value={"added": 1, "removed": 1}):
+                    conflicts = sm._detect_conflicts()
+
+        gitignore_conflicts = [c for c in conflicts if c.filename == "gitignore_global"]
+        assert len(gitignore_conflicts) == 1
+        assert gitignore_conflicts[0].agent_name == "git"
+
+    def test_detect_conflicts_skips_gitignore_when_agents_only(self, tmp_path):
+        """agents_only flag should skip gitignore_global detection."""
+        sm = SyncManager.__new__(SyncManager)
+        sm.repo_dir = tmp_path / "repo"
+        sm.repo_dir.mkdir()
+        configs = sm.repo_dir / "configs"
+        configs.mkdir()
+        (configs / "gitignore_global").write_text("*.log\n")
+
+        local = tmp_path / ".gitignore_global"
+        local.write_text("*.log\n.DS_Store\n")
+
+        sm.config = MagicMock()
+
+        with patch.object(sm, "_get_global_gitignore_path", return_value=local):
+            with patch.object(sm, "_run_git", return_value="M configs/gitignore_global"):
+                conflicts = sm._detect_conflicts(agents_only=True)
+
+        gitignore_conflicts = [c for c in conflicts if c.filename == "gitignore_global"]
+        assert len(gitignore_conflicts) == 0
+
+
+class TestApplyGitignoreInteractive:
+    """Tests for interactive menu (Prompt.ask)."""
+
+    def _make_sm(self, tmp_path):
+        sm = SyncManager.__new__(SyncManager)
+        sm.repo_dir = tmp_path / "repo"
+        sm.repo_dir.mkdir()
+        configs = sm.repo_dir / "configs"
+        configs.mkdir()
+        sm.config = MagicMock()
+        return sm
+
+    def test_interactive_replace(self, tmp_path):
+        """User picks 1 → replaces local with remote."""
+        sm = self._make_sm(tmp_path)
+
+        remote = "*.log\n.env\nsecrets/\n"
+        (sm.repo_dir / "configs" / "gitignore_global").write_text(remote)
+
+        local = tmp_path / ".gitignore_global"
+        local.write_text("*.log\n")
+
+        with patch.object(sm, "_get_global_gitignore_path", return_value=local):
+            with patch("rich.prompt.Prompt.ask", return_value="1"):
+                changes = sm._apply_gitignore_global()
+
+        assert local.read_text() == remote
+        assert any("replaced" in c for c in changes)
+
+    def test_interactive_keep(self, tmp_path):
+        """User picks 2 → keeps local version."""
+        sm = self._make_sm(tmp_path)
+
+        remote = "*.log\n.env\nsecrets/\n"
+        (sm.repo_dir / "configs" / "gitignore_global").write_text(remote)
+
+        local = tmp_path / ".gitignore_global"
+        local.write_text("*.log\n")
+
+        with patch.object(sm, "_get_global_gitignore_path", return_value=local):
+            with patch("rich.prompt.Prompt.ask", return_value="2"):
+                changes = sm._apply_gitignore_global()
+
+        assert local.read_text() == "*.log\n"  # Unchanged
+        assert any("kept" in c for c in changes)
+
+    def test_interactive_merge(self, tmp_path):
+        """User picks 3 → merges missing patterns into local."""
+        sm = self._make_sm(tmp_path)
+
+        remote = "*.log\n.env\nsecrets/\n"
+        (sm.repo_dir / "configs" / "gitignore_global").write_text(remote)
+
+        local = tmp_path / ".gitignore_global"
+        local.write_text("*.log\n")
+
+        with patch.object(sm, "_get_global_gitignore_path", return_value=local):
+            with patch("rich.prompt.Prompt.ask", return_value="3"):
+                changes = sm._apply_gitignore_global()
+
+        content = local.read_text()
+        assert "*.log" in content
+        assert ".env" in content
+        assert "secrets/" in content
+        assert any("merged" in c for c in changes)
