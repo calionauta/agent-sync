@@ -649,6 +649,31 @@ class SyncManager:
                                 )
                                 conflicts.append(conflict)
         
+        # Check global gitignore
+        if not skills_only and not agents_only:
+            gitignore_repo = self.repo_dir / "configs" / "gitignore_global"
+            if gitignore_repo.exists():
+                relative_path = "configs/gitignore_global"
+                local_gitignore = self._get_global_gitignore_path()
+
+                if local_gitignore and local_gitignore.exists():
+                    # Check if local version differs from repo version
+                    try:
+                        local_content = local_gitignore.read_text(encoding="utf-8")
+                        remote_content = gitignore_repo.read_text(encoding="utf-8")
+                        if local_content != remote_content:
+                            diff_stats = self._get_file_diff_stats(relative_path)
+                            conflict = PullConflict(
+                                agent_name="git",
+                                filename="gitignore_global",
+                                local_path=local_gitignore,
+                                remote_path=Path(relative_path),
+                                diff_stats=diff_stats,
+                            )
+                            conflicts.append(conflict)
+                    except (OSError, UnicodeDecodeError):
+                        pass
+
         return conflicts
     
     def _get_file_diff_stats(self, file_path: str) -> dict:
@@ -2470,7 +2495,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                 if not dry_run:
                     dest.write_text(remote_content, encoding="utf-8")
                     self._run_git("config", "--global", "core.excludesFile", str(dest))
-                changes.append(f"gitignore_global: created {dest}")
+                changes.append(f"gitignore_global: created {dest}")  # Reports even in dry-run
                 return changes
 
             try:
@@ -2519,7 +2544,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
             # --- Interactive prompt ---
             try:
-                from rich.prompt import Confirm
+                from rich.prompt import Confirm, Prompt
                 console.print("\n[yellow]📄 .gitignore_global — differences found:[/yellow]")
                 if added:
                     console.print("  [green]+ New patterns (in remote):[/green]")
@@ -2543,12 +2568,11 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                     )
 
                 console.print("\nOptions:")
-                console.print("  [1] Replace with remote version")
-                console.print("  [2] Keep local version")
-                console.print("  [3] Merge (add missing patterns to local)")
-                console.print("  [s] Skip")
+                console.print("  [green][1][/green] Replace with remote version")
+                console.print("  [yellow][2][/yellow] Keep local version")
+                console.print("  [cyan][3][/cyan] Merge (add missing patterns to local)")
 
-                choice = input("\nChoice [1/2/3/s]: ").strip().lower()
+                choice = Prompt.ask("Choice", choices=["1", "2", "3"], default="2")
 
                 if choice == "1":
                     if not dry_run:
