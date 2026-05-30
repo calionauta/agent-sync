@@ -528,6 +528,10 @@ class SyncManager:
         else:
             console.print("[dim]Skipping configs (skills/agents-only mode)[/dim]")
 
+        # Apply global gitignore
+        if not skills_only and not agents_only:
+            changes.extend(self._apply_gitignore_global(force=force, dry_run=dry_run))
+
         # Apply skills (or skip based on flags)
         if not configs_only and not agents_only:
             skill_changes = self._apply_synced_skills()
@@ -826,6 +830,17 @@ class SyncManager:
         
         # Always parse working tree changes (unstaged)
         changed_files = []
+
+        # Stage global gitignore
+        if not skills_only:
+            gitignore_file = self._stage_gitignore_global()
+            if gitignore_file:
+                changed_files.append({
+                    'path': gitignore_file,
+                    'status': 'M',
+                    'label': 'global gitignore',
+                    'directory_count': 0,
+                })
         for line in status.split("\n"):
             stripped = line.strip()
             if not stripped:
@@ -2373,6 +2388,186 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             console.print(f"  [green]✓ Restored extension: {agent_name}-{extension_dir}[/green]")
 
         return restored
+
+    # -----------------------------------------------------------------------
+    # Global gitignore sync
+    # -----------------------------------------------------------------------
+
+    CRITICAL_GITIGNORE_PATTERNS = frozenset({
+        "*.pem", "*.key", "*.secret", "*.token",
+        ".env", ".env.*", "*.env.*",
+        "secrets/", "credentials/", "tokens/", "api_keys/",
+        "mcp-secrets",
+    })
+
+    def _get_global_gitignore_path(self) -> Optional[Path]:
+        """Return the user's global gitignore path, or None if not configured."""
+        try:
+            result = subprocess.run(
+                ["git", "config", "--global", "core.excludesFile"],
+                capture_output=True, text=True, check=False, timeout=10,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                path_str = os.path.expanduser(result.stdout.strip())
+                path = Path(path_str)
+                if path.exists():
+                    return path
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+        # Fallback: common default locations
+        for candidate in [
+            Path.home() / ".gitignore_global",
+            Path.home() / ".config" / "git" / "ignore",
+            Path.home() / ".gitignore",
+        ]:
+            if candidate.exists():
+                return candidate
+        return None
+
+    def _stage_gitignore_global(self) -> Optional[str]:
+        """Backup the user's global gitignore to the repo.
+
+        Returns the repo-relative filename if staged, None otherwise.
+        """
+        global_path = self._get_global_gitignore_path()
+        if global_path is None:
+            return None
+
+        try:
+            dest = self.repo_dir / "configs" / "gitignore_global"
+            dest.parent.mkdir(parents=True, exist_ok=True)
+
+            src_content = global_path.read_text(encoding="utf-8")
+            if dest.exists() and dest.read_text(encoding="utf-8") == src_content:
+                return None  # Already up-to-date
+
+            dest.write_text(src_content, encoding="utf-8")
+            return "configs/gitignore_global"
+        except (OSError, PermissionError):
+            return None
+
+    def _apply_gitignore_global(self, force: bool = False, dry_run: bool = False) -> list[str]:
+        """Apply the global gitignore from the synced repo.
+
+        Shows diff and asks user for replace/keep/merge.
+        Returns list of change descriptions.
+        """
+        changes = []
+        repo_file = self.repo_dir / "configs" / "gitignore_global"
+        if not repo_file.exists():
+            return changes
+
+        remote_content = repo_file.read_text(encoding="utf-8")
+        remote_patterns = {l.strip() for l in remote_content.splitlines()
+                           if l.strip() and not l.strip().startswith("#")}
+
+        local_path = self._get_global_gitignore_path()
+
+        # --- Local file doesn't exist: offer to create ---
+        if local_path is None:
+            if force:
+                dest = Path.home() / ".gitignore_global"
+                if not dry_run:
+                    dest.write_text(remote_content, encoding="utf-8")
+                    self._run_git("config", "--global", "core.excludesFile", str(dest))
+                changes.append(f"gitignore_global: created {dest}")
+                return changes
+
+            try:
+                from rich.prompt import Confirm
+                console.print("\n[yellow]📄 .gitignore_global not found on this machine.[/yellow]")
+                console.print("[dim]Remote repo contains:")
+                for line in remote_content.splitlines()[:15]:
+                    console.print(f"  {line}")
+                if len(remote_content.splitlines()) > 15:
+                    console.print(f"  ... and {len(remote_content.splitlines()) - 15} more lines")
+                console.print("[/dim]")
+
+                if Confirm.ask("Create ~/.gitignore_global from remote version?", default=True):
+                    if not dry_run:
+                        dest = Path.home() / ".gitignore_global"
+                        dest.write_text(remote_content, encoding="utf-8")
+                        self._run_git("config", "--global", "core.excludesFile", str(dest))
+                    changes.append("gitignore_global: created from remote")
+            except (EOFError, KeyboardInterrupt):
+                pass
+
+        # --- Local file exists: diff and prompt ---
+        else:
+            local_content = local_path.read_text(encoding="utf-8")
+            if local_content == remote_content:
+                return changes  # Identical
+
+            local_patterns = {l.strip() for l in local_content.splitlines()
+                               if l.strip() and not l.strip().startswith("#")}
+
+            added = remote_patterns - local_patterns
+            removed = local_patterns - remote_patterns
+
+            if not added and not removed:
+                return changes  # Only comment differences
+
+            # --- Force mode: merge (add missing, keep local) ---
+            if force:
+                if not dry_run:
+                    merged_lines = local_content.rstrip() + "\n"
+                    for pattern in sorted(added):
+                        merged_lines += f"{pattern}\n"
+                    local_path.write_text(merged_lines, encoding="utf-8")
+                changes.append(f"gitignore_global: merged {len(added)} new patterns")
+                return changes
+
+            # --- Interactive prompt ---
+            try:
+                from rich.prompt import Confirm
+                console.print("\n[yellow]📄 .gitignore_global — differences found:[/yellow]")
+                if added:
+                    console.print("  [green]+ New patterns (in remote):[/green]")
+                    for p in sorted(added):
+                        console.print(f"    + {p}")
+                if removed:
+                    console.print("  [red]- Patterns only on this machine:[/red]")
+                    for p in sorted(removed):
+                        console.print(f"    - {p}")
+
+                # Security warning
+                missing_critical = self.CRITICAL_GITIGNORE_PATTERNS - local_patterns
+                if missing_critical:
+                    console.print(
+                        f"\n  [bold red]⚠  Your local gitignore is missing critical security patterns:[/bold red]"
+                    )
+                    for p in sorted(missing_critical):
+                        console.print(f"    ⚠  {p}")
+                    console.print(
+                        "  [dim]These patterns prevent agents from seeing sensitive files.[/dim]"
+                    )
+
+                console.print("\nOptions:")
+                console.print("  [1] Replace with remote version")
+                console.print("  [2] Keep local version")
+                console.print("  [3] Merge (add missing patterns to local)")
+                console.print("  [s] Skip")
+
+                choice = input("\nChoice [1/2/3/s]: ").strip().lower()
+
+                if choice == "1":
+                    if not dry_run:
+                        local_path.write_text(remote_content, encoding="utf-8")
+                    changes.append("gitignore_global: replaced with remote version")
+                elif choice == "3":
+                    if not dry_run:
+                        merged_lines = local_content.rstrip() + "\n"
+                        for pattern in sorted(added):
+                            merged_lines += f"{pattern}\n"
+                        local_path.write_text(merged_lines, encoding="utf-8")
+                    changes.append(f"gitignore_global: merged {len(added)} new patterns")
+                else:
+                    changes.append("gitignore_global: kept local version")
+
+            except (EOFError, KeyboardInterrupt):
+                changes.append("gitignore_global: skipped")
+
+        return changes
 
     def _get_github_user(self) -> str:
         """Get current GitHub username."""
