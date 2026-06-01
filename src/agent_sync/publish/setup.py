@@ -420,12 +420,11 @@ def _print_tui_footer(commands: list[tuple[str, str]]) -> None:
 
 
 def _handle_number_input(state: SelectionState, input_str: str) -> None:
-    """Handle number input for state."""
+    """Handle number input for state — toggles each given index."""
     from .models import parse_number_input
     
     try:
         indices = parse_number_input(input_str)
-        state.selected = {src: set() for src in state.items.keys()}
         for idx in indices:
             state.toggle_by_index(idx)
     except (ValueError, TypeError):
