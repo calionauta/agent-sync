@@ -87,9 +87,28 @@ class PullConflict:
 
 
 @dataclass
+class SkillDrift:
+    """Represents a skill whose local content differs from the repo version."""
+    name: str
+    files_changed: int
+    local_path: Path
+    repo_path: Path
+    file_details: list[dict] = field(default_factory=list)
+
+    @property
+    def display_name(self) -> str:
+        return self.name
+
+    @property
+    def diff_summary(self) -> str:
+        return f"{self.files_changed} file(s) modified"
+
+
+@dataclass
 class PullSummary:
     """Summary of a pull operation."""
     conflicts: list[PullConflict] = field(default_factory=list)
+    skill_drifts: list[SkillDrift] = field(default_factory=list)
     new_files: int = 0
     updated_files: int = 0
     deleted_files: int = 0
@@ -99,8 +118,12 @@ class PullSummary:
         return len(self.conflicts) > 0
     
     @property
+    def has_skill_drifts(self) -> bool:
+        return len(self.skill_drifts) > 0
+    
+    @property
     def total_changes(self) -> int:
-        return len(self.conflicts) + self.new_files + self.updated_files + self.deleted_files
+        return len(self.conflicts) + len(self.skill_drifts) + self.new_files + self.updated_files + self.deleted_files
 
 
 def _get_app_name() -> str:
@@ -488,15 +511,31 @@ class SyncManager:
         # Fetch latest
         self._run_git("fetch", "origin")
         
-        # Detect conflicts before pulling
+        # Detect conflicts and skill drifts before pulling
         conflicts = self._detect_conflicts(skills_only, configs_only, agents_only)
-        summary = PullSummary(conflicts=conflicts)
+        skill_drifts = self._detect_skill_drifts(skills_filter, skills_exclude)
+        summary = PullSummary(conflicts=conflicts, skill_drifts=skill_drifts)
+
+        # Build the skill names to keep local from interactive choice
+        keep_local_skills: set[str] = set()
         
         # Dry run: show what would change
         if dry_run:
             self._show_pull_preview(summary)
             return ([], summary)
         
+        # Handle skill drifts (before git pull, so we know user intent)
+        if skill_drifts and not force:
+            if interactive:
+                apply_remote = self._handle_skill_drifts_interactive(skill_drifts)
+                if not apply_remote:
+                    keep_local_skills = {d.name for d in skill_drifts}
+            else:
+                # No interactive: keep local (current behavior)
+                keep_local_skills = {d.name for d in skill_drifts}
+        # Clear from summary since they've been resolved
+        summary.skill_drifts = []
+
         # Handle conflicts
         if conflicts and interactive and not force:
             if conflict_resolver:
@@ -534,7 +573,13 @@ class SyncManager:
 
         # Apply skills (or skip based on flags)
         if not configs_only and not agents_only:
-            skill_changes = self._apply_synced_skills()
+            skill_changes = self._apply_synced_skills(
+                skills_filter=skills_filter,
+                skills_exclude=skills_exclude,
+                force=force,
+                interactive=interactive,
+                keep_local_skills=keep_local_skills,
+            )
             changes.extend(skill_changes)
         else:
             console.print("[dim]Skipping skills (configs/agents-only mode)[/dim]")
@@ -695,7 +740,230 @@ class SyncManager:
             return stats
         except subprocess.CalledProcessError:
             return {"added": 0, "removed": 0}
-    
+
+    # ------------------------------------------------------------------ #
+    # Skill drift detection
+    # ------------------------------------------------------------------ #
+
+    def _compare_skill_dirs(self, local_dir: Path, repo_dir: Path) -> dict | None:
+        """Compare a local skill directory against the repo version recursively.
+
+        Returns a dict with 'files_changed' count and 'file_details' list,
+        or None if the directories are identical.
+        """
+        # Collect all relative paths from both sides
+        local_files: dict[str, Path] = {}
+        repo_files: dict[str, Path] = {}
+
+        if local_dir.is_dir():
+            for p in local_dir.rglob("*"):
+                if p.is_file() and not p.name.startswith("."):
+                    local_files[str(p.relative_to(local_dir))] = p
+
+        if repo_dir.is_dir():
+            for p in repo_dir.rglob("*"):
+                if p.is_file() and not p.name.startswith("."):
+                    repo_files[str(p.relative_to(repo_dir))] = p
+
+        all_paths = set(local_files) | set(repo_files)
+        file_details = []
+
+        for rel_path in sorted(all_paths):
+            local_p = local_files.get(rel_path)
+            repo_p = repo_files.get(rel_path)
+
+            if local_p and repo_p:
+                # Both sides: compare byte content
+                if self._same_content(local_p, repo_p):
+                    continue
+                # Count added/removed lines via text diff
+                local_lines = local_p.read_bytes().count(b"\n")
+                repo_lines = repo_p.read_bytes().count(b"\n")
+                added = max(0, repo_lines - local_lines)
+                removed = max(0, local_lines - repo_lines)
+                file_details.append({
+                    "path": rel_path,
+                    "local": local_p,
+                    "repo": repo_p,
+                    "added": added,
+                    "removed": removed,
+                })
+            elif local_p and not repo_p:
+                file_details.append({
+                    "path": rel_path,
+                    "local": local_p,
+                    "repo": None,
+                    "added": 0,
+                    "removed": local_p.read_bytes().count(b"\n") + 1,
+                })
+            elif repo_p and not local_p:
+                file_details.append({
+                    "path": rel_path,
+                    "local": None,
+                    "repo": repo_p,
+                    "added": repo_p.read_bytes().count(b"\n") + 1,
+                    "removed": 0,
+                })
+
+        if not file_details:
+            return None
+
+        return {
+            "files_changed": len(file_details),
+            "file_details": file_details,
+        }
+
+    def _detect_skill_drifts(
+        self,
+        skills_filter: Optional[list[str]] = None,
+        skills_exclude: Optional[list[str]] = None,
+    ) -> list[SkillDrift]:
+        """Detect skills whose local content differs from the repo version.
+
+        Only checks skills that exist in BOTH locations — orphan skills
+        (exist in only one place) are left untouched.
+        """
+        synced_skills_dir = self.repo_dir / "skills"
+        global_skills_dir = Path.home() / ".agents" / "skills"
+
+        if not synced_skills_dir.exists() or not global_skills_dir.exists():
+            return []
+
+        drifts = []
+        for skill_item in synced_skills_dir.glob("*"):
+            if skill_item.name.startswith("."):
+                continue
+
+            # Apply filter/exclude
+            if skills_filter and skill_item.name not in skills_filter:
+                continue
+            if skills_exclude and skill_item.name in skills_exclude:
+                continue
+
+            local_skill = global_skills_dir / skill_item.name
+            if not local_skill.exists():
+                continue  # orphan: only in repo, skip
+
+            diff = self._compare_skill_dirs(local_skill, skill_item)
+            if diff is not None:
+                drifts.append(SkillDrift(
+                    name=skill_item.name,
+                    files_changed=diff["files_changed"],
+                    file_details=diff["file_details"],
+                    local_path=local_skill,
+                    repo_path=skill_item,
+                ))
+
+        return drifts
+
+    def _show_skill_diff(self, drifts: list[SkillDrift]) -> None:
+        """Show diff for skill drifts using pager."""
+        import os
+        import subprocess
+        import tempfile
+
+        from rich.console import Console
+        console = Console()
+
+        if not drifts:
+            return
+
+        diff_segments = []
+        for drift in drifts:
+            for fd in drift.file_details:
+                label = f"{drift.name}/{fd['path']}"
+                # Get repo version via git show
+                repo_rel = f"skills/{drift.name}/{fd['path']}"
+                try:
+                    remote_content = self._run_git("show", f"origin/main:{repo_rel}")
+                except subprocess.CalledProcessError:
+                    remote_content = ""
+
+                # Read local version, with binary safety
+                try:
+                    local_content = fd["local"].read_text() if fd["local"] else ""
+                except (UnicodeDecodeError, Exception):
+                    local_content = ""
+
+                # Generate unified diff (unified_diff already outputs ---/+++ headers)
+                import difflib
+                diff_lines = list(difflib.unified_diff(
+                    local_content.splitlines(keepends=True),
+                    remote_content.splitlines(keepends=True),
+                    fromfile=f"a/{label}",
+                    tofile=f"b/{label}",
+                ))
+                if diff_lines:
+                    diff_segments.extend(diff_lines)
+                    diff_segments.append("\n")
+
+        full_diff = "".join(diff_segments)
+        if not full_diff.strip():
+            console.print("[dim]Files differ but could not generate diff.[/dim]")
+            return
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.diff', delete=False) as f:
+            f.write(full_diff)
+            diff_path = f.name
+
+        try:
+            pager = os.environ.get('PAGER', 'less')
+            subprocess.run(
+                [pager, diff_path],
+                stdin=subprocess.DEVNULL,
+                check=False,
+            )
+        except FileNotFoundError:
+            # Pager not available, fall back to printing inline
+            console.print("[yellow]Pager not found, showing diff inline:[/yellow]\n")
+            console.print(full_diff)
+        finally:
+            os.unlink(diff_path)
+
+    def _handle_skill_drifts_interactive(self, drifts: list[SkillDrift]) -> bool:
+        """Handle skill drifts interactively with user prompts.
+
+        Returns True if user chose to apply remote versions, False to keep local.
+        """
+        from rich.console import Console
+        from rich.prompt import Prompt
+
+        console = Console()
+
+        if not drifts:
+            return False
+
+        console.print("\n[bold yellow]⚠️  Skill Differences Detected[/bold yellow]\n")
+        console.print("[dim]Some skills have local changes that differ from the repository.[/dim]\n")
+
+        for i, drift in enumerate(drifts, 1):
+            console.print(f"{i}. {drift.name} ({drift.diff_summary})")
+
+        console.print()
+        console.print("[Enter] Keep local version (default)")
+        console.print("[a] Apply all remote versions (overwrite local)")
+        console.print("[v] View diff")
+        console.print("[q] Abort pull")
+        console.print()
+
+        while True:
+            choice = Prompt.ask(
+                "[cyan]Choose action[/cyan]",
+                choices=["a", "v", "q", ""],
+                default="",
+            )
+
+            if choice == "a":
+                console.print("[green]✓ Will apply remote skill versions[/green]")
+                return True
+            elif choice == "v":
+                self._show_skill_diff(drifts)
+            elif choice == "q":
+                raise RuntimeError("Pull aborted by user")
+            elif choice == "":
+                console.print("[dim]Keeping local skill versions.[/dim]")
+                return False
+
     def _show_pull_preview(self, summary: PullSummary) -> None:
         """Show a preview of what would be pulled."""
         from rich.console import Console
@@ -711,12 +979,19 @@ class SyncManager:
             for conflict in summary.conflicts:
                 console.print(f"  • {conflict.display_name} ({conflict.diff_summary})")
             console.print()
+
+        if summary.has_skill_drifts:
+            console.print(f"[yellow]⚠️  {len(summary.skill_drifts)} skill(s) with differences:[/yellow]")
+            for drift in summary.skill_drifts:
+                console.print(f"  • {drift.name} ({drift.diff_summary})")
+            console.print()
         
-        if summary.total_changes > len(summary.conflicts):
-            non_conflict = summary.total_changes - len(summary.conflicts)
-            console.print(f"[green]+ {non_conflict} file(s) to update (auto-apply)[/green]")
+        # Count non-conflict and non-drift changes
+        other = summary.new_files + summary.updated_files + summary.deleted_files
+        if other > 0:
+            console.print(f"[green]+ {other} file(s) to update (auto-apply)[/green]")
         
-        if not summary.has_conflicts and summary.total_changes == 0:
+        if not summary.has_conflicts and not summary.has_skill_drifts and other == 0:
             console.print("[dim]No changes to pull.[/dim]")
         
         console.print("\n[dim]Run without --dry-run to apply changes.[/dim]")
@@ -2163,6 +2438,9 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         self,
         skills_filter: Optional[list[str]] = None,
         skills_exclude: Optional[list[str]] = None,
+        force: bool = False,
+        interactive: bool = True,
+        keep_local_skills: Optional[set[str]] = None,
     ) -> list[str]:
         """
         Apply synced skills to local directories.
@@ -2175,6 +2453,10 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         Args:
             skills_filter: Only apply these specific skills (None = all)
             skills_exclude: Exclude these skills from being applied
+            force: Apply all remote versions without confirmation
+            interactive: Show interactive prompts for skill drifts
+            keep_local_skills: Pre-resolved set of skill names to keep local
+                              (when called from pull(), avoids double detection)
         """
         changes = []
         synced_skills_dir = self.repo_dir / "skills"
@@ -2208,6 +2490,23 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                 for ext_name in manifest.get("extensions", {}).keys():
                     extension_skill_names.add(ext_name)
 
+            # Detect skill drifts only if not pre-resolved by caller
+            if keep_local_skills is None:
+                skill_drifts = self._detect_skill_drifts(skills_filter, skills_exclude)
+                resolved_keep: set[str] = set()
+
+                if skill_drifts:
+                    if force:
+                        pass
+                    elif interactive:
+                        apply_remote = self._handle_skill_drifts_interactive(skill_drifts)
+                        if not apply_remote:
+                            resolved_keep = {d.name for d in skill_drifts}
+                    else:
+                        resolved_keep = {d.name for d in skill_drifts}
+            else:
+                resolved_keep = keep_local_skills
+
             for skill_item in synced_skills_dir.glob("*"):
                 if skill_item.name.startswith("."):
                     continue
@@ -2223,12 +2522,21 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                     continue
 
                 dest = global_skills_dir / skill_item.name
-                if not dest.exists() or (skill_item.is_file() and self._same_content(dest, skill_item)):
-                    if skill_item.is_dir():
-                        shutil.copytree(skill_item, dest, dirs_exist_ok=True)
-                    else:
-                        shutil.copy2(skill_item, dest)
-                    changes.append(f"global-skills: {skill_item.name}")
+
+                # Skip skills where user chose to keep local version
+                if skill_item.name in resolved_keep:
+                    continue
+
+                # Skip identical files to avoid unnecessary I/O
+                if dest.exists() and skill_item.is_file() and self._same_content(dest, skill_item):
+                    continue
+
+                # Copy: overwrites existing (for drifts/force) or creates new
+                if skill_item.is_dir():
+                    shutil.copytree(skill_item, dest, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(skill_item, dest)
+                changes.append(f"global-skills: {skill_item.name}")
 
         return changes
 
