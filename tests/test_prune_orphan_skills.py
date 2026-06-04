@@ -32,14 +32,19 @@ def _make_hub(tmp_path: Path, skill_names: list[str]) -> Path:
 
 
 def _make_sm(hub: Path, head_skills: list[str]):
-    """Create a SyncManager-like mock with _run_git and a HOME-returning Path.home."""
+    """Create a SyncManager-like mock with _run_git and a HOME-returning Path.home.
+
+    `head_skills` are the bare skill names (no `skills/` prefix); the mock
+    pretends git ls-tree returned the standard `skills/<name>` format, which
+    is what real git does when you query `HEAD skills/`.
+    """
     sm = MagicMock()
     sm._run_git = MagicMock()
 
     def fake_run_git(*args, **kwargs):
-        # ls-tree returns the list of skill names (one per line)
+        # ls-tree returns `skills/<name>` per line (real git behavior)
         if args[:3] == ("ls-tree", "--name-only", "HEAD"):
-            return "\n".join(head_skills)
+            return "\n".join(f"skills/{n}" for n in head_skills)
         # Empty output for everything else
         return ""
 
