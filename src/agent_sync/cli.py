@@ -239,21 +239,21 @@ def push(
 
     commit_msg = message or "chore: sync config updates"
 
-    do_skills = not configs_only
-    do_configs = not skills_only
-    if not skills_only and not configs_only:
-        do_skills = True
-        do_configs = True
-
-    # Stage and get changed files (don't commit yet)
+    # Pass the raw flags directly. With neither flag, both are False and
+    # _push_stage_and_get_changes runs all three branches (skills, configs, agents).
+    # `--skills-only` / `--configs-only` flip the respective flag to True,
+    # which makes it skip the other branches. The previous
+    # `do_skills = not configs_only` dance effectively set configs_only=True
+    # by default, which made the prune check `not configs_only` always False
+    # — prune never ran on default pushes.
     changed_files = sync_manager._push_stage_and_get_changes(
         message=commit_msg,
         skills_filter=list(skill) if skill else None,
         agents_filter=list(agent) if agent else None,
         skills_exclude=list(exclude_skill) if exclude_skill else None,
         agents_exclude=list(exclude_agent) if exclude_agent else None,
-        skills_only=do_skills,
-        configs_only=do_configs,
+        skills_only=skills_only,
+        configs_only=configs_only,
         prune=not no_prune,
     )
 
