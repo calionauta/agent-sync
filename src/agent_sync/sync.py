@@ -58,7 +58,7 @@ def _sanitize_git_output(text: str) -> str:
 @dataclass
 class PullConflict:
     """Represents a file conflict between local and remote versions."""
-    
+
     agent_name: str  # e.g., "pi.dev", "gemini-cli"
     filename: str  # e.g., "AGENTS.md", "settings.json"
     local_path: Path  # Local file path
@@ -66,12 +66,12 @@ class PullConflict:
     local_modified: Optional[datetime] = None
     remote_modified: Optional[datetime] = None
     diff_stats: dict = field(default_factory=lambda: {"added": 0, "removed": 0})  # Lines added/removed
-    
+
     @property
     def display_name(self) -> str:
         """Display name for UI."""
         return f"{self.agent_name}/{self.filename}"
-    
+
     @property
     def diff_summary(self) -> str:
         """Short summary of changes for display."""
@@ -112,15 +112,15 @@ class PullSummary:
     new_files: int = 0
     updated_files: int = 0
     deleted_files: int = 0
-    
+
     @property
     def has_conflicts(self) -> bool:
         return len(self.conflicts) > 0
-    
+
     @property
     def has_skill_drifts(self) -> bool:
         return len(self.skill_drifts) > 0
-    
+
     @property
     def total_changes(self) -> int:
         return len(self.conflicts) + len(self.skill_drifts) + self.new_files + self.updated_files + self.deleted_files
@@ -154,27 +154,27 @@ class SyncManager:
         "*accounts*.json",
         "*overrides*.json*",
         "*credentials*.json",
-        
+
         # Lock files
         "*.lock",
         "package-lock.json",
         "bun.lock",
-        
+
         # System files
         ".DS_Store",
-        
+
         # Agent session state (not configuration)
         "history/",
         "tmp/",
         "state.json",
         "projects.json",
         "installation_id",
-        
+
         # Transient files
         "*.bak",
         "*.log",
         "*.log.*",
-        
+
         # Database files
         "*.db",
         "*.mdb",
@@ -358,7 +358,7 @@ class SyncManager:
 
         # Repo doesn't exist - create it
         visibility = "private" if private else "public"
-        
+
         # Inform user about what we're creating
         if private:
             console.print(f"\n[green]🔒 Creating PRIVATE repository: {repo_name}[/green]")
@@ -510,7 +510,7 @@ class SyncManager:
 
         # Fetch latest
         self._run_git("fetch", "origin")
-        
+
         # Detect conflicts and skill drifts before pulling
         conflicts = self._detect_conflicts(skills_only, configs_only, agents_only)
         skill_drifts = self._detect_skill_drifts(skills_filter, skills_exclude)
@@ -518,12 +518,12 @@ class SyncManager:
 
         # Build the skill names to keep local from interactive choice
         keep_local_skills: set[str] = set()
-        
+
         # Dry run: show what would change
         if dry_run:
             self._show_pull_preview(summary)
             return ([], summary)
-        
+
         # Handle skill drifts (before git pull, so we know user intent)
         if skill_drifts and not force:
             if interactive:
@@ -544,12 +544,12 @@ class SyncManager:
                 self._handle_conflicts_interactive(conflicts)
             # Mark conflicts as resolved (local version kept)
             summary.conflicts = []  # Cleared after resolution
-        
+
         # Check for local changes in repo (unstaged)
         # Ignore manifest file which is auto-generated
         status = self._run_git("status", "--porcelain")
         # Filter out manifest file (it's auto-generated, not user content)
-        relevant_changes = [line for line in status.split('\n') 
+        relevant_changes = [line for line in status.split('\n')
                          if line and '.agent-sync-manifest.json' not in line]
         if relevant_changes and not force:
             raise RuntimeError(
@@ -594,7 +594,7 @@ class SyncManager:
         self._save_state("pulled", self.config.repo_url)
 
         return (changes, summary)
-    
+
     def _detect_conflicts(
         self,
         skills_only: bool = False,
@@ -602,65 +602,65 @@ class SyncManager:
         agents_only: bool = False,
     ) -> list[PullConflict]:
         """Detect files that have been modified both locally and remotely.
-        
+
         A conflict occurs when:
         1. The file exists locally
         2. The file has been modified locally (unstaged changes in git)
         3. The remote version is different from the local version
-        
+
         Args:
             skills_only: Only check skills
             configs_only: Only check configs
             agents_only: Only check agents
-            
+
         Returns:
             List of conflicts detected
         """
         from .agents import get_all_agents
-        
+
         conflicts = []
-        
+
         # Check unstaged changes in the repo
         status_output = self._run_git("status", "--porcelain")
         unstaged_files = set()
-        
+
         for line in status_output.strip().split("\n"):
             if line and line[1] == " " and not line.startswith("?"):  # Unstaged changes (not untracked)
                 # Format: XY filename, XY is status (M = modified, D = deleted, etc.)
                 parts = line.split(" ", 1)
                 if len(parts) >= 2:
                     unstaged_files.add(parts[1])
-        
+
         # Get list of files in HEAD (what's in the repo)
         try:
             head_files = self._run_git("ls-tree", "-r", "--name-only", "HEAD").strip().split("\n")
         except subprocess.CalledProcessError:
             head_files = []  # Empty repo
-        
+
         # Check configs
         if not skills_only and not agents_only:
             for agent in get_all_agents():
                 # Skip if agent sync is disabled
                 if not self.config.is_agent_enabled(agent.name):
                     continue
-                
+
                 synced_config_dir = self.repo_dir / "configs" / agent.name
                 if not synced_config_dir.exists():
                     continue
-                    
+
                 for config_file in synced_config_dir.glob("*"):
                     if not config_file.is_file():
                         continue
-                        
+
                     relative_path = str(config_file.relative_to(self.repo_dir))
-                    
+
                     # Check if this file is in unstaged changes
                     if relative_path in unstaged_files:
                         # Get diff stats
                         diff_stats = self._get_file_diff_stats(relative_path)
-                        
+
                         local_path = agent.config_path.parent / config_file.name
-                        
+
                         conflict = PullConflict(
                             agent_name=agent.name,
                             filename=config_file.name,
@@ -669,7 +669,7 @@ class SyncManager:
                             diff_stats=diff_stats,
                         )
                         conflicts.append(conflict)
-        
+
         # Check skills
         if not configs_only and not agents_only:
             synced_skills_dir = self.repo_dir / "skills"
@@ -677,14 +677,14 @@ class SyncManager:
                 for skill_item in synced_skills_dir.glob("*"):
                     if skill_item.name.startswith(".") or not skill_item.is_dir():
                         continue
-                        
+
                     for skill_file in skill_item.rglob("*"):
                         if skill_file.is_file() and skill_file.name != MANIFEST_FILENAME:
                             relative_path = str(skill_file.relative_to(self.repo_dir))
-                            
+
                             if relative_path in unstaged_files:
                                 diff_stats = self._get_file_diff_stats(relative_path)
-                                
+
                                 conflict = PullConflict(
                                     agent_name="skills",
                                     filename=f"{skill_item.name}/{skill_file.name}",
@@ -693,7 +693,7 @@ class SyncManager:
                                     diff_stats=diff_stats,
                                 )
                                 conflicts.append(conflict)
-        
+
         # Check global gitignore
         if not skills_only and not agents_only:
             gitignore_repo = self.repo_dir / "configs" / "gitignore_global"
@@ -720,7 +720,7 @@ class SyncManager:
                         pass
 
         return conflicts
-    
+
     def _get_file_diff_stats(self, file_path: str) -> dict:
         """Get diff statistics (added/removed lines) for a file."""
         try:
@@ -820,7 +820,7 @@ class SyncManager:
     ) -> list[SkillDrift]:
         """Detect skills whose local content differs from the repo version.
 
-        Only checks skills that exist in BOTH locations — orphan skills
+        Only checks skills that exist in BOTH locations - orphan skills
         (exist in only one place) are left untouched.
         """
         synced_skills_dir = self.repo_dir / "skills"
@@ -969,11 +969,11 @@ class SyncManager:
         from rich.console import Console
         from rich.panel import Panel
         from rich.table import Table
-        
+
         console = Console()
-        
+
         console.print("\n[bold cyan]Pull Preview[/bold cyan]\n")
-        
+
         if summary.has_conflicts:
             console.print(f"[yellow]⚠️  {len(summary.conflicts)} conflict(s):[/yellow]")
             for conflict in summary.conflicts:
@@ -985,44 +985,44 @@ class SyncManager:
             for drift in summary.skill_drifts:
                 console.print(f"  • {drift.name} ({drift.diff_summary})")
             console.print()
-        
+
         # Count non-conflict and non-drift changes
         other = summary.new_files + summary.updated_files + summary.deleted_files
         if other > 0:
             console.print(f"[green]+ {other} file(s) to update (auto-apply)[/green]")
-        
+
         if not summary.has_conflicts and not summary.has_skill_drifts and other == 0:
             console.print("[dim]No changes to pull.[/dim]")
-        
+
         console.print("\n[dim]Run without --dry-run to apply changes.[/dim]")
-    
+
     def _handle_conflicts_interactive(self, conflicts: list[PullConflict]) -> None:
         """Handle conflicts interactively with user prompts."""
         from rich.console import Console
         from rich.prompt import Prompt
-        
+
         console = Console()
-        
+
         console.print("\n[bold yellow]⚠️  Conflicts Detected[/bold yellow]\n")
         console.print("[dim]Your local changes differ from remote.[/dim]\n")
-        
+
         for i, conflict in enumerate(conflicts, 1):
             console.print(f"{i}. {conflict.display_name} ({conflict.diff_summary})")
-        
+
         console.print()
         console.print("[Enter] Keep local version (default)")
         console.print("[a] Apply all conflicts (use remote version)")
         console.print("[v] View diff")
         console.print("[q] Abort")
         console.print()
-        
+
         while True:
             choice = Prompt.ask(
                 "[cyan]Choose action[/cyan]",
                 choices=["a", "v", "q", ""],
                 default="",
             )
-            
+
             if choice == "a":
                 # Apply all remote - discard local changes in repo
                 # git pull will merge remote over our cleaned state
@@ -1037,45 +1037,45 @@ class SyncManager:
                 # Keep local - just return, local changes in repo will be preserved
                 console.print("[dim]Keeping local versions.[/dim]")
                 return
-    
+
     def _show_conflict_diff(self, conflict: PullConflict | None) -> None:
         """Show diff for a conflict using pager."""
         import os
         import subprocess
         import tempfile
-        
+
         if not conflict:
             return
-            
+
         from rich.console import Console
         console = Console()
-        
+
         # Get remote version to temp file
         try:
             remote_content = self._run_git("show", f"origin/main:{conflict.remote_path}")
         except subprocess.CalledProcessError:
             remote_content = ""
-        
+
         # Read local version
         try:
             local_content = conflict.local_path.read_text()
         except (FileNotFoundError, PermissionError):
             local_content = ""
-        
+
         # Create temp files for diff
         with tempfile.NamedTemporaryFile(mode='w', suffix='.local', delete=False) as local_file:
             local_file.write(local_content)
             local_temp = local_file.name
-        
+
         with tempfile.NamedTemporaryFile(mode='w', suffix='.remote', delete=False) as remote_file:
             remote_file.write(remote_content)
             remote_temp = remote_file.name
-        
+
         try:
             # Show diff using pager
             pager = os.environ.get('PAGER', 'less')
             subprocess.run(
-                [pager, '-d', '-c', 
+                [pager, '-d', '-c',
                  f'--- Local: {conflict.display_name}\n+++ Remote: {conflict.display_name}',
                  local_temp, remote_temp],
                 stdin=subprocess.DEVNULL
@@ -1094,6 +1094,7 @@ class SyncManager:
         agents_filter: Optional[list[str]] = None,
         skills_exclude: Optional[list[str]] = None,
         agents_exclude: Optional[list[str]] = None,
+        prune: bool = True,
     ) -> list[dict]:
         """Stage files and return changed files list WITHOUT committing or pushing.
 
@@ -1101,7 +1102,7 @@ class SyncManager:
             List of dicts with 'path', 'status', 'label', 'directory_count'
         """
         from .agents import get_all_agents
-        
+
         if not self.repo_dir.exists():
             raise RuntimeError("Not linked to a repository. Run 'agent-sync init' or 'link' first")
 
@@ -1109,7 +1110,7 @@ class SyncManager:
         # Count only available agents that are enabled (not all registry entries)
         agents_count = len([a for a in get_all_agents()
                            if self.config.is_agent_enabled(a.name) and a.is_available()])
-        
+
         if skills_only and not configs_only:
             console.print(f"  [dim]📦 Syncing {skills_count} skills...[/dim]")
             self._stage_skills()
@@ -1127,7 +1128,7 @@ class SyncManager:
 
         # Parse BOTH staged and unstaged changes
         status = self._run_git("status", "--porcelain")
-        
+
         # Always parse working tree changes (unstaged)
         changed_files = []
 
@@ -1145,7 +1146,7 @@ class SyncManager:
             stripped = line.strip()
             if not stripped:
                 continue
-            
+
             # Parse porcelain format: XY PATH or R100 OLD\tNEW (tab-separated)
             if '\t' in stripped:
                 status_code = stripped[:1]
@@ -1154,15 +1155,15 @@ class SyncManager:
                 parts = stripped.split()
                 status_code = parts[0]
                 path = parts[-1]
-            
+
             # Skip manifest file
             if path == '.agent-sync-manifest.json':
                 continue
-            
+
             # Skip if already in list
             if any(c['path'] == path for c in changed_files):
                 continue
-            
+
             # Classify the status for a human-readable label
             if status_code == '??':
                 label = 'added'
@@ -1172,7 +1173,7 @@ class SyncManager:
                 label = 'added'
             else:
                 label = 'modified'
-            
+
             # Count files if git reported a whole directory (trailing slash)
             directory_count = None
             if path.endswith('/'):
@@ -1180,15 +1181,75 @@ class SyncManager:
                 if dir_path.exists():
                     directory_count = sum(1 for _ in dir_path.rglob('*') if _.is_file())
                 path = path.rstrip('/')
-            
+
             changed_files.append({
                 'path': path,
                 'status': status_code,
                 'label': label,
                 'directory_count': directory_count,
             })
-        
+
+        # Mirror-prune: remove skills that exist in HEAD but not in local hub.
+        # This makes the private repo a true mirror of ~/.agents/skills/ instead
+        # of an accumulating archive. Each push records the prune as a normal
+        # `D` entry in the commit (history preserved, no --force).
+        if prune and not configs_only and not agents_only:
+            changed_files.extend(self._prune_orphan_skills())
+
         return changed_files
+
+    def _prune_orphan_skills(self) -> list[dict]:
+        """Detect skills tracked in HEAD but missing from ~/.agents/skills/.
+
+        For each such skill, `git rm --cached` it (stages the deletion in the
+        next commit) and returns a synthetic change entry so the caller can
+        show it in the +/~/− summary.
+
+        Returns:
+            List of change dicts (one per pruned skill) with status='D' and
+            label='deleted'.
+        """
+        local_hub = Path.home() / ".agents" / "skills"
+        if not local_hub.exists():
+            return []
+
+        # Skills in the local hub (authoritative source)
+        local_skill_names = {
+            d.name for d in local_hub.iterdir()
+            if d.is_dir() and not d.name.startswith(".")
+        }
+
+        # Skills tracked in HEAD under skills/
+        try:
+            head_ls = self._run_git("ls-tree", "--name-only", "HEAD", "skills/")
+        except subprocess.CalledProcessError:
+            return []  # Empty repo or no skills/ yet
+        head_skill_names = {
+            name for name in head_ls.split("\n")
+            if name and not name.startswith(".")
+        }
+
+        orphan_skills = sorted(head_skill_names - local_skill_names)
+        if not orphan_skills:
+            return []
+
+        pruned: list[dict] = []
+        for orphan in orphan_skills:
+            path = f"skills/{orphan}"
+            try:
+                self._run_git("rm", "-r", "--cached", path)
+            except subprocess.CalledProcessError as e:
+                console.print(
+                    f"[yellow]⚠ Could not prune {path}: {e.stderr.strip()}[/yellow]"
+                )
+                continue
+            pruned.append({
+                "path": path + "/",
+                "status": "D",
+                "label": "deleted",
+                "directory_count": None,
+            })
+        return pruned
     def sync(self, force: bool = False, skills: bool = True, configs: bool = True, agents: bool = False) -> bool:
         """
         Run full sync cycle (pull + push).
@@ -1211,9 +1272,20 @@ class SyncManager:
         except Exception:
             return False
 
-    def push(self, message: str = "chore: sync config updates", skills_only: bool = False, configs_only: bool = False, agents_only: bool = False) -> list[str]:
-        """Commit and push local changes. Returns changed_files list."""
-        changed_files = self._push_stage_and_get_changes(message, skills_only, configs_only, agents_only)
+    def push(self, message: str = "chore: sync config updates", skills_only: bool = False, configs_only: bool = False, agents_only: bool = False, prune: bool = True) -> list[str]:
+        """Commit and push local changes to the private repo.
+
+        When `prune` is True (default), skills that exist in HEAD but are
+        missing from the local ~/.agents/skills/ are removed via `git rm`.
+        This makes the private repo a mirror of local state (no accumulating
+        archive). Pass `prune=False` for legacy additive-only behavior.
+
+        Returns:
+            List of change dicts (path, status, label, directory_count).
+        """
+        changed_files = self._push_stage_and_get_changes(
+            message, skills_only, configs_only, agents_only, prune=prune
+        )
         if not changed_files:
             return []
 
@@ -1515,7 +1587,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             # Skip if agent sync is disabled
             if not self.config.is_agent_enabled(agent.name):
                 continue
-            
+
             # Apply filter/exclude logic
             if agents_filter and agent.name not in agents_filter:
                 continue
@@ -2308,7 +2380,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         agents_exclude: Optional[list[str]] = None,
     ) -> list[str]:
         """Apply synced configurations to local agent directories.
-        
+
         Args:
             agents_filter: Only apply configs for these agents (None = all)
             agents_exclude: Skip configs for these agents
@@ -2340,7 +2412,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             # Restore pi.dev extra paths from repo to original locations
             if agent.name == "pi.dev":
                 self._restore_pi_extra_paths(agent, synced_config_dir, changes)
-            
+
             extra_paths = agent.data.get("extra_paths", {})
             if extra_paths and agent.name != "pi.dev":
                 for category, source_paths in extra_paths.items():
@@ -2514,7 +2586,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                 # Skip extension skills (they were restored above)
                 if skill_item.name in extension_skill_names:
                     continue
-                
+
                 # Apply filter/exclude logic
                 if skills_filter and skill_item.name not in skills_filter:
                     continue
@@ -2853,7 +2925,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             # --- Interactive prompt ---
             try:
                 from rich.prompt import Confirm, Prompt
-                console.print("\n[yellow]📄 .gitignore_global — differences found:[/yellow]")
+                console.print("\n[yellow]📄 .gitignore_global - differences found:[/yellow]")
                 if added:
                     console.print("  [green]+ New patterns (in remote):[/green]")
                     for p in sorted(added):

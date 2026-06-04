@@ -200,6 +200,7 @@ def sync(force: bool, skills_only: bool, configs_only: bool, agents_only: bool):
 @click.option("--agent", "-a", multiple=True, help="Specific agent config to push (can repeat)")
 @click.option("--exclude-skill", multiple=True, help="Skill to exclude (can repeat)")
 @click.option("--exclude-agent", multiple=True, help="Agent to exclude (can repeat)")
+@click.option("--no-prune", is_flag=True, help="Disable mirror-prune (additive only; orphan skills in remote are kept)")
 def push(
     dry_run: bool,
     message: Optional[str],
@@ -209,14 +210,21 @@ def push(
     agent: tuple,
     exclude_skill: tuple,
     exclude_agent: tuple,
+    no_prune: bool,
 ):
     """Push local changes to the remote repository.
 
+    By default, the private repo is kept as a mirror of the local hub: any
+    skill that exists in the remote `skills/` but is missing from
+    `~/.agents/skills/` is removed in the same commit (history preserved as
+    `D` entries). Use --no-prune for the legacy additive behavior.
+
     Examples:
-      agent-sync push                    # Push all
+      agent-sync push                    # Push all (mirror, default)
       agent-sync push --skill dogfood   # Specific skill
       agent-sync push --agent pi.dev    # Specific agent config
       agent-sync push --exclude-skill deprecated-skill  # Exclude skill
+      agent-sync push --no-prune        # Add-only, keep remote orphans
       agent-sync push --dry-run         # Preview changes
     """
     from ._tui import print_footer, build_footer_commands
@@ -246,6 +254,7 @@ def push(
         agents_exclude=list(exclude_agent) if exclude_agent else None,
         skills_only=do_skills,
         configs_only=do_configs,
+        prune=not no_prune,
     )
 
     # No changes?
@@ -1244,6 +1253,7 @@ def centralize_skills(copy: bool, push: bool, dry_run: bool):
 @click.option("--list-sources", "list_sources_flag", is_flag=True, help="List skill sources")
 @click.option("--clear-cache", is_flag=True, help="Clear skill cache")
 @click.option("--reset-selection", is_flag=True, help="Reset saved selection")
+@click.option("--no-private", is_flag=True, help="Skip auto-sync to the private repo after publishing to public")
 def publish(
     dry_run: bool,
     repo_url: Optional[str],
@@ -1252,18 +1262,25 @@ def publish(
     list_sources_flag: bool,
     clear_cache: bool,
     reset_selection: bool,
+    no_private: bool,
 ):
     """Publish skills and agents to a public repository.
-    
+
     Run without options to select and publish skills & agents interactively.
-    
+
+    After publishing the curated subset to the public repo, the full local
+    state is also synced to the private repo (config.repo_url) as a normal
+    commit (preserves history). Skip with --no-private or set
+    PublishConfig.auto_push_private=false in ~/.config/agent-sync/publish.yaml.
+
     Examples:
-    
+
       agent-sync publish                  Select and publish skills & agents
       agent-sync publish --repo URL       Set repository URL
       agent-sync publish --add-source URL  Add external skill source
       agent-sync publish --list-sources   List configured sources
-      agent-sync publish --clear-cache    Clear cached repos
+      agent-sync publish --clear-cache    Clear cached repositories
+      agent-sync publish --no-private    Publish to public only, skip private sync
     """
     
     # Handle repo URL
@@ -1328,12 +1345,76 @@ def publish(
     # =============================================================================
     # Publish Flow
     # =============================================================================
-    
+
     # Simple: just run step-by-step publish setup
     # User selects/deselects skills and agents in the TUI
     success = run_publish_setup()
     if not success:
         raise click.Abort()
+
+    # =============================================================================
+    # Auto-sync to private repo (convention over configuration)
+    # =============================================================================
+    # After publishing the curated subset to the public repo (which uses
+    # orphan commits + force-push, see git_publish.py), also sync the full
+    # local state to the private repo via a normal commit. This preserves
+    # the private repo's history (no force, no orphan).
+    #
+    # Skip when:
+    #   - --no-private flag is set (explicit opt-out)
+    #   - PublishConfig.auto_push_private is False (config opt-out)
+    #   - No private repo configured (config.repo_url is empty)
+    #
+    # Failures here do NOT abort the publish (public already succeeded).
+    if not no_private:
+        try:
+            from .config import Config
+            from .sync import SyncManager
+            from .publish.config import load_config as _load_pub_config
+            from .sync import _sanitize_git_output
+
+            cfg = Config()
+            pub_cfg = _load_pub_config()
+            if cfg.repo_url and getattr(pub_cfg, "auto_push_private", True):
+                console.print(
+                    f"\n[bold]📥 Syncing to private: [cyan]{cfg.repo_url}[/cyan]...[/]"
+                )
+                sync_manager = SyncManager(cfg)
+                try:
+                    changed = sync_manager.push(message="chore: sync private after publish")
+                except Exception as push_err:
+                    err_msg = _sanitize_git_output(str(push_err))
+                    console.print(
+                        f"[yellow]⚠ Private sync failed (public publish already succeeded): {err_msg}[/yellow]"
+                    )
+                else:
+                    if changed:
+                        # Try to get the new HEAD SHA from the local repo
+                        sha = ""
+                        try:
+                            sha = sync_manager._run_git("rev-parse", "HEAD")
+                            sha = sha[:7] if sha else ""
+                        except Exception:
+                            pass
+                        sha_str = f" (commit {sha})" if sha else ""
+                        console.print(
+                            f"[green]✓ Synced {len(changed)} item(s) to private{sha_str}[/green]"
+                        )
+                        console.print(f"  [dim]→ {cfg.repo_url}[/dim]")
+                    else:
+                        console.print(
+                            f"[dim]No local changes to sync to private ({cfg.repo_url})[/dim]"
+                        )
+            elif not cfg.repo_url:
+                console.print(
+                    "\n[dim]No private repo configured (skip auto-sync). "
+                    "Run `agent-sync init` to set one.[/dim]"
+                )
+        except Exception as e:
+            # Defensive: never let private sync failure break the publish success message
+            console.print(
+                f"\n[yellow]⚠ Auto-sync to private failed: {e}[/yellow]"
+            )
 
 
 # =============================================================================

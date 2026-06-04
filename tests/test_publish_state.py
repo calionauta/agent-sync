@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from agent_sync.publish.config import PublishState, PublishStateManager
+from agent_sync.publish.base import PublishConfig
 
 
 class TestPublishState:
@@ -191,10 +192,56 @@ class TestPublishStateManager:
             "agent_sync.publish.config.CONFIG_PATH",
             config_path,
         )
-        
+
         PublishStateManager.save({"local": ["a"]}, {})
-        
+
         state = PublishStateManager.load()
-        
+
         items = PublishStateManager.get_source_state(state, "nonexistent")
         assert items == set()
+
+
+class TestPublishConfigAutoPushPrivate:
+    """Tests for PublishConfig.auto_push_private field."""
+
+    def test_default_is_true(self):
+        """Default is True (convention over configuration)."""
+        cfg = PublishConfig(published_repo="https://github.com/x/y")
+        assert cfg.auto_push_private is True
+
+    def test_to_dict_includes_field(self):
+        """to_dict includes auto_push_private key."""
+        cfg = PublishConfig(published_repo="", auto_push_private=False)
+        d = cfg.to_dict()
+        assert "auto_push_private" in d
+        assert d["auto_push_private"] is False
+
+    def test_to_dict_default_true(self):
+        """to_dict serializes default True explicitly."""
+        cfg = PublishConfig(published_repo="")
+        d = cfg.to_dict()
+        assert d["auto_push_private"] is True
+
+    def test_from_dict_missing_field_defaults_true(self):
+        """from_dict defaults to True when key is absent (backward compatible)."""
+        cfg = PublishConfig.from_dict({"published_repo": "https://x"})
+        assert cfg.auto_push_private is True
+
+    def test_from_dict_explicit_false(self):
+        """from_dict respects explicit False value."""
+        cfg = PublishConfig.from_dict(
+            {"published_repo": "https://x", "auto_push_private": False}
+        )
+        assert cfg.auto_push_private is False
+
+    def test_roundtrip_preserves_value(self):
+        """to_dict → from_dict roundtrip preserves auto_push_private."""
+        original = PublishConfig(published_repo="https://x", auto_push_private=False)
+        restored = PublishConfig.from_dict(original.to_dict())
+        assert restored.auto_push_private is False
+
+    def test_roundtrip_default(self):
+        """to_dict → from_dict roundtrip preserves default True."""
+        original = PublishConfig(published_repo="https://x")
+        restored = PublishConfig.from_dict(original.to_dict())
+        assert restored.auto_push_private is True
