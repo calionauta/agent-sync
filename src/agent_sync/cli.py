@@ -389,21 +389,19 @@ def pull(force: bool, dry_run: bool, interactive: bool, skills_only: bool, confi
         console.print("[red]✗ Not initialized.[/red]")
         return
 
-    # Default: pull both (unless explicit --skills-only or --configs-only)
-    do_skills = not configs_only  # True unless --configs-only
-    do_configs = not skills_only  # True unless --skills-only
-    # If neither flag, do both
-    if not skills_only and not configs_only:
-        do_skills = True
-        do_configs = True
-
+    # Pass the raw flags directly. With neither flag, both are False and
+    # SyncManager.pull runs all three branches (configs, skills, agents).
+    # `--skills-only` / `--configs-only` flip the respective flag to True,
+    # which makes the SyncManager skip the other branches. The previous
+    # `do_skills = not configs_only` dance was inverted and effectively
+    # skipped everything by default.
     try:
         changes, summary = sync_manager.pull(
             force=force,
             dry_run=dry_run,
             interactive=interactive,
-            skills_only=do_skills,
-            configs_only=do_configs,
+            skills_only=skills_only,
+            configs_only=configs_only,
             skills_filter=list(skill) if skill else None,
             agents_filter=list(agent) if agent else None,
             skills_exclude=list(exclude_skill) if exclude_skill else None,
