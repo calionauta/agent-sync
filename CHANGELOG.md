@@ -4,6 +4,45 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.32.0-alpha] - 2026-06-04
+
+### ✨ New Features
+
+#### `pull --prune` — Mirror-pull (inverse of mirror-push)
+
+The private repo is the authoritative state for skills. With `--prune`, `agent-sync pull` now also removes local skills that exist in `~/.agents/skills/` but are missing from the private repo — the inverse of mirror-push. Default OFF for safety (additive pull, like before); opt in with `--prune` to make local a true mirror of private.
+
+**Preview always shows orphan candidates** (independent of `--prune`), so you can see the cleanup opportunity even on default pull:
+
+```
+⚠️  2 local skill(s) NOT in private repo (use --prune to remove):
+  - cali-go-stack
+  - cali-starhtml
+```
+
+**Why:** with mirror-push alone, a skill deleted from the private repo (e.g., on another machine) stays in every other machine's hub forever. Mirror-pull closes that loop.
+
+**Safety:** even with `--prune`, the user must explicitly run the command; no automatic deletion on normal pull.
+
+### 🧪 Tests
+
+- `tests/test_pull_prune.py` (new) — +9 tests covering detection, deletion, missing-dir safety, hidden-dir handling, and the `prune=False` default contract
+
+**516/516 tests passing.**
+
+### Backward compatible
+
+- Default pull behavior unchanged (additive)
+- No new required flags
+- New `--prune` is purely opt-in
+
+### Files changed
+
+- `src/agent_sync/sync.py` — `pull(prune=False)`, new `_prune_local_orphan_skills()` + `_detect_local_orphan_skills()` helpers, preview updated
+- `src/agent_sync/cli.py` — `--prune` flag on `agent-sync pull`
+
+---
+
 ## [0.31.0-alpha] - 2026-06-04
 
 ### ✨ New Features

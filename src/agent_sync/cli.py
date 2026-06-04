@@ -365,23 +365,30 @@ def push(
 @click.option("--agent", "-a", multiple=True, help="Specific agent config to pull (can repeat)")
 @click.option("--exclude-skill", multiple=True, help="Skill to exclude (can repeat)")
 @click.option("--exclude-agent", multiple=True, help="Agent to exclude (can repeat)")
-def pull(force: bool, dry_run: bool, interactive: bool, skills_only: bool, configs_only: bool, skill: tuple, agent: tuple, exclude_skill: tuple, exclude_agent: tuple):
+@click.option("--prune", is_flag=True, help="Remove local skills that are missing from the private repo (mirror-pull). Default: preview only.")
+def pull(force: bool, dry_run: bool, interactive: bool, skills_only: bool, configs_only: bool, skill: tuple, agent: tuple, exclude_skill: tuple, exclude_agent: tuple, prune: bool):
     """Pull changes from the remote repository.
-    
+
+    Default behavior is additive (no local skill is deleted). Local skills
+    that are missing from the private repo are always shown in the preview
+    so you can see the cleanup opportunity. Pass --prune to actually
+    remove them (mirror-pull, makes local a mirror of private).
+
     Examples:
-      agent-sync pull                    # Pull all
+      agent-sync pull                    # Pull all (additive, safe)
       agent-sync pull --skill cali-product-workflow   # Specific skill
       agent-sync pull --agent pi.dev     # Specific agent config
       agent-sync pull --exclude-skill deprecated-skill # Exclude skill
       agent-sync pull --dry-run          # Preview changes
+      agent-sync pull --prune            # Mirror: also remove local orphans
     """
     config = Config()
     sync_manager = SyncManager(config)
-    
+
     if not config.repo_url:
         console.print("[red]✗ Not initialized.[/red]")
         return
-    
+
     # Default: pull both (unless explicit --skills-only or --configs-only)
     do_skills = not configs_only  # True unless --configs-only
     do_configs = not skills_only  # True unless --skills-only
@@ -389,7 +396,7 @@ def pull(force: bool, dry_run: bool, interactive: bool, skills_only: bool, confi
     if not skills_only and not configs_only:
         do_skills = True
         do_configs = True
-    
+
     try:
         changes, summary = sync_manager.pull(
             force=force,
@@ -401,6 +408,7 @@ def pull(force: bool, dry_run: bool, interactive: bool, skills_only: bool, confi
             agents_filter=list(agent) if agent else None,
             skills_exclude=list(exclude_skill) if exclude_skill else None,
             agents_exclude=list(exclude_agent) if exclude_agent else None,
+            prune=prune,
         )
         
         if dry_run:
