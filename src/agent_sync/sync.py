@@ -1224,10 +1224,17 @@ class SyncManager:
             head_ls = self._run_git("ls-tree", "--name-only", "HEAD", "skills/")
         except subprocess.CalledProcessError:
             return []  # Empty repo or no skills/ yet
-        head_skill_names = {
-            name for name in head_ls.split("\n")
-            if name and not name.startswith(".")
-        }
+        # git ls-tree returns paths relative to the queried tree, so when we
+        # query `skills/`, names come back as `skills/<name>` (already prefixed).
+        # Strip the prefix to get the bare skill name, then filter out hidden
+        # dirs (`.cali-product-workflow` etc. — state, not skills).
+        head_skill_names = set()
+        for name in head_ls.split("\n"):
+            if not name:
+                continue
+            bare = name[len("skills/"):] if name.startswith("skills/") else name
+            if bare and not bare.startswith("."):
+                head_skill_names.add(bare)
 
         orphan_skills = sorted(head_skill_names - local_skill_names)
         if not orphan_skills:
