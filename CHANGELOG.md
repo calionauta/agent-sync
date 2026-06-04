@@ -4,6 +4,55 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.31.0-alpha] - 2026-06-04
+
+### ✨ New Features
+
+#### `publish run` — Auto-sync to private repo
+
+After publishing the curated subset to the public repo, `agent-sync publish run` now also syncs the full local state to the private repo (`config.repo_url`) as a normal commit (preserves history). Default ON, opt-out with `--no-private`. New `PublishConfig.auto_push_private: bool = True` field in `~/.config/agent-sync/publish.yaml`.
+
+#### `push` — Mirror-prune private repo
+
+Private repo is now kept as a mirror of the local `~/.agents/skills/` instead of an accumulating archive. On every push, skills that exist in HEAD but are missing from the local hub are removed via `git rm` in the same commit (history preserved as `D` entries, no `--force`). Default ON, opt-out with `agent-sync push --no-prune`.
+
+**Why:** the private repo previously kept every skill ever pushed, so `pull` or any restore could resurrect deleted/renamed skills. Mirror-prune closes that loop.
+
+**Output example:**
+```
+📤 Changes to be pushed to agent-sync-private.git:
+
+  skills/
+    - cali-go-stack/SKILL.md
+    - cali-go-stack/references/...
+    - cali-go-standards/SKILL.md
+    ...
+
+15 item(s)
+```
+
+### 🧪 Tests
+
+- `tests/test_publish_state.py` — +7 tests for `PublishConfig.auto_push_private` (default, to_dict, from_dict, roundtrip, backward compat)
+- `tests/test_publish_private_sync.py` (new) — +8 tests for the publish-run auto-sync: CLI flag registration, default vs `--no-private`, missing `repo_url` skip, `auto_push_private=false` skip, push exception handling, zero-changes path
+- `tests/test_prune_orphan_skills.py` (new) — +11 tests for mirror-prune: no orphans, orphan shape, `git rm` per orphan, missing hub, empty HEAD, hidden dirs, `git rm` failure isolation, default `prune=True` plumbing
+
+**507/507 tests passing.**
+
+### Backward compatible
+
+- Without `--no-prune` opt-out: push still works as before (additive)
+- Without `--no-private` opt-out: publish run still publishes to public only
+- Old `publish.yaml` files load with `auto_push_private=True` default (backward compatible)
+
+### Files changed
+
+- `src/agent_sync/publish/base.py` — `PublishConfig.auto_push_private: bool = True`
+- `src/agent_sync/sync.py` — `SyncManager.push(prune=True)`, `_push_stage_and_get_changes(prune=True)`, new `_prune_orphan_skills()` helper
+- `src/agent_sync/cli.py` — `--no-prune` flag on `push`, `--no-private` flag on `publish run`, post-publish auto-sync block
+
+---
+
 ## [0.20.0] - 2026-05-14
 
 ### ✨ New Features

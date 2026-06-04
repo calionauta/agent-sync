@@ -125,19 +125,24 @@ class SourceWithSkills:
 @dataclass
 class PublishConfig:
     """Root configuration for the publish feature.
-    
+
     Attributes:
         published_repo: Target repo for publishing skills
         skill_sources: List of external source configurations
         selected_skills: Mapping of source_id to selected skill names
         cache_dir: Directory for caching cloned repos
         cache_ttl_hours: Default TTL for cache
+        auto_push_private: If True (default), `publish run` also syncs the
+            full local state to the private repo (config.repo_url) after
+            publishing the curated subset to the public repo. Disable with
+            `agent-sync publish --no-private` or set this field to False.
     """
     published_repo: str
     skill_sources: list[SourceConfig] = field(default_factory=list)
     selected_skills: dict[str, list[str]] = field(default_factory=dict)
     cache_dir: Path = Path.home() / ".cache" / "agent-sync" / "repos"
     cache_ttl_hours: int = 24
+    auto_push_private: bool = True
     
     def get_skills_for_source(self, source_id: str) -> list[str]:
         """Get selected skills for a source."""
@@ -173,6 +178,7 @@ class PublishConfig:
             "selected_skills": self.selected_skills,
             "cache_dir": str(self.cache_dir),
             "cache_ttl_hours": self.cache_ttl_hours,
+            "auto_push_private": self.auto_push_private,
         }
     
     @classmethod
@@ -192,4 +198,5 @@ class PublishConfig:
             selected_skills=data.get("selected_skills", {}),
             cache_dir=cache_dir,
             cache_ttl_hours=data.get("cache_ttl_hours", 24),
+            auto_push_private=data.get("auto_push_private", True),
         )
