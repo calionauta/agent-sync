@@ -1212,6 +1212,10 @@ class SyncManager:
         agents_count = len([a for a in get_all_agents()
                            if self.config.is_agent_enabled(a.name) and a.is_available()])
 
+        global_skills_dir = Path.home() / ".agents" / "skills"
+        skills_count = len([d for d in global_skills_dir.iterdir()
+                           if d.is_dir() and (d / "SKILL.md").exists()]) if global_skills_dir.exists() else 0
+
         if skills_only and not configs_only:
             console.print(f"  [dim]📦 Syncing {skills_count} skills...[/dim]")
             self._stage_skills()
@@ -1346,6 +1350,13 @@ class SyncManager:
             path = f"skills/{orphan}"
             try:
                 self._run_git("rm", "-r", "--cached", path)
+                # Also nuke from disk so a subsequent pull doesn't resurrect them
+                file_path = self.repo_dir / path
+                if isinstance(file_path, Path) and file_path.exists():
+                    if file_path.is_dir():
+                        shutil.rmtree(file_path, ignore_errors=True)
+                    else:
+                        file_path.unlink(missing_ok=True)
             except subprocess.CalledProcessError as e:
                 console.print(
                     f"[yellow]⚠ Could not prune {path}: {e.stderr.strip()}[/yellow]"
@@ -1414,95 +1425,6 @@ class SyncManager:
             raise
 
         self._save_state("pushed", self.config.repo_url)
-        return changed_files
-        if not self.repo_dir.exists():
-            raise RuntimeError("Not linked to a repository. Run 'agent-sync init' or 'link' first")
-
-        # Stage files based on flags
-        # Both flags true = stage ALL (skills + configs + agents)
-        # Both flags false = default = stage ALL
-        # Only skills_only = stage ONLY skills
-        # Only configs_only = stage configs + agents
-        if skills_only and not configs_only:
-            # --skills-only: stage only skills
-            self._stage_skills()
-        elif configs_only and not skills_only:
-            # --configs-only: stage configs + agents (no skills)
-            self._stage_all_agent_files()
-            self._stage_agents()
-        else:
-            # Default (both or neither): stage everything
-            self._stage_all_agent_files()
-            self._stage_skills()
-            self._stage_agents()
-
-        # Check for changes
-        status = self._run_git("status", "--porcelain")
-        if not status:
-            return []
-
-        # Parse git status with detailed info (path, status code, human label)
-        changed_files = []
-        for line in status.split("\n"):
-            stripped = line.strip()
-            if not stripped:
-                continue
-
-            # Parse porcelain format: XY PATH or R100 OLD\tNEW (tab-separated)
-            if '\t' in stripped:
-                # Rename/copy format
-                status_code = stripped[:1]
-                path = stripped.split('\t')[-1]
-            else:
-                parts = stripped.split()
-                status_code = parts[0]
-                path = parts[-1]
-
-            # Classify the status for a human-readable label
-            if status_code == '??':
-                label = 'added'
-            elif 'D' in status_code:
-                label = 'deleted'
-            elif 'A' in status_code:
-                label = 'added'
-            else:
-                label = 'modified'
-
-            # Count files if git reported a whole directory (trailing slash)
-            directory_count = None
-            if path.endswith('/'):
-                dir_path = self.repo_dir / path.rstrip('/')
-                if dir_path.exists():
-                    directory_count = sum(1 for _ in dir_path.rglob('*') if _.is_file())
-                path = path.rstrip('/')
-
-            changed_files.append({
-                'path': path,
-                'status': status_code,
-                'label': label,
-                'directory_count': directory_count,
-            })
-
-        # Commit and push
-        self._run_git("add", ".")
-        self._run_git("commit", "-m", message)
-
-        try:
-            self._run_git("push", "origin", "main")
-        except subprocess.CalledProcessError as e:
-            # Check if it's an auth error
-            if "Authentication failed" in e.stderr or "Invalid username or token" in e.stderr:
-                raise RuntimeError(
-                    "GitHub authentication failed. Try one of these solutions:\n"
-                    "  1. Unset GITHUB_TOKEN: run 'unset GITHUB_TOKEN' and try again\n"
-                    "  2. Refresh gh CLI auth: run 'gh auth refresh'\n"
-                    "  3. Check auth status: run 'gh auth status'\n"
-                    f"\nOriginal error: {e.stderr.strip()}"
-                ) from e
-            raise
-
-        self._save_state("pushed", self.config.repo_url)
-
         return changed_files
 
     def get_status(self) -> dict:
