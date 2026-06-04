@@ -479,6 +479,7 @@ class SyncManager:
         agents_filter: Optional[list[str]] = None,
         skills_exclude: Optional[list[str]] = None,
         agents_exclude: Optional[list[str]] = None,
+        prune: bool = False,
     ) -> tuple[list[str], PullSummary]:
         """
         Fetch and apply remote configuration with conflict detection.
@@ -591,9 +592,75 @@ class SyncManager:
         else:
             console.print("[dim]Skipping agents (skills/configs-only mode)[/dim]")
 
+        # Mirror-pull: remove local skills that are in hub but not in privado.
+        # This is the inverse of mirror-push. Default off (safety) — user
+        # must opt in with --prune to actually delete local skills.
+        if prune and not configs_only and not agents_only:
+            local_pruned = self._prune_local_orphan_skills()
+            changes.extend(local_pruned)
+            if local_pruned:
+                console.print(
+                    f"[green]✓ Pruned {len(local_pruned)} orphan skill(s) from local hub[/green]"
+                )
+
         self._save_state("pulled", self.config.repo_url)
 
         return (changes, summary)
+
+    def _prune_local_orphan_skills(self) -> list[dict]:
+        """Remove skills from ~/.agents/skills/ that are not in privado.
+
+        Inverse of `_prune_orphan_skills` (which cleans privado). Called by
+        `pull(prune=True)` after the local clone of the private repo has
+        been updated and synced skills applied. Ensures the local hub is a
+        mirror of privado.
+
+        Returns:
+            List of change dicts (one per removed skill) with status='D'.
+        """
+        import shutil
+
+        local_hub = Path.home() / ".agents" / "skills"
+        if not local_hub.exists():
+            return []
+
+        # Skills in the local clone of privado (already pulled)
+        synced_skills_dir = self.repo_dir / "skills"
+        if not synced_skills_dir.exists():
+            return []
+
+        privado_skill_names = {
+            d.name for d in synced_skills_dir.iterdir()
+            if d.is_dir() and not d.name.startswith(".")
+        }
+
+        # Skills in the local hub
+        local_skill_names = {
+            d.name for d in local_hub.iterdir()
+            if d.is_dir() and not d.name.startswith(".")
+        }
+
+        orphan_locals = sorted(local_skill_names - privado_skill_names)
+        if not orphan_locals:
+            return []
+
+        pruned: list[dict] = []
+        for orphan in orphan_locals:
+            path = local_hub / orphan
+            try:
+                shutil.rmtree(path)
+            except Exception as e:
+                console.print(
+                    f"[yellow]⚠ Could not remove local skill {orphan}: {e}[/yellow]"
+                )
+                continue
+            pruned.append({
+                "path": f"~/.agents/skills/{orphan}/",
+                "status": "D",
+                "label": "deleted (prune)",
+                "directory_count": None,
+            })
+        return pruned
 
     def _detect_conflicts(
         self,
@@ -986,15 +1053,49 @@ class SyncManager:
                 console.print(f"  • {drift.name} ({drift.diff_summary})")
             console.print()
 
+        # Local-orphan prune candidates (skills in ~/.agents/skills/ but not in privado).
+        # Shown always (independent of --prune) so the user sees the cleanup
+        # opportunity even on default pull.
+        local_orphans = self._detect_local_orphan_skills()
+        if local_orphans:
+            console.print(
+                f"[yellow]⚠️  {len(local_orphans)} local skill(s) NOT in private repo (use --prune to remove):[/yellow]"
+            )
+            for name in local_orphans:
+                console.print(f"  - {name}")
+            console.print()
+
         # Count non-conflict and non-drift changes
         other = summary.new_files + summary.updated_files + summary.deleted_files
         if other > 0:
             console.print(f"[green]+ {other} file(s) to update (auto-apply)[/green]")
 
-        if not summary.has_conflicts and not summary.has_skill_drifts and other == 0:
+        if not summary.has_conflicts and not summary.has_skill_drifts and other == 0 and not local_orphans:
             console.print("[dim]No changes to pull.[/dim]")
 
-        console.print("\n[dim]Run without --dry-run to apply changes.[/dim]")
+        console.print("\n[dim]Run without --dry-run to apply changes. Add --prune to remove local orphans.[/dim]")
+
+    def _detect_local_orphan_skills(self) -> list[str]:
+        """Return the list of skill names in local hub that are missing from privado.
+
+        Pure read-only detection — does not touch the filesystem. Used by the
+        pull preview and by tests. The actual deletion lives in
+        `_prune_local_orphan_skills`.
+        """
+        local_hub = Path.home() / ".agents" / "skills"
+        synced_skills_dir = self.repo_dir / "skills"
+        if not local_hub.exists() or not synced_skills_dir.exists():
+            return []
+
+        local_skill_names = {
+            d.name for d in local_hub.iterdir()
+            if d.is_dir() and not d.name.startswith(".")
+        }
+        privado_skill_names = {
+            d.name for d in synced_skills_dir.iterdir()
+            if d.is_dir() and not d.name.startswith(".")
+        }
+        return sorted(local_skill_names - privado_skill_names)
 
     def _handle_conflicts_interactive(self, conflicts: list[PullConflict]) -> None:
         """Handle conflicts interactively with user prompts."""
