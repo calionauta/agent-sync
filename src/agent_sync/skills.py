@@ -696,7 +696,7 @@ class SkillsManager:
         # ─────────────────────────────────────────────────────────────────────
         # Phase 5: Configure all agents to use hub
         # ─────────────────────────────────────────────────────────────────────
-        console.print("[bold]⚙️  Configuring agents to use ~/.agents/skills/...[/]\n]")
+        console.print("[bold]⚙️  Configuring agents to use ~/.agents/skills/...[/]\n")
         self.configure_agents()
 
         # ─────────────────────────────────────────────────────────────────────
