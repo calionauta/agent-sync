@@ -7,7 +7,9 @@ Supports extension subdirectories (e.g., ~/.config/opencode/superpowers/skills/)
 """
 
 import hashlib
+import os
 import shutil
+import time
 from pathlib import Path
 
 from rich import box
@@ -504,6 +506,44 @@ class SkillsManager:
 
         return best_agent, best_path
 
+    def _centralize_lock_dir(self) -> Path:
+        """Lock file lives next to the hub to work in both real and test paths."""
+        return self.global_skills_dir.parent / ".centralize-lock"
+
+    def _acquire_centralize_lock(self) -> bool:
+        """Acquire an atomic filesystem lock for centralize.
+
+        Uses os.mkdir() which is atomic at the OS level — two processes
+        cannot create the same directory simultaneously. If the lock is
+        older than 10 minutes, it's considered stale and removed.
+
+        Returns:
+            True if lock acquired, False if another process holds it.
+        """
+        lock = self._centralize_lock_dir()
+        STALE_TIMEOUT = 600  # 10 minutes
+        try:
+            os.mkdir(lock)
+            return True
+        except FileExistsError:
+            try:
+                age = time.time() - lock.stat().st_mtime
+                if age > STALE_TIMEOUT:
+                    os.rmdir(lock)
+                    os.mkdir(lock)
+                    return True
+            except OSError:
+                pass
+            return False
+
+    def _release_centralize_lock(self) -> None:
+        """Release the centralize lock."""
+        lock = self._centralize_lock_dir()
+        try:
+            os.rmdir(lock)
+        except OSError:
+            pass
+
     def centralize(
         self,
         dry_run: bool = False,
@@ -540,6 +580,19 @@ class SkillsManager:
 
         if not dry_run:
             self.global_skills_dir.mkdir(parents=True, exist_ok=True)
+
+        # Acquire atomic lock to prevent concurrent centralize runs
+        # (e.g. two pi sessions starting simultaneously). Dry-run is
+        # read-only, so no lock needed.
+        if not dry_run:
+            if not self._acquire_centralize_lock():
+                stats["errors"] += 1
+                console.print(
+                    "\n[red]✗ Another centralize is already running. "
+                    "Wait for it to finish or delete ~/.agents/.centralize-lock "
+                    "if it appears stale (older than 10 minutes).[/red]\n"
+                )
+                return stats
 
         # ─────────────────────────────────────────────────────────────────────
         # Phase 1: Scan agents
@@ -726,6 +779,9 @@ class SkillsManager:
         if stats["errors"] > 0:
             console.print(f"  [red]✗ {stats['errors']} errors[/red]")
         console.print()
+
+        if not dry_run:
+            self._release_centralize_lock()
 
         return stats
 

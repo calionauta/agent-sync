@@ -1,6 +1,7 @@
 """Integration tests for all skills configuration methods (native, config, copy)."""
 
 import json
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -491,3 +492,113 @@ def test_get_retired_skill_names_from_git(tmp_path):
         "Deleted skill should be detected as retired"
     assert "active-skill" not in retired, \
         "Active skill should NOT be retired"
+
+
+def test_centralize_lock_prevents_concurrent(tmp_path):
+    """Test that centralize lock prevents a second process from running."""
+    from agent_sync.skills import SkillsManager
+    from agent_sync.agents import BaseAgent
+
+    home = tmp_path / "home"
+    global_dir = home / ".agents" / "skills"
+    global_dir.mkdir(parents=True)
+
+    agent = BaseAgent("test-agent", {
+        "method": "native", "config_dir": str(home),
+        "skills_dir_name": "skills", "check": {"always": True},
+    })
+    manager = SkillsManager(global_skills_dir=global_dir)
+
+    lock = manager._centralize_lock_dir()
+    lock.mkdir()  # Simulate another process holding the lock
+
+    with patch("agent_sync.skills.get_all_agents", return_value=[agent]), \
+         patch.object(manager, '_sync_from_repo', return_value=0), \
+         patch.object(manager, '_get_retired_skill_names', return_value=set()):
+        stats = manager.centralize(move=True)
+
+    assert stats["errors"] == 1, "Concurrent lock should cause an error"
+    assert lock.exists(), "Existing lock should NOT be removed by second process"
+
+    lock.rmdir()
+
+
+def test_centralize_lock_acquire_and_release(tmp_path):
+    """Test that centralize acquires and releases the lock."""
+    from agent_sync.skills import SkillsManager
+    from agent_sync.agents import BaseAgent
+
+    home = tmp_path / "home"
+    global_dir = home / ".agents" / "skills"
+    global_dir.mkdir(parents=True)
+    (global_dir / "existing-skill").mkdir()
+    (global_dir / "existing-skill" / "SKILL.md").write_text("content")
+
+    agent = BaseAgent("test-agent", {
+        "method": "native", "config_dir": str(home),
+        "skills_dir_name": "skills", "check": {"always": True},
+    })
+    manager = SkillsManager(global_skills_dir=global_dir)
+
+    lock = manager._centralize_lock_dir()
+    assert not lock.exists(), "Lock should not exist before centralize"
+
+    with patch("agent_sync.skills.get_all_agents", return_value=[agent]), \
+         patch.object(manager, '_sync_from_repo', return_value=0), \
+         patch.object(manager, '_get_retired_skill_names', return_value=set()):
+        stats = manager.centralize(move=True)
+
+    assert stats["errors"] == 0, "No errors expected"
+    assert not lock.exists(), "Lock should be released after centralize"
+
+
+def test_centralize_stale_lock_is_cleared(tmp_path):
+    """Test that a stale lock is removed and re-acquired."""
+    from agent_sync.skills import SkillsManager
+    import time
+
+    home = tmp_path / "home"
+    global_dir = home / ".agents" / "skills"
+    global_dir.mkdir(parents=True)
+
+    manager = SkillsManager(global_skills_dir=global_dir)
+    lock = manager._centralize_lock_dir()
+    lock.mkdir()
+
+    old_time = time.time() - 3600  # 1 hour ago
+    os.utime(lock, (old_time, old_time))
+
+    assert manager._acquire_centralize_lock(), "Stale lock should be acquired"
+    assert lock.exists(), "New lock should exist"
+    assert lock.stat().st_mtime >= time.time() - 5, "New lock should have recent mtime"
+
+    lock.rmdir()
+
+
+def test_centralize_dry_run_skips_lock(tmp_path):
+    """Test that dry-run does NOT acquire the lock."""
+    from agent_sync.skills import SkillsManager
+    from agent_sync.agents import BaseAgent
+
+    home = tmp_path / "home"
+    global_dir = home / ".agents" / "skills"
+    global_dir.mkdir(parents=True)
+    (global_dir / "some-skill").mkdir()
+    (global_dir / "some-skill" / "SKILL.md").write_text("content")
+
+    agent = BaseAgent("test-agent", {
+        "method": "native", "config_dir": str(home),
+        "skills_dir_name": "skills", "check": {"always": True},
+    })
+    manager = SkillsManager(global_skills_dir=global_dir)
+
+    lock = manager._centralize_lock_dir()
+    assert not lock.exists(), "Lock should not exist before"
+
+    with patch("agent_sync.skills.get_all_agents", return_value=[agent]), \
+         patch.object(manager, '_sync_from_repo', return_value=0), \
+         patch.object(manager, '_get_retired_skill_names', return_value=set()):
+        stats = manager.centralize(dry_run=True, move=True)
+
+    assert not lock.exists(), "Dry-run should not create a lock"
+    assert stats["errors"] == 0, "No errors expected"
