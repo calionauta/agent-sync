@@ -368,3 +368,126 @@ def test_find_orphans_skill_in_hub(tmp_path):
     orphans = SkillsManager._find_orphans({"my-skill"}, skills_found)
     assert "my-skill" not in orphans, "Skills in hub should not be orphans"
     assert "another-skill" in orphans, "Skills not in hub should be orphans"
+
+
+def test_find_orphans_skips_retired_skills(tmp_path):
+    """Test that _find_orphans excludes retired skills."""
+    from agent_sync.skills import SkillsManager
+
+    agent_dir = tmp_path / "agent"
+    (agent_dir / "skills" / "retired-old").mkdir(parents=True)
+    (agent_dir / "skills" / "retired-old" / "SKILL.md").write_text("old version")
+    (agent_dir / "skills" / "active-new").mkdir(parents=True)
+    (agent_dir / "skills" / "active-new" / "SKILL.md").write_text("new version")
+
+    skills_found = {
+        "test-agent": [
+            agent_dir / "skills" / "retired-old",
+            agent_dir / "skills" / "active-new",
+        ]
+    }
+
+    # Pass retired set: retired-old should be excluded, active-new should remain
+    orphans = SkillsManager._find_orphans(set(), skills_found, retired={"retired-old"})
+    assert "retired-old" not in orphans, "Retired skills should be excluded"
+    assert "active-new" in orphans, "Non-retired skills should still be found"
+    assert len(orphans) == 1, "Only non-retired skill should be in orphans"
+
+
+def test_find_orphans_retired_none_is_backward_compat(tmp_path):
+    """Test that _find_orphans works without retired param (backward compat)."""
+    from agent_sync.skills import SkillsManager
+
+    agent_dir = tmp_path / "agent"
+    (agent_dir / "skills" / "some-skill").mkdir(parents=True)
+    (agent_dir / "skills" / "some-skill" / "SKILL.md").write_text("test")
+
+    skills_found = {"test-agent": [agent_dir / "skills" / "some-skill"]}
+
+    # No retired param = old behavior
+    orphans = SkillsManager._find_orphans(set(), skills_found)
+    assert "some-skill" in orphans, "Default should not filter anything"
+
+
+def test_centralize_skips_retired_orphans(tmp_path):
+    """Test that centralize does NOT import retired skills as orphans.
+
+    Regression guard: retired skills (deleted from git history) must never
+    be re-imported, even if stale copies exist in agent directories.
+    """
+    from agent_sync.skills import SkillsManager
+    from agent_sync.agents import BaseAgent
+
+    home = tmp_path / "home"
+    global_dir = home / ".agents" / "skills"
+    global_dir.mkdir(parents=True)
+    (global_dir / "existing-skill").mkdir()
+    (global_dir / "existing-skill" / "SKILL.md").write_text("hub content")
+
+    # Agent has BOTH a retired skill (should be skipped) and a real orphan
+    agent_home = home / ".agent-retired"
+    (agent_home / "skills" / "retired-old").mkdir(parents=True)
+    (agent_home / "skills" / "retired-old" / "SKILL.md").write_text("old copy")
+    (agent_home / "skills" / "real-orphan").mkdir(parents=True)
+    (agent_home / "skills" / "real-orphan" / "SKILL.md").write_text("new orphan")
+
+    agent = BaseAgent("agent-retired", {
+        "method": "copy", "config_dir": str(agent_home),
+        "skills_dir_name": "skills", "check": {"always": True},
+    })
+    manager = SkillsManager(global_skills_dir=global_dir)
+
+    with patch("agent_sync.skills.get_all_agents", return_value=[agent]), \
+         patch.object(manager, '_sync_from_repo', return_value=0), \
+         patch.object(manager, '_get_retired_skill_names', return_value={"retired-old"}):
+        stats = manager.centralize(move=True)
+
+    # Retired skill must NOT be imported
+    assert not (global_dir / "retired-old" / "SKILL.md").exists(), \
+        "Retired skill should NOT be imported to hub"
+    # Real orphan should still be imported
+    assert (global_dir / "real-orphan" / "SKILL.md").exists(), \
+        "Real orphan should still be imported"
+    assert stats["orphans_imported"] == 1, \
+        "Only real orphan should be imported"
+
+
+def test_get_retired_skill_names_from_git(tmp_path):
+    """Test that _get_retired_skill_names correctly parses git history.
+
+    Creates a real git repo with commits that add then delete a skill,
+    then verifies the method detects the deleted skill as retired.
+    """
+    from agent_sync.sync import SyncManager
+    from unittest.mock import PropertyMock
+    import subprocess
+
+    # Create a fake repo with git history
+    repo_dir = tmp_path / "repo"
+    (repo_dir / "skills").mkdir(parents=True)
+    (repo_dir / "skills" / "active-skill").mkdir(parents=True)
+    (repo_dir / "skills" / "active-skill" / "SKILL.md").write_text("active")
+    (repo_dir / "skills" / "to-be-deleted").mkdir(parents=True)
+    (repo_dir / "skills" / "to-be-deleted" / "SKILL.md").write_text("will be deleted")
+
+    subprocess.run(["git", "init"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@test"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "test"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "add", "-A"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "add both skills"], cwd=repo_dir, capture_output=True)
+
+    # Delete to-be-deleted
+    import shutil
+    shutil.rmtree(repo_dir / "skills" / "to-be-deleted")
+    subprocess.run(["git", "add", "-A"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "delete retired skill"], cwd=repo_dir, capture_output=True)
+
+    # Mock DEFAULT_REPO_DIR to point to our test repo
+    manager = SkillsManager(global_skills_dir=tmp_path / "hub")
+    with patch.object(SyncManager, 'DEFAULT_REPO_DIR', PropertyMock(return_value=repo_dir)):
+        retired = manager._get_retired_skill_names()
+
+    assert "to-be-deleted" in retired, \
+        "Deleted skill should be detected as retired"
+    assert "active-skill" not in retired, \
+        "Active skill should NOT be retired"
