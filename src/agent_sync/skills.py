@@ -172,8 +172,20 @@ class SkillsManager:
     def _find_orphans(
         hub_skills: set[str],
         skills_found: dict,
+        retired: set[str] | None = None,
     ) -> dict:
         """Find orphan skills (exist in agents but NOT in hub).
+
+        Skills that were previously deleted from the private repo (visible in
+        git history as `D` entries) are excluded — they are intentionally
+        retired and should never be re-imported, even if stale copies still
+        linger in agent directories.
+
+        Args:
+            hub_skills: Set of skill names currently in the hub.
+            skills_found: Dict mapping agent name → skill paths.
+            retired: Set of retired skill names to exclude. If None, no
+                     skills are excluded (backward-compat with tests).
 
         Returns:
             dict of {skill_name: {
@@ -183,6 +195,7 @@ class SkillsManager:
             }}
         """
         orphans: dict = {}
+        retired = retired or set()
 
         for agent_name, skill_data in skills_found.items():
             if isinstance(skill_data, dict) and skill_data.get("is_extension"):
@@ -191,6 +204,11 @@ class SkillsManager:
 
             for skill_path in skill_paths:
                 skill_name = skill_path.name
+                if skill_name in retired:
+                    # Skip retired skills: they were intentionally deleted
+                    # from the private repo at some point. Re-importing them
+                    # would resurrect skills the user removed.
+                    continue
                 if skill_name not in hub_skills:
                     if skill_name not in orphans:
                         orphans[skill_name] = {"agents": [], "hash": None, "content_differs": False}
@@ -206,6 +224,91 @@ class SkillsManager:
                 info["hash"] = hashes.pop() if len(hashes) == 1 else None
 
         return orphans
+
+    def _get_retired_skill_names(self) -> set[str]:
+        """Get skill names that were deleted from the private repo at some point.
+
+        Uses git history of the private repo (`~/.config/agent-sync/repo/`)
+        to find every skill that was ever removed (commit type `D`). These
+        are treated as "retired" — `_find_orphans` and `_sync_from_repo`
+        will skip them even if stale copies linger in agent directories.
+
+        This is the source of truth for skill retirement: no manual
+        `retired-skills.yaml` to maintain. The git history is authoritative.
+
+        Returns:
+            Set of retired skill names. Empty if repo is unavailable.
+        """
+        from .sync import SyncManager
+
+        repo_dir = SyncManager.DEFAULT_REPO_DIR
+        if not (repo_dir / ".git").exists():
+            return set()
+
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["git", "log", "--all", "--diff-filter=D", "--name-only", "--format=", "--", "skills/"],
+                cwd=repo_dir,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode != 0:
+                return set()
+            retired: set[str] = set()
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                # Path is "skills/<name>/..." — strip prefix and trailing slash
+                if line.startswith("skills/"):
+                    bare = line[len("skills/"):]
+                    if "/" in bare:
+                        bare = bare.split("/", 1)[0]
+                    if bare and not bare.startswith("."):
+                        retired.add(bare)
+            return retired
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            return set()
+
+    def _remove_retired_from_agents(self, retired: set[str]) -> dict[str, list[str]]:
+        """Delete retired skill copies from all agent directories.
+
+        Stale copies of retired skills in agent dirs (e.g. `~/.claude/commands/`,
+        `~/.gemini/tools/`) are a primary source of restore loops: the
+        next `centralize` run would re-discover them as orphans and re-import
+        them to the hub. We proactively clean them up here.
+
+        Args:
+            retired: Set of retired skill names (from `_get_retired_skill_names`).
+
+        Returns:
+            dict mapping retired skill name → list of agent names it was
+            removed from. Empty if nothing was removed.
+        """
+        from .agents import get_all_agents
+
+        removed: dict[str, list[str]] = {}
+        for agent in get_all_agents():
+            if agent.name == "global-skills":
+                continue
+            agent_skills_path = agent.skills_path
+            if not agent_skills_path.exists():
+                continue
+            for skill_name in retired:
+                target = agent_skills_path / skill_name
+                if not target.exists() and not target.is_symlink():
+                    continue
+                try:
+                    if target.is_symlink() or target.is_file():
+                        target.unlink()
+                    else:
+                        shutil.rmtree(target)
+                    removed.setdefault(skill_name, []).append(agent.name)
+                except OSError:
+                    pass
+        return removed
 
 
     def scan_all_agents(self) -> dict[str, list[Path]]:
@@ -325,6 +428,11 @@ class SkillsManager:
     def _sync_from_repo(self) -> int:
         """Sync skills from git repo to global skills directory.
 
+        Skills that were previously deleted from the private repo (visible in
+        git history as `D` entries) are skipped — they are retired and must
+        not be re-synced to the hub even if a stale copy lingers in the
+        repo's working tree.
+
         Returns:
             Number of skills synced from repo
         """
@@ -335,10 +443,13 @@ class SkillsManager:
         if not repo_skills_dir.exists():
             return 0
 
+        retired = self._get_retired_skill_names()
         synced = 0
         for skill_dir in repo_skills_dir.iterdir():
             if skill_dir.name.startswith("."):
                 continue
+            if skill_dir.name in retired:
+                continue  # Don't resurrect retired skills
 
             dest = self.global_skills_dir / skill_dir.name
             if not dest.exists():
@@ -481,10 +592,14 @@ class SkillsManager:
         else:
             console.print("  [dim]Nothing to sync from repo[/dim]\n")
 
+        # Pre-compute retired set (skills deleted from git history) so
+        # that Phases 2-5 can use it — no manual retired-skills.yaml needed.
+        retired = self._get_retired_skill_names()
+
         # ─────────────────────────────────────────────────────────────────────
-        # Phase 3: Find orphans
+        # Phase 3: Find orphans (skip retired — they were intentionally deleted)
         # ─────────────────────────────────────────────────────────────────────
-        orphans = self._find_orphans(hub_skills, skills_found)
+        orphans = self._find_orphans(hub_skills, skills_found, retired=retired)
         stats["orphans_found"] = len(orphans)
 
         if not orphans:
@@ -559,9 +674,29 @@ class SkillsManager:
             console.print()
 
         # ─────────────────────────────────────────────────────────────────────
+        # Phase 4.5: Clean up retired skill copies from agent directories
+        # ─────────────────────────────────────────────────────────────────────
+        # Skills that were deleted from the private repo (git history `D`
+        # entries) should NOT linger in agent directories. Phase 4 only
+        # imports active orphans; this phase actively removes retired ones.
+        # Without this, a stale copy in ~/.claude/commands/ would be
+        # re-discovered on the next `centralize` run.
+        if retired:
+            console.print("[bold]🧹 Removing retired skill copies from agents...[/]\n")
+            retired_removed = self._remove_retired_from_agents(retired)
+            for skill_name, agents_removed in retired_removed.items():
+                console.print(
+                    f"  [yellow]🗑 {skill_name}[/yellow] "
+                    f"[dim]retired — removed from {', '.join(agents_removed)}[/dim]"
+                )
+            if not retired_removed:
+                console.print("  [dim]No retired skill copies found in agent dirs[/dim]")
+            console.print()
+
+        # ─────────────────────────────────────────────────────────────────────
         # Phase 5: Configure all agents to use hub
         # ─────────────────────────────────────────────────────────────────────
-        console.print("[bold]⚙️  Configuring agents to use ~/.agents/skills/...[/]\n")
+        console.print("[bold]⚙️  Configuring agents to use ~/.agents/skills/...[/]\n]")
         self.configure_agents()
 
         # ─────────────────────────────────────────────────────────────────────
