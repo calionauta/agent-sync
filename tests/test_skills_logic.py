@@ -453,23 +453,23 @@ def test_centralize_skips_retired_orphans(tmp_path):
         "Only real orphan should be imported"
 
 
-def test_get_retired_skill_names_from_git(tmp_path):
-    """Test that _get_retired_skill_names correctly parses git history.
-
-    Creates a real git repo with commits that add then delete a skill,
-    then verifies the method detects the deleted skill as retired.
+def test_get_retired_skill_names_from_manifest(tmp_path):
+    """Retirement is now manifest-based (AD-1). Skills listed in
+    `~/.agents/skills/RETIRED.md` are retired; skills in HEAD but NOT
+    in the manifest are active — even if they were deleted in a past
+    commit and re-added later (regression for 2026-06-06).
     """
     from agent_sync.sync import SyncManager
     from unittest.mock import PropertyMock
     import subprocess
 
-    # Create a fake repo with git history
+    # Create a fake git repo with both skills present in HEAD
     repo_dir = tmp_path / "repo"
     (repo_dir / "skills").mkdir(parents=True)
     (repo_dir / "skills" / "active-skill").mkdir(parents=True)
     (repo_dir / "skills" / "active-skill" / "SKILL.md").write_text("active")
-    (repo_dir / "skills" / "to-be-deleted").mkdir(parents=True)
-    (repo_dir / "skills" / "to-be-deleted" / "SKILL.md").write_text("will be deleted")
+    (repo_dir / "skills" / "old-skill").mkdir(parents=True)
+    (repo_dir / "skills" / "old-skill" / "SKILL.md").write_text("retired by manifest")
 
     subprocess.run(["git", "init"], cwd=repo_dir, capture_output=True)
     subprocess.run(["git", "config", "user.email", "test@test"], cwd=repo_dir, capture_output=True)
@@ -477,21 +477,22 @@ def test_get_retired_skill_names_from_git(tmp_path):
     subprocess.run(["git", "add", "-A"], cwd=repo_dir, capture_output=True)
     subprocess.run(["git", "commit", "-m", "add both skills"], cwd=repo_dir, capture_output=True)
 
-    # Delete to-be-deleted
-    import shutil
-    shutil.rmtree(repo_dir / "skills" / "to-be-deleted")
-    subprocess.run(["git", "add", "-A"], cwd=repo_dir, capture_output=True)
-    subprocess.run(["git", "commit", "-m", "delete retired skill"], cwd=repo_dir, capture_output=True)
+    # Write the manifest in the hub, declaring old-skill as retired
+    hub = tmp_path / "hub"
+    hub.mkdir(parents=True)
+    (hub / "RETIRED.md").write_text(
+        "# Retired skills\n"
+        "old-skill   # replaced by new-skill  2026-05-01\n"
+    )
 
-    # Mock DEFAULT_REPO_DIR to point to our test repo
-    manager = SkillsManager(global_skills_dir=tmp_path / "hub")
+    manager = SkillsManager(global_skills_dir=hub)
     with patch.object(SyncManager, 'DEFAULT_REPO_DIR', PropertyMock(return_value=repo_dir)):
         retired = manager._get_retired_skill_names()
 
-    assert "to-be-deleted" in retired, \
-        "Deleted skill should be detected as retired"
+    assert "old-skill" in retired, \
+        "Skill listed in manifest must be retired"
     assert "active-skill" not in retired, \
-        "Active skill should NOT be retired"
+        "Skill NOT listed in manifest must not be retired"
 
 
 def test_centralize_lock_prevents_concurrent(tmp_path):
