@@ -22,7 +22,7 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .paths import HUB_DIR, REPO_DIR, RETIRED_MANIFEST
+from .paths import GIT_TIMEOUT, HUB_DIR, REPO_DIR, RETIRED_MANIFEST
 
 
 # ---------------------------------------------------------------------------
@@ -97,7 +97,7 @@ def _list_repo_skills() -> set[str]:
             cwd=REPO_DIR,
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=GIT_TIMEOUT,
         )
         if result.returncode != 0:
             return set()
@@ -210,7 +210,7 @@ def _git_log_for_skill(name: str) -> list[dict]:
             cwd=REPO_DIR,
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=GIT_TIMEOUT,
         )
         if result.returncode != 0:
             return []

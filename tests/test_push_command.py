@@ -109,3 +109,16 @@ class TestSyncMethodSignatures:
         sig = inspect.signature(SyncManager._clone_to_repo)
         params = list(sig.parameters.keys())
         assert "repo_url" in params
+class TestPushStrictFlag:
+    """Smoke tests for the `--strict` flag (CI-friendly exit code 2)."""
+
+    def test_strict_does_not_crash(self):
+        """push --strict runs without crash (exit: 0, 1, or 2)."""
+        from click.testing import CliRunner
+        from agent_sync.cli import main
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["push", "--strict"])
+        assert result.exit_code in (0, 1, 2), (
+            f"Unexpected exit code {result.exit_code}: {result.output[:200]}"
+        )

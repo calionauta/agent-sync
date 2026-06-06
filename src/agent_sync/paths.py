@@ -53,3 +53,11 @@ STATE_FILE: Path = DATA_DIR / "sync-state.json"
 #: Manifest that lives inside the private repo (different from the
 #: hub manifest — this one tracks repo-level sync metadata).
 REPO_MANIFEST: Path = REPO_DIR / INTERNAL_MANIFEST_FILENAME
+
+# --- Timeouts (seconds) ----------------------------------------------------
+
+#: Default timeout for `git` subprocess calls.
+GIT_TIMEOUT: int = 10
+
+#: How long the centralize lock is valid before it's considered stale.
+LOCK_STALE_TIMEOUT: int = 600  # 10 minutes

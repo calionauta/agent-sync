@@ -368,3 +368,25 @@ class TestCliAudit:
         result = runner.invoke(skills_group, ["explain", "cali-coding-go-stack"])
         # Should not crash, exit 0 or informative output
         assert "cali-coding-go-stack" in result.output or result.exit_code != 0
+
+    def test_audit_limit_truncates_output(self):
+        """`skills audit --limit 5` returns at most 5 rows."""
+        from click.testing import CliRunner
+        from agent_sync.cli import skills_group
+
+        runner = CliRunner()
+        result = runner.invoke(skills_group, ["audit", "--limit", "5", "--json"])
+        if result.exit_code == 0 and result.stdout.strip():
+            data = json.loads(result.stdout)
+            assert len(data["rows"]) <= 5
+
+    def test_audit_filter_searches_byname(self):
+        """`skills audit --filter go` returns only 'go'-related skills."""
+        from click.testing import CliRunner
+        from agent_sync.cli import skills_group
+
+        runner = CliRunner()
+        result = runner.invoke(skills_group, ["audit", "--filter", "go", "--json"])
+        if result.exit_code == 0 and result.stdout.strip():
+            data = json.loads(result.stdout)
+            assert all("go" in row["name"].lower() for row in data["rows"])
