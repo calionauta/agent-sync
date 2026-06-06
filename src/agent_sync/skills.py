@@ -270,6 +270,29 @@ class SkillsManager:
                         bare = bare.split("/", 1)[0]
                     if bare and not bare.startswith("."):
                         retired.add(bare)
+
+            # A skill deleted in a past commit and re-added in a later
+            # commit is NOT retired — only skills still absent from HEAD
+            # count. This prevents a temporary deletion (e.g. accidental
+            # `agent-sync centralize` with wrong filter) from permanently
+            # blacklisting a skill.
+            head_result = subprocess.run(
+                ["git", "ls-tree", "--name-only", "HEAD", "skills/"],
+                cwd=repo_dir,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if head_result.returncode == 0:
+                present: set[str] = set()
+                for line in head_result.stdout.splitlines():
+                    line = line.strip()
+                    if line.startswith("skills/"):
+                        bare = line[len("skills/"):].rstrip("/")
+                        if bare and "/" not in bare and not bare.startswith("."):
+                            present.add(bare)
+                retired -= present
+
             return retired
         except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
             return set()
