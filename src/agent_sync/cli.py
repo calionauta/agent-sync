@@ -1259,20 +1259,16 @@ def _skill_description_lines(skill_path: Path) -> list[str]:
 @click.option("--limit", "-l", type=int, default=None, help="Maximum number of rows to show (for large outputs).")
 @click.option("--filter", "-f", type=str, default=None, help="Only show skills whose name contains this substring.")
 def audit_skills(as_json: bool, limit: int | None, filter: str | None):
-    """Show every skill's status across hub, repo, and retirement manifest.
+    """Show every skill's status across the hub and the private repo.
 
-    Compares three sources of truth and flags drift:
+    Compares two sources of truth:
     - Local hub: `~/.agents/skills/`
     - Private repo HEAD: `skills/`
-    - Retirement manifest: `~/.agents/skills/RETIRED.md`
 
     A skill can be:
-    - in_sync: present everywhere it should be
-    - in_hub_only: new skill, will be pushed
-    - in_repo_only: orphan in the repo (use `push --prune` to clean up)
-    - retired_in_repo: in repo and manifest, correctly retired
-    - retired_clean: only in manifest, fully retired
-    - conflict_*: in hub AND in manifest (needs user attention)
+    - in_sync: present in both hub and repo
+    - in_hub_only: new skill, will be pushed on next push
+    - in_repo_only: orphan in the repo (run `push --prune` or `skills prune`)
     """
     from .skills_audit import audit_skills as build_audit
 
@@ -1283,14 +1279,12 @@ def audit_skills(as_json: bool, limit: int | None, filter: str | None):
         console.print(_json.dumps({
             "hub_count": report.hub_count,
             "repo_count": report.repo_count,
-            "manifest_count": report.manifest_count,
             "summary": report.summary_counts(),
             "rows": [
                 {
                     "name": r.name,
                     "in_hub": r.in_hub,
                     "in_repo": r.in_repo,
-                    "in_manifest": r.in_manifest,
                     "status": r.status,
                 }
                 for r in report.rows
@@ -1303,8 +1297,7 @@ def audit_skills(as_json: bool, limit: int | None, filter: str | None):
     console.print(
         f"\n[bold]Skills audit[/bold] — "
         f"[green]{report.hub_count}[/green] in hub, "
-        f"[green]{report.repo_count}[/green] in repo, "
-        f"[yellow]{report.manifest_count}[/yellow] retired\n"
+        f"[green]{report.repo_count}[/green] in repo\n"
     )
 
     # Apply `--filter` (substring match) and `--limit` before rendering
@@ -1319,18 +1312,12 @@ def audit_skills(as_json: bool, limit: int | None, filter: str | None):
     table.add_column("Skill", style="cyan", no_wrap=True)
     table.add_column("Hub", justify="center", width=3)
     table.add_column("Repo", justify="center", width=4)
-    table.add_column("Retired", justify="center", width=7)
     table.add_column("Status")
 
     STATUS_DISPLAY = {
         "in_sync": ("green", "in sync"),
         "in_hub_only": ("green", "new (will push)"),
         "in_repo_only": ("red", "orphan in repo"),
-        "retired_in_repo": ("yellow", "retired (in repo)"),
-        "retired_clean": ("dim", "retired (clean)"),
-        "conflict_retired_in_hub": ("red bold", "ERROR: retired in hub"),
-        "conflict_retired_everywhere": ("red bold", "ERROR: retired everywhere"),
-        "unknown": ("dim", "unknown"),
     }
 
     for row in filtered_rows:
@@ -1339,28 +1326,19 @@ def audit_skills(as_json: bool, limit: int | None, filter: str | None):
             row.name,
             "[green]\u2713[/green]" if row.in_hub else "[dim]\u00b7[/dim]",
             "[green]\u2713[/green]" if row.in_repo else "[dim]\u00b7[/dim]",
-            "[yellow]\u2713[/yellow]" if row.in_manifest else "[dim]\u00b7[/dim]",
             f"[{color}]{label}[/{color}]",
         )
 
     console.print(table)
     console.print()
 
-    problems = [
-        r for r in filtered_rows
-        if r.status.startswith("conflict_") or r.status == "in_repo_only"
-    ]
+    problems = [r for r in filtered_rows if r.status == "in_repo_only"]
     if problems:
         console.print(
-            f"[bold red]\u26a0 {len(problems)} problem(s) need attention:[/bold red]"
+            f"[bold red]\u26a0 {len(problems)} orphan(s) in repo (need attention):[/bold red]"
         )
         for r in problems:
-            if r.status == "in_repo_only":
-                fix = "run `agent-sync skills prune --yes` or `agent-sync push --prune`"
-            elif r.status == "conflict_retired_in_hub":
-                fix = "remove from hub or from `~/.agents/skills/RETIRED.md`"
-            else:
-                fix = "investigate; conflicting state"
+            fix = "run `agent-sync skills prune --yes` or `agent-sync push --prune`"
             console.print(f"  [red]\u2022[/red] [cyan]{r.name}[/cyan]: {fix}")
         console.print()
     else:
@@ -1373,7 +1351,7 @@ def explain_skill_cmd(name: str):
     """Show lifecycle and current state of a single skill.
 
     Useful for debugging "where did this skill go?". Shows:
-    - Current location: hub / repo / manifest / combinations
+    - Current location: hub / repo
     - When it was first added (commit + date)
     - When it was last modified (commit + date)
     - Total commits affecting it
@@ -1383,10 +1361,10 @@ def explain_skill_cmd(name: str):
 
     expl = build_explanation(name)
 
-    if not expl.in_hub and not expl.in_repo and not expl.in_manifest:
+    if not expl.in_hub and not expl.in_repo:
         console.print(
             f"\n[yellow]\u26a0 Skill [cyan]{name}[/cyan] is not tracked anywhere "
-            f"(not in hub, repo, or manifest).[/yellow]\n"
+            f"(not in hub or repo).[/yellow]\n"
         )
         return
 
@@ -1401,9 +1379,6 @@ def explain_skill_cmd(name: str):
     )
     state_table.add_row(
         "Repo (HEAD)", "[green]present[/green]" if expl.in_repo else "[dim]absent[/dim]"
-    )
-    state_table.add_row(
-        "Manifest", "[yellow]retired[/yellow]" if expl.in_manifest else "[dim]active[/dim]"
     )
     console.print(state_table)
     console.print()
@@ -1430,11 +1405,6 @@ def explain_skill_cmd(name: str):
 
     if expl.in_hub:
         console.print(f"[bold]Local files:[/bold] {expl.file_count}")
-
-    if expl.manifest_line:
-        console.print()
-        console.print("[bold]Manifest entry:[/bold]")
-        console.print(f"  {expl.manifest_line}")
 
 
 @skills_group.command("prune")

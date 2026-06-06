@@ -453,46 +453,55 @@ def test_centralize_skips_retired_orphans(tmp_path):
         "Only real orphan should be imported"
 
 
-def test_get_retired_skill_names_from_manifest(tmp_path):
-    """Retirement is now manifest-based (AD-1). Skills listed in
-    `~/.agents/skills/RETIRED.md` are retired; skills in HEAD but NOT
-    in the manifest are active — even if they were deleted in a past
-    commit and re-added later (regression for 2026-06-06).
+def test_get_retired_skill_names_from_git_history(tmp_path):
+    """Retirement is derived from git history. A skill deleted and
+    NOT re-added is retired. A skill deleted and RE-ADDED is NOT.
+    A skill never deleted is NOT.
     """
-    from agent_sync.sync import SyncManager
-    from unittest.mock import PropertyMock
     import subprocess
+    from unittest.mock import patch
 
-    # Create a fake git repo with both skills present in HEAD
+    def _git(*a):
+        subprocess.run(["git", "-C", str(repo_dir)] + list(a),
+                       capture_output=True, check=True)
     repo_dir = tmp_path / "repo"
     (repo_dir / "skills").mkdir(parents=True)
-    (repo_dir / "skills" / "active-skill").mkdir(parents=True)
-    (repo_dir / "skills" / "active-skill" / "SKILL.md").write_text("active")
-    (repo_dir / "skills" / "old-skill").mkdir(parents=True)
-    (repo_dir / "skills" / "old-skill" / "SKILL.md").write_text("retired by manifest")
+    for s in ["alive", "dead"]:
+        (repo_dir / "skills" / s).mkdir(parents=True)
+        (repo_dir / "skills" / s / "SKILL.md").write_text(f"# {s}\n")
+    _git("init")
+    _git("config", "user.email", "t@t")
+    _git("config", "user.name", "T")
+    _git("add", "-A")
+    _git("commit", "-m", "add both")
 
-    subprocess.run(["git", "init"], cwd=repo_dir, capture_output=True)
-    subprocess.run(["git", "config", "user.email", "test@test"], cwd=repo_dir, capture_output=True)
-    subprocess.run(["git", "config", "user.name", "test"], cwd=repo_dir, capture_output=True)
-    subprocess.run(["git", "add", "-A"], cwd=repo_dir, capture_output=True)
-    subprocess.run(["git", "commit", "-m", "add both skills"], cwd=repo_dir, capture_output=True)
+    import shutil
+    shutil.rmtree(repo_dir / "skills" / "dead")
+    _git("add", "-A")
+    _git("commit", "-m", "delete dead")
 
-    # Write the manifest in the hub, declaring old-skill as retired
-    hub = tmp_path / "hub"
-    hub.mkdir(parents=True)
-    (hub / "RETIRED.md").write_text(
-        "# Retired skills\n"
-        "old-skill   # replaced by new-skill  2026-05-01\n"
-    )
+    # Re-add dead (simulating user putting it back)
+    (repo_dir / "skills" / "dead").mkdir()
+    (repo_dir / "skills" / "dead" / "SKILL.md").write_text("# dead (back)\n")
+    _git("add", "-A")
+    _git("commit", "-m", "re-add dead")
 
-    manager = SkillsManager(global_skills_dir=hub)
+    manager = SkillsManager(global_skills_dir=tmp_path / "hub")
     with patch('agent_sync.paths.REPO_DIR', repo_dir):
         retired = manager._get_retired_skill_names()
 
-    assert "old-skill" in retired, \
-        "Skill listed in manifest must be retired"
-    assert "active-skill" not in retired, \
-        "Skill NOT listed in manifest must not be retired"
+    assert "alive" not in retired, "alive was never deleted"
+    assert "dead" not in retired, "dead was re-added to HEAD"
+
+    # Now test truly deleted (never re-added)
+    shutil.rmtree(repo_dir / "skills" / "dead")
+    _git("add", "-A")
+    _git("commit", "-m", "delete dead again")
+
+    with patch('agent_sync.paths.REPO_DIR', repo_dir):
+        retired = manager._get_retired_skill_names()
+    assert "dead" in retired, "dead was deleted and NOT re-added"
+    assert "alive" not in retired, "alive was never deleted"
 
 
 def test_centralize_lock_prevents_concurrent(tmp_path):

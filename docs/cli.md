@@ -160,8 +160,6 @@ local hub). Orphan skills accumulate when you remove a skill from
 `~/.agents/skills/` without also removing it from the repo. This
 subcommand is the dedicated, safe way to clean them up.
 
-Manifest-declared retired skills are **never** pruned, even with `--yes`.
-
 **Options:**
 - `--dry-run` — Show what would be pruned; do not modify anything
 - `-y, --yes` — Skip the confirmation prompt (for scripts)

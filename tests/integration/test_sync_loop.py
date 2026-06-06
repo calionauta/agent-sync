@@ -59,7 +59,6 @@ def _seed_skill(repo: Path, name: str, content: str = "# " + "stub\n") -> None:
 def _build_test_env(
     tmp_path: Path,
     seed_skills: list[str] = (),
-    manifest_entries: list[str] = (),
 ) -> tuple[Path, Path, Path]:
     """Build a full test environment: bare remote, repo clone, hub.
 
@@ -90,18 +89,9 @@ def _build_test_env(
     if seed_skills:
         _git(repo, "push", "origin", "main")
 
-    # Hub directory with optional manifest
+    # Hub directory (empty initially)
     hub = tmp_path / "hub"
     hub.mkdir(parents=True, exist_ok=True)
-    if manifest_entries:
-        manifest = hub / "RETIRED.md"
-        lines = [
-            "# Retired Skills (test)",
-            "# One per line. Comments and trailing text are ignored.",
-            "",
-        ]
-        lines.extend(manifest_entries)
-        manifest.write_text("\n".join(lines) + "\n")
 
     return hub, repo, bare
 
@@ -207,54 +197,15 @@ def test_02_hub_new_skill_pushed_cleanly(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Scenario 3: manifest-declared retired skill stays retired
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.integration
-def test_03_manifest_retired_skill_stays_retired(tmp_path):
-    """A skill listed in RETIRED.md is NOT re-imported by centralize
-    even if it exists in the repo. After push, no orphan.
-    """
-    hub, repo, bare = _build_test_env(
-        tmp_path,
-        seed_skills=["cali-questions-quality"],
-        manifest_entries=["cali-questions-quality"],
-    )
-
-    with patch("agent_sync.paths.HUB_DIR", hub), \
-         patch("agent_sync.paths.REPO_DIR", repo):
-        sm = _make_sync_manager(hub, repo, bare)
-
-        # centralize: should NOT import the retired skill to the hub
-        skills_mgr = _make_skills_manager(hub)
-        synced = skills_mgr._sync_from_repo()
-        assert synced == 0, f"Retired skill was imported: {synced}"
-        assert not (hub / "cali-questions-quality").exists(), \
-            "Retired skill should not be in hub"
-
-        # push: even with prune=True, the retired skill should NOT be
-        # pruned (manifest says it's intentionally retired).
-        changed_files, orphans = sm._push_stage_and_get_changes(
-            "test", prune=True
-        )
-        # The skill is absent from the hub, so _detect_orphan_skills WILL
-        # list it as an orphan. The prune step (if invoked) must skip it
-        # because it's in the manifest. Verify no delete was staged.
-        deletes = [f for f in changed_files if f.get("status") == "D"]
-        assert not any("cali-questions-quality" in f["path"] for f in deletes), \
-            f"Retired skill should not be staged for deletion, got: {deletes}"
-
-
-# ---------------------------------------------------------------------------
-# Scenario 4: detection returns truly-orphaned names (the bug-trigger)
+# Scenario 4: detection returns truly-orphaned names
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration
 def test_04_detect_orphan_skills(tmp_path):
-    """Direct test of the orphan detection: skill in repo but missing
-    from hub, not in manifest, IS an orphan.
+    """Skill in repo but missing from hub IS an orphan. No manifest
+    needed — git history and hub content are the only sources.
     """
     hub, repo, bare = _build_test_env(
         tmp_path, seed_skills=["cali-orphan-1", "cali-orphan-2"]
@@ -417,115 +368,72 @@ def test_05_hub_modification_overrides_repo(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Scenario 6: push after manifest retirement → repo loses the skill
+# Scenario 6: push after removing from hub = skill leaves repo too
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration
-def test_06_push_after_manifest_retirement_removes_from_repo(tmp_path):
-    """The ONLY path that should remove a skill from the remote repo is
-    explicit retirement (manifest entry) combined with an explicit prune.
-
-    Sequence:
-      1. Skill X exists in hub and repo
-      2. User adds X to RETIRED.md and removes X from hub
-      3. push (default, no --prune): X stays in repo (additive)
-      4. push --prune: X is removed from repo in the same commit
+def test_06_remove_from_hub_then_push_removes_from_repo(tmp_path):
+    """Removing a skill from hub + push = skill leaves repo too.
+    The hub is source of truth. Removing from hub and pushing mirrors
+    the deletion to the repo. The skill is then retired (git history)
+    and won't be re-imported.
     """
     hub, repo, bare = _build_test_env(
-        tmp_path, seed_skills=["cali-to-retire"]
+        tmp_path, seed_skills=["cali-to-remove"]
     )
-    # The skill is in the repo from the seed. Manually put it in the hub
-    # too (in real life, `centralize` would have done this earlier).
+    # Copy skill to hub too
     import shutil
-    shutil.copytree(repo / "skills" / "cali-to-retire", hub / "cali-to-retire")
-    # Sanity: skill is in both
-    assert (hub / "cali-to-retire" / "SKILL.md").exists()
-    assert (repo / "skills" / "cali-to-retire" / "SKILL.md").exists()
+    shutil.copytree(repo / "skills" / "cali-to-remove", hub / "cali-to-remove")
+    assert (hub / "cali-to-remove" / "SKILL.md").exists()
 
-    # Step 1: declare retirement + remove from hub
-    (hub / "RETIRED.md").write_text("cali-to-retire  # explicitly retired\n")
-    import shutil
-    shutil.rmtree(hub / "cali-to-retire")
-    assert not (hub / "cali-to-retire").exists()
+    # Remove from hub
+    shutil.rmtree(hub / "cali-to-remove")
 
     with patch("agent_sync.paths.HUB_DIR", hub), \
          patch("agent_sync.paths.REPO_DIR", repo):
         sm = _make_sync_manager(hub, repo, bare)
 
-        # Step 2: default push (prune=False) — repo should be additive
+        # Default push: the orphan is detected, the changed_files includes
+        # the deletion (mirrored from hub to repo working tree).
         changed_files, orphans = sm._push_stage_and_get_changes(
-            "retire cali-to-retire", prune=False
+            "remove cali-to-remove", prune=False
         )
-        # No delete should be staged
-        deletes = [f for f in changed_files if f.get("status") == "D"]
-        assert not any("cali-to-retire" in f["path"] for f in deletes), \
-            f"Default push should not delete retired skill, got: {deletes}"
-        # The orphan was detected for the warning
-        assert "cali-to-retire" in orphans
-
-        # Step 3: explicit push --prune — repo loses the skill
-        changed_files, orphans = sm._push_stage_and_get_changes(
-            "retire cali-to-retire", prune=True
-        )
-        # No delete! The skill is in the manifest, so it stays.
-        deletes = [f for f in changed_files if f.get("status") == "D"]
-        assert not any("cali-to-retire" in f["path"] for f in deletes), \
-            f"Manifest retirement should protect from prune, got: {deletes}"
+        # The skill appears as an orphan (in repo, not in hub)
+        assert "cali-to-remove" in orphans
 
 
 # ---------------------------------------------------------------------------
-# Scenario 7 (F7): push then pull restores hub on a new machine
+# Scenario 7 (F7): push then pull restores hub
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration
-def test_07_push_then_pull_restores_hub_and_manifest(tmp_path):
-    """After push, a pull on a fresh clone restores the hub with:
-    - All committed skills
-    - The RETIRED.md manifest file (if present)
-
-    This validates the backup-recovery flow.
-    """
+def test_07_push_then_pull_restores_hub(tmp_path):
+    """After push, a pull on a fresh clone restores all skills."""
     hub, repo, bare = _build_test_env(
-        tmp_path, seed_skills=["cali-backup-1", "cali-backup-2"],
-        manifest_entries=["cali-backup-1"],
+        tmp_path, seed_skills=["cali-backup-1", "cali-backup-2"]
     )
-    # Put the skills and manifest in the hub
     for s in ["cali-backup-1", "cali-backup-2"]:
         (hub / s).mkdir(parents=True)
         (hub / s / "SKILL.md").write_text(f"# {s}\n")
-    assert (hub / "cali-backup-1").exists()
-    assert (hub / "cali-backup-2").exists()
 
     with patch("agent_sync.paths.HUB_DIR", hub), \
          patch("agent_sync.paths.REPO_DIR", repo):
         sm = _make_sync_manager(hub, repo, bare)
-
-        # Push (default, safe) — commits skills + manifest
         _cf, orphans = sm._push_stage_and_get_changes("backup")
-        assert isinstance(orphans, list), f"Expected list, got {orphans}"
+        assert isinstance(orphans, list)
 
-        # Now simulate a NEW machine: fresh hub, same repo
+        # New machine: fresh hub
         hub2 = tmp_path / "hub2"
         hub2.mkdir(parents=True)
 
         with patch("agent_sync.paths.HUB_DIR", hub2):
             skills_mgr = _make_skills_manager(hub2)
-
-            # Pull = sync from repo to hub. Count includes 2 skill dirs
-            # + 1 manifest file (RETIRED.md).
             synced = skills_mgr._sync_from_repo()
-            assert synced == 3, f"Expected 3 items (2 skills + 1 manifest) restored, got {synced}"
-
-            # Both skills present
+            assert synced == 2, f"Expected 2 skills restored, got {synced}"
             assert (hub2 / "cali-backup-1" / "SKILL.md").exists()
             assert (hub2 / "cali-backup-2" / "SKILL.md").exists()
-
-            # Manifest restored too
-            manifest = hub2 / "RETIRED.md"
-            assert manifest.exists(), "Manifest must be restored from repo"
-            assert "cali-backup-1" in manifest.read_text()
 
 
 # ---------------------------------------------------------------------------
@@ -539,26 +447,15 @@ def test_08_audit_reflects_test_state(tmp_path):
     from agent_sync.skills_audit import audit_skills
 
     hub, repo, bare = _build_test_env(
-        tmp_path,
-        seed_skills=["cali-in-sync", "cali-orphan"],
-        manifest_entries=["cali-retired-only"],
+        tmp_path, seed_skills=["cali-in-sync", "cali-orphan"]
     )
-    # Hub has the in-sync one
     (hub / "cali-in-sync").mkdir(parents=True)
     (hub / "cali-in-sync" / "SKILL.md").write_text("# cali-in-sync\n")
-    # cali-orphan: in repo, not in hub, not in manifest → in_repo_only
-    # cali-retired-only: in manifest, not in repo, not in hub → retired_clean
 
     with patch("agent_sync.skills_audit.HUB_DIR", hub), \
-         patch("agent_sync.skills_audit.REPO_DIR", repo), \
-         patch("agent_sync.skills_audit.RETIRED_MANIFEST", hub / "RETIRED.md"):
-        report = audit_skills(
-            hub_skills=None,
-            repo_skills=None,
-            manifest_skills=None,
-        )
+         patch("agent_sync.skills_audit.REPO_DIR", repo):
+        report = audit_skills(hub_skills=None, repo_skills=None)
 
     by_name = {r.name: r for r in report.rows}
     assert by_name["cali-in-sync"].status == "in_sync"
     assert by_name["cali-orphan"].status == "in_repo_only"
-    assert by_name["cali-retired-only"].status == "retired_clean"

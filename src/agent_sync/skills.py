@@ -225,50 +225,68 @@ class SkillsManager:
         return orphans
 
     def _get_retired_skill_names(self) -> set[str]:
-        """Get skill names explicitly listed as retired.
+        """Get skill names that were deleted from the private repo and
+        have NOT been re-added to HEAD.
 
-        Reads `~/.agents/skills/RETIRED.md`, the user-editable source of
-        truth for retired skills. The repo's `RETIRED.md` (if committed)
-        is a MIRROR of the hub's manifest; the hub always wins.
-
-        If the hub has no `RETIRED.md`, there is no retirement. A stale
-        manifest in the repo is not consulted — only the local hub.
-
-        Manifest format (one skill per line, `#` for comments):
-            cali-old-skill        # renamed to cali-new-skill  2026-05-01
+        Source of truth: `git log --all --diff-filter=D` gives every
+        deletion. Subtracting `git ls-tree -d HEAD skills/` gives the
+        set of skills that were once in the repo and are intentionally
+        gone. A skill that was briefly deleted and re-added in a later
+        commit is NOT retired.
 
         Returns:
-            Set of retired skill names. Empty if no manifest exists.
+            Set of retired skill names. Empty if repo is unavailable.
         """
-        manifest = self.global_skills_dir / "RETIRED.md"
-        if not manifest.exists():
+        from . import paths
+
+        repo_dir = paths.REPO_DIR
+        if not (repo_dir / ".git").exists():
             return set()
-        return self._parse_retired_manifest(manifest)
 
-    def _parse_retired_manifest(self, path: Path) -> set[str]:
-        """Parse a RETIRED.md manifest file.
-
-        Format: one skill name per line. Lines starting with `#` and
-        blank lines are ignored. Trailing text after the skill name
-        (e.g. comments and dates) is also ignored — only the first
-        whitespace-delimited token is the skill name.
-        """
-        retired: set[str] = set()
         try:
-            content = path.read_text(encoding="utf-8")
-        except OSError:
+            import subprocess
+            result = subprocess.run(
+                ["git", "log", "--all", "--diff-filter=D", "--name-only", "--format=", "--", "skills/"],
+                cwd=repo_dir,
+                capture_output=True,
+                text=True,
+                timeout=paths.GIT_TIMEOUT,
+            )
+            if result.returncode != 0:
+                return set()
+            retired: set[str] = set()
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                if line.startswith("skills/"):
+                    bare = line[len("skills/"):]
+                    if "/" in bare:
+                        bare = bare.split("/", 1)[0]
+                    if bare and not bare.startswith("."):
+                        retired.add(bare)
+
+            # Skills in HEAD are NOT retired — they were re-added
+            head_result = subprocess.run(
+                ["git", "ls-tree", "-d", "--name-only", "HEAD", "skills/"],
+                cwd=repo_dir,
+                capture_output=True,
+                text=True,
+                timeout=paths.GIT_TIMEOUT,
+            )
+            if head_result.returncode == 0:
+                present: set[str] = set()
+                for line in head_result.stdout.splitlines():
+                    line = line.strip()
+                    if line.startswith("skills/"):
+                        bare = line[len("skills/"):].rstrip("/")
+                        if bare and "/" not in bare and not bare.startswith("."):
+                            present.add(bare)
+                retired -= present
+
             return retired
-        for raw in content.splitlines():
-            line = raw.strip()
-            if not line or line.startswith("#"):
-                continue
-            tokens = line.split()
-            if not tokens:
-                continue
-            name = tokens[0]
-            if name and not name.startswith("."):
-                retired.add(name)
-        return retired
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            return set()
 
     def _get_active_skill_names(self) -> set[str]:
         """Skills in the repo's HEAD:skills/ that are NOT retired.
@@ -276,6 +294,8 @@ class SkillsManager:
         This is the positive "what skills exist" API. Retirement is a
         manifest-declared subtraction, not a git-history query.
         """
+        from . import paths
+
         from . import paths
 
         repo_dir = paths.REPO_DIR
