@@ -45,6 +45,14 @@ agent-sync supports two protocols:
 
 [Learn more about DotAgents Protocol](protocols/dotagents.md)
 
+## Documentation
+
+- [Quick Start](quickstart.md) - Get up and running in 5 minutes
+- [CLI Reference](cli.md) - Complete command documentation
+- [Configuration](configuration.md) - All config options
+- [Skills Lifecycle](skills-lifecycle.md) - Retirement, unretirement, recovery
+- [Protocols](protocols/) - DotAgents and GitAgent
+
 ## License
 
 MIT License

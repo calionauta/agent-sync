@@ -149,6 +149,87 @@ No interaction needed — centralizes everything automatically.
 - `--push` — Push to GitHub after centralizing
 - `--dry-run` — Preview without changing anything
 
+See [Skills Lifecycle](skills-lifecycle.md) for the full retirement flow.
+
+---
+
+### `agent-sync skills prune`
+
+Remove orphan skills from the remote repo (in HEAD, missing from the
+local hub). Orphan skills accumulate when you remove a skill from
+`~/.agents/skills/` without also removing it from the repo. This
+subcommand is the dedicated, safe way to clean them up.
+
+Manifest-declared retired skills are **never** pruned, even with `--yes`.
+
+**Options:**
+- `--dry-run` — Show what would be pruned; do not modify anything
+- `-y, --yes` — Skip the confirmation prompt (for scripts)
+
+**Examples:**
+```bash
+agent-sync skills prune --dry-run    # preview only
+agent-sync skills prune              # preview + ask y/n
+agent-sync skills prune --yes        # execute without prompt
+```
+
+**Sample output:**
+```
+Orphan skills in remote repo (in HEAD, missing from local hub): 3
+
+  - skills/cali-orphan-1/
+  - skills/cali-orphan-2/
+  - skills/cali-orphan-3/
+
+These skills will be removed from the remote repo in the next commit.
+Proceed? [y/N]:
+```
+
+---
+
+### `agent-sync skills audit`
+
+Show every skill's status across the hub, repo, and retirement
+manifest. Compares three sources of truth and flags drift.
+
+**Status types:**
+- `in sync` — present in hub + repo, not retired
+- `new (will push)` — in hub only
+- `orphan in repo` — in repo only (use `push --prune` to clean)
+- `retired (in repo)` — in repo + manifest, correctly retired
+- `retired (clean)` — only in manifest, fully retired
+- `ERROR: retired in hub` — in hub + manifest (needs user attention)
+- `ERROR: retired everywhere` — in hub + repo + manifest
+
+**Options:**
+- `--json` — Output as JSON (machine-readable)
+
+**Examples:**
+```bash
+agent-sync skills audit                # human-readable table
+agent-sync skills audit --json         # machine-readable JSON
+```
+
+---
+
+### `agent-sync skills explain <name>`
+
+Show the lifecycle and current state of a single skill. Useful for
+debugging "where did this skill go?".
+
+**Output includes:**
+- Current location: hub / repo / manifest / combinations
+- When it was first added (commit + date)
+- When it was last modified (commit + date)
+- Total commits affecting it
+- File count in the local hub
+- Raw manifest line (if retired)
+
+**Example:**
+```bash
+agent-sync skills explain cali-coding-go-stack
+```
+
 ### `agent-sync publish`
 
 ### `agent-sync publish`
