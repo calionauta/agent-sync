@@ -201,7 +201,7 @@ def sync(force: bool, skills_only: bool, configs_only: bool, agents_only: bool):
 @click.option("--agent", "-a", multiple=True, help="Specific agent config to push (can repeat)")
 @click.option("--exclude-skill", multiple=True, help="Skill to exclude (can repeat)")
 @click.option("--exclude-agent", multiple=True, help="Agent to exclude (can repeat)")
-@click.option("--no-prune", is_flag=True, help="Disable mirror-prune (additive only; orphan skills in remote are kept)")
+@click.option("--prune", is_flag=True, help="Remove orphan skills from the remote repo (in HEAD but not in local hub). Default: kept additively.")
 def push(
     dry_run: bool,
     message: Optional[str],
@@ -211,21 +211,22 @@ def push(
     agent: tuple,
     exclude_skill: tuple,
     exclude_agent: tuple,
-    no_prune: bool,
+    prune: bool,
 ):
     """Push local changes to the remote repository.
 
-    By default, the private repo is kept as a mirror of the local hub: any
-    skill that exists in the remote `skills/` but is missing from
-    `~/.agents/skills/` is removed in the same commit (history preserved as
-    `D` entries). Use --no-prune for the legacy additive behavior.
+    By default, the remote repo is kept ADDITIVE: any skill that exists in
+    the remote `skills/` but is missing from `~/.agents/skills/` is left
+    alone. Use `--prune` to remove those orphans in the same commit
+    (history preserved as `D` entries). Use `agent-sync skills prune` for
+    a dedicated subcommand with `--dry-run` and `--yes` flags.
 
     Examples:
-      agent-sync push                    # Push all (mirror, default)
+      agent-sync push                    # Push all (additive, default)
       agent-sync push --skill dogfood   # Specific skill
       agent-sync push --agent pi.dev    # Specific agent config
       agent-sync push --exclude-skill deprecated-skill  # Exclude skill
-      agent-sync push --no-prune        # Add-only, keep remote orphans
+      agent-sync push --prune           # Remove remote orphans too
       agent-sync push --dry-run         # Preview changes
     """
     from ._tui import print_footer, build_footer_commands
@@ -247,7 +248,7 @@ def push(
     # `do_skills = not configs_only` dance effectively set configs_only=True
     # by default, which made the prune check `not configs_only` always False
     # — prune never ran on default pushes.
-    changed_files = sync_manager._push_stage_and_get_changes(
+    changed_files, orphans = sync_manager._push_stage_and_get_changes(
         message=commit_msg,
         skills_filter=list(skill) if skill else None,
         agents_filter=list(agent) if agent else None,
@@ -255,11 +256,17 @@ def push(
         agents_exclude=list(exclude_agent) if exclude_agent else None,
         skills_only=skills_only,
         configs_only=configs_only,
-        prune=not no_prune,
+        prune=prune,
     )
 
     # No changes?
     if not changed_files:
+        # Even if nothing was changed in this push, surface orphan info
+        # so the user knows they exist (educational).
+        if orphans:
+            _warn_about_orphans(orphans)
+        console.print("\n[yellow]Nothing to push (no changes since last sync).[/yellow]\n")
+        return
         console.print("\n[yellow]Nothing to push (no changes since last sync).[/yellow]\n")
         return
 
@@ -350,6 +357,35 @@ def push(
     except subprocess.CalledProcessError as e:
         from .sync import _sanitize_git_output
         console.print(f"\n[red]✗ Push failed:[/red] {_sanitize_git_output(e.stderr) or e}")
+        return
+
+    # Educational warning: orphans detected but not pruned (default is safe).
+    # The user just opted out of the destructive operation; tell them what
+    # they could have done, without being preachy.
+    if orphans and not prune:
+        _warn_about_orphans(orphans)
+
+
+def _warn_about_orphans(orphans: list[str]) -> None:
+    """Print a yellow warning listing orphan skills and how to prune them.
+
+    Called after a successful `push` that detected orphans but did NOT
+    prune them (the default). The user can then choose to run
+    `agent-sync skills prune` or `agent-sync push --prune`.
+    """
+    n = len(orphans)
+    sample = ", ".join(orphans[:5])
+    more = f" (+{n - 5} more)" if n > 5 else ""
+    console.print(
+        f"\n[yellow]⚠  {n} orphan skill(s) in the remote repo "
+        f"(missing from local hub): {sample}{more}[/yellow]"
+    )
+    console.print(
+        "[yellow]   To remove them, run one of:[/yellow]\n"
+        "    [cyan]agent-sync skills prune --dry-run[/cyan]  # preview\n"
+        "    [cyan]agent-sync skills prune --yes[/cyan]       # execute\n"
+        "    [cyan]agent-sync push --prune[/cyan]            # prune in next push\n"
+    )
 
 
 # =============================================================================
@@ -1209,6 +1245,71 @@ def _skill_description_lines(skill_path: Path) -> list[str]:
         return desc if desc else [f"[dim]Empty SKILL.md[/dim]"]
     except Exception:
         return [f"[dim]Could not read SKILL.md[/dim]"]
+
+
+@skills_group.command("prune")
+@click.option("--dry-run", is_flag=True, help="Show what would be pruned; do not modify anything")
+@click.option("--yes", "-y", is_flag=True, help="Skip the confirmation prompt")
+def prune_skills(dry_run: bool, yes: bool):
+    """Remove orphan skills from the remote repo (in HEAD, missing from local hub).
+
+    Orphan skills accumulate in the private repo when you remove a skill
+    from `~/.agents/skills/` without also removing it from the repo. This
+    subcommand is the dedicated, safe way to clean them up.
+
+    By default shows a preview and asks for confirmation. Use `--yes` to
+    skip the prompt (for scripts), or `--dry-run` to only preview.
+
+    Examples:
+      agent-sync skills prune --dry-run    # preview only
+      agent-sync skills prune              # preview + ask y/n
+      agent-sync skills prune --yes        # execute without prompt
+    """
+    from .config import Config
+    from .sync import SyncManager
+
+    config = Config()
+    if not config.repo_url:
+        console.print("[red]✗ Not initialized. Run 'agent-sync init' first.[/red]")
+        return
+
+    sync_manager = SyncManager(config)
+    orphans = sync_manager._detect_orphan_skills()
+
+    if not orphans:
+        console.print("[green]✓ No orphan skills — repo and hub are in sync.[/green]\n")
+        return
+
+    # Always show the preview (the user needs to see what will change)
+    console.print(
+        f"\n[bold]Orphan skills in remote repo "
+        f"(in HEAD, missing from local hub):[/bold] [red]{len(orphans)}[/red]\n"
+    )
+    for name in orphans:
+        console.print(f"  [red]-[/] skills/{name}/")
+    console.print()
+
+    if dry_run:
+        console.print("[dim]Dry run — no changes made.[/dim]\n")
+        return
+
+    if not yes:
+        console.print("[yellow]These skills will be removed from the remote repo in the next commit.[/yellow]")
+        if not click.confirm("Proceed?", default=False):
+            console.print("[yellow]Cancelled — no changes made.[/yellow]\n")
+            return
+
+    # Commit + push the prune
+    try:
+        sync_manager._run_git("add", ".")
+        sync_manager._run_git("commit", "-m", "chore: prune orphan skills from local hub")
+        console.print(f"  [dim]🚀 Pushing to {config.repo_url.split('/')[-1]}...[/dim]")
+        sync_manager._run_git("push", "origin", "main")
+        sync_manager._save_state("pushed", sync_manager.config.repo_url)
+        console.print(f"\n[green]✓ Pruned {len(orphans)} orphan skill(s).[/green]\n")
+    except subprocess.CalledProcessError as e:
+        from .sync import _sanitize_git_output
+        console.print(f"\n[red]✗ Prune failed:[/red] {_sanitize_git_output(e.stderr) or e}")
 
 
 @skills_group.command("centralize")

@@ -106,10 +106,11 @@ class TestPushEndToEnd:
         manager = SyncManager(mock_config)
         manager.repo_dir = temp_repo
         
-        changes = manager._push_stage_and_get_changes("test commit")
-        
-        # Should return changes
+        changes, orphans = manager._push_stage_and_get_changes("test commit")
+
+        # Should return (changed_files, orphans) tuple
         assert isinstance(changes, list), "Should return list of changes"
+        assert isinstance(orphans, list), "Should return list of orphans"
         # Note: the exact format depends on implementation
 
 

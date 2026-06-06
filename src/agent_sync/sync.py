@@ -1186,12 +1186,17 @@ class SyncManager:
         agents_filter: Optional[list[str]] = None,
         skills_exclude: Optional[list[str]] = None,
         agents_exclude: Optional[list[str]] = None,
-        prune: bool = True,
-    ) -> list[dict]:
-        """Stage files and return changed files list WITHOUT committing or pushing.
+        prune: bool = False,
+    ) -> tuple[list[dict], list[str]]:
+        """Stage files and return (changed_files, orphans).
 
         Returns:
-            List of dicts with 'path', 'status', 'label', 'directory_count'
+            (changed_files, orphans) where:
+            - changed_files: list of dicts with 'path', 'status', 'label',
+              'directory_count' for everything to be committed.
+            - orphans: list of skill names that exist in HEAD but are
+              missing from the local hub. Always detected; only pruned
+              if `prune=True`.
         """
         from .agents import get_all_agents
 
@@ -1285,46 +1290,45 @@ class SyncManager:
                 'directory_count': directory_count,
             })
 
-        # Mirror-prune: remove skills that exist in HEAD but not in local hub.
-        # This makes the private repo a true mirror of ~/.agents/skills/ instead
-        # of an accumulating archive. Each push records the prune as a normal
-        # `D` entry in the commit (history preserved, no --force).
-        if prune and not configs_only and not agents_only:
-            changed_files.extend(self._prune_orphan_skills())
+        # Detect orphan skills (in HEAD but missing from local hub) so the
+        # caller can warn the user. We ALWAYS detect (cheap read-only git
+        # query); we only actually prune if the user explicitly asked.
+        orphans = (
+            self._detect_orphan_skills()
+            if not configs_only and not agents_only
+            else []
+        )
 
-        return changed_files
+        if prune and orphans and not configs_only and not agents_only:
+            changed_files.extend(self._prune_orphan_skills(orphans))
 
-    def _prune_orphan_skills(self) -> list[dict]:
-        """Detect skills tracked in HEAD but missing from ~/.agents/skills/.
+        return changed_files, orphans
 
-        For each such skill, `git rm --cached` it (stages the deletion in the
-        next commit) and returns a synthetic change entry so the caller can
-        show it in the +/~/− summary.
+    def _detect_orphan_skills(self) -> list[str]:
+        """Read-only: return skill names in HEAD but missing from local hub.
 
-        Returns:
-            List of change dicts (one per pruned skill) with status='D' and
-            label='deleted'.
+        Cheaper than `_prune_orphan_skills` because it does not touch the
+        git index. Used to surface a warning to the user on default `push`
+        and by `agent-sync skills prune --dry-run`.
         """
         local_hub = paths.HUB_DIR
         if not local_hub.exists():
             return []
 
-        # Skills in the local hub (authoritative source)
         local_skill_names = {
             d.name for d in local_hub.iterdir()
             if d.is_dir() and not d.name.startswith(".")
         }
 
-        # Skills tracked in HEAD under skills/
         try:
-            head_ls = self._run_git("ls-tree", "--name-only", "HEAD", "skills/")
+            # `-d` restricts to directory entries only — a file like
+            # `skills/RETIRED.md` (manifest) would otherwise be treated as
+            # a phantom orphan.
+            head_ls = self._run_git("ls-tree", "-d", "--name-only", "HEAD", "skills/")
         except subprocess.CalledProcessError:
             return []  # Empty repo or no skills/ yet
-        # git ls-tree returns paths relative to the queried tree, so when we
-        # query `skills/`, names come back as `skills/<name>` (already prefixed).
-        # Strip the prefix to get the bare skill name, then filter out hidden
-        # dirs (`.cali-product-workflow` etc. — state, not skills).
-        head_skill_names = set()
+
+        head_skill_names: set[str] = set()
         for name in head_ls.split("\n"):
             if not name:
                 continue
@@ -1332,12 +1336,31 @@ class SyncManager:
             if bare and not bare.startswith("."):
                 head_skill_names.add(bare)
 
-        orphan_skills = sorted(head_skill_names - local_skill_names)
-        if not orphan_skills:
+        return sorted(head_skill_names - local_skill_names)
+
+    def _prune_orphan_skills(self, orphans: list[str] | None = None) -> list[dict]:
+        """Stage `git rm --cached` for each orphan skill and return change dicts.
+
+        For each orphan skill, `git rm --cached` it (stages the deletion in
+        the next commit) and returns a synthetic change entry so the caller
+        can show it in the +/~/− summary.
+
+        Args:
+            orphans: Pre-detected orphan skill names. If None, calls
+                     `_detect_orphan_skills()` to compute them (skips a
+                     redundant git query when the caller already detected).
+
+        Returns:
+            List of change dicts (one per pruned skill) with status='D' and
+            label='deleted'.
+        """
+        if orphans is None:
+            orphans = self._detect_orphan_skills()
+        if not orphans:
             return []
 
         pruned: list[dict] = []
-        for orphan in orphan_skills:
+        for orphan in orphans:
             path = f"skills/{orphan}"
             try:
                 self._run_git("rm", "-r", "--cached", path)
@@ -1382,18 +1405,20 @@ class SyncManager:
         except Exception:
             return False
 
-    def push(self, message: str = "chore: sync config updates", skills_only: bool = False, configs_only: bool = False, agents_only: bool = False, prune: bool = True) -> list[str]:
+    def push(self, message: str = "chore: sync config updates", skills_only: bool = False, configs_only: bool = False, agents_only: bool = False, prune: bool = False) -> tuple[list[dict], list[str]]:
         """Commit and push local changes to the private repo.
 
-        When `prune` is True (default), skills that exist in HEAD but are
-        missing from the local ~/.agents/skills/ are removed via `git rm`.
-        This makes the private repo a mirror of local state (no accumulating
-        archive). Pass `prune=False` for legacy additive-only behavior.
+        By default (`prune=False`), the private repo is additive: skills
+        missing from the local hub stay in the repo. Set `prune=True` to
+        remove them in the same commit (records a `D` entry; no `--force`).
 
         Returns:
-            List of change dicts (path, status, label, directory_count).
+            (changed_files, orphans):
+            - changed_files: list of change dicts that were committed+pushd.
+            - orphans: list of orphan skill names that were DETECTED but
+              NOT pruned (because `prune=False`). Empty if prune ran.
         """
-        changed_files = self._push_stage_and_get_changes(
+        changed_files, orphans = self._push_stage_and_get_changes(
             message, skills_only, configs_only, agents_only, prune=prune
         )
         if not changed_files:
@@ -1416,7 +1441,7 @@ class SyncManager:
             raise
 
         self._save_state("pushed", self.config.repo_url)
-        return changed_files
+        return changed_files, orphans
 
     def get_status(self) -> dict:
         """
