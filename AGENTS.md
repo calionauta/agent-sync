@@ -110,8 +110,26 @@ python3 -m pytest tests/ --cov=src --cov-report=term-missing
 # Run specific test file
 python3 -m pytest tests/test_cli_params_e2e.py -v
 
-# Run only fast tests
-python3 -m pytest tests/ -m "not slow" -v
+# Run only fast tests (skip integration)
+python3 -m pytest tests/ -m "not integration" -v
+
+# Run only integration tests (real git, real fs)
+python3 -m pytest -m integration tests/integration/ -v
+```
+
+### Skills state observability
+
+When debugging skill sync issues, use:
+
+```bash
+# Full hub/repo/manifest state across all skills
+agent-sync skills audit
+
+# Lifecycle of one skill (when added, last modified, current state)
+agent-sync skills explain <name>
+
+# Preview prune before executing
+agent-sync skills prune --dry-run
 ```
 
 ### Local CI Scripts

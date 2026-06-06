@@ -136,6 +136,13 @@ agent-sync publish add https://github.com/YOUR_USERNAME/agent-sync-public.git
 
   > 🛡️ **Safety features** (v0.15+): Interactive TUI selects which orphans to import (default: none). Content comparison via hash detects divergent copies. Post-selection prompt: Keep or Remove unselected.
   > 🔗 **DotAgents Protocol**: Structure automatically follows `.agents/` convention (https://dotagentsprotocol.com/)
+- `skills audit` - Show every skill's status across hub, repo, and `RETIRED.md` (use `--json` for machine-readable)
+- `skills explain <name>` - Lifecycle of a single skill (when added, last modified, current state)
+- `skills prune` - Remove orphan skills from the remote repo
+  - `--dry-run` - Preview only
+  - `--yes` / `-y` - Skip the confirmation prompt
+
+  > 🛡️ **Safe-by-default push** (v0.35+): `agent-sync push` is additive — it does NOT delete orphan skills from the remote repo. Use `push --prune` or the dedicated `skills prune` subcommand for explicit destruction. See [Skills Lifecycle](docs/skills-lifecycle.md).
 - `skills diff` - Show differences between local and remote skills
 - `skills reconcile` - Resolve divergences between local and remote
 - `skills delete` - Delete skills from hub and all agent directories (interactive)
@@ -209,6 +216,53 @@ If you are an AI model (LLM) contributing to this project, please read [AGENTS.m
 Inspired by [opencode-synced](https://github.com/iHildy/opencode-synced), expanded to support multiple agent CLIs and other powerful features.
 
 ---
+
+## 🩺 Troubleshooting
+
+### "A skill disappeared from my hub / repo"
+
+```bash
+# 1. See the full state across hub, repo, and retirement manifest
+agent-sync skills audit
+
+# 2. Drill into one specific skill
+agent-sync skills explain cali-coding-go-stack
+```
+
+The audit table shows the status of every skill. The explain command
+shows the git lifecycle (first added, last modified, commit count)
+and current location.
+
+### "I want to retire a skill permanently"
+
+Add its name to `~/.agents/skills/RETIRED.md` (one per line, `#` for
+comments). The skill is no longer re-imported by `centralize`, and
+won't be pruned from the repo by `push --prune` or `skills prune`.
+
+See [Skills Lifecycle](docs/skills-lifecycle.md) for the full flow.
+
+### "I want to UN-retire a skill"
+
+Delete its line from `~/.agents/skills/RETIRED.md`, then run
+`agent-sync skills centralize`. The skill will be re-imported to the
+hub on the next sync.
+
+### "I accidentally pruned a skill from the repo"
+
+If you have the skill in your local `~/.agents/skills/`, just run
+`agent-sync push` (without `--prune`) — the skill will be re-committed.
+
+If you DON'T have it locally, restore from the repo's git history:
+
+```bash
+cd ~/Library/Application\ Support/agent-sync/repo
+git log --diff-filter=D --name-only --pretty=format: -- 'skills/cali-skill/'
+# Find the deletion commit, restore from its parent:
+git checkout <commit>^ -- skills/cali-skill/
+git add skills/cali-skill/
+git commit -m "fix: restore cali-skill after accidental prune"
+git push origin main
+```
 
 ## 🔗 Protocol Support
 
