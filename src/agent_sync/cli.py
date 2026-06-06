@@ -1247,6 +1247,179 @@ def _skill_description_lines(skill_path: Path) -> list[str]:
         return [f"[dim]Could not read SKILL.md[/dim]"]
 
 
+@skills_group.command("audit")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON (machine-readable)")
+def audit_skills(as_json: bool):
+    """Show every skill's status across hub, repo, and retirement manifest.
+
+    Compares three sources of truth and flags drift:
+    - Local hub: `~/.agents/skills/`
+    - Private repo HEAD: `skills/`
+    - Retirement manifest: `~/.agents/skills/RETIRED.md`
+
+    A skill can be:
+    - in_sync: present everywhere it should be
+    - in_hub_only: new skill, will be pushed
+    - in_repo_only: orphan in the repo (use `push --prune` to clean up)
+    - retired_in_repo: in repo and manifest, correctly retired
+    - retired_clean: only in manifest, fully retired
+    - conflict_*: in hub AND in manifest (needs user attention)
+    """
+    from .skills_audit import audit_skills as build_audit
+
+    report = build_audit()
+
+    if as_json:
+        import json as _json
+        console.print(_json.dumps({
+            "hub_count": report.hub_count,
+            "repo_count": report.repo_count,
+            "manifest_count": report.manifest_count,
+            "summary": report.summary_counts(),
+            "rows": [
+                {
+                    "name": r.name,
+                    "in_hub": r.in_hub,
+                    "in_repo": r.in_repo,
+                    "in_manifest": r.in_manifest,
+                    "status": r.status,
+                }
+                for r in report.rows
+            ],
+        }, indent=2))
+        return
+
+    summary = report.summary_counts()
+    console.print(
+        f"\n[bold]Skills audit[/bold] — "
+        f"[green]{report.hub_count}[/green] in hub, "
+        f"[green]{report.repo_count}[/green] in repo, "
+        f"[yellow]{report.manifest_count}[/yellow] retired\n"
+    )
+
+    from rich.table import Table
+    table = Table(box=None, show_header=True, header_style="bold dim", pad_edge=False)
+    table.add_column("Skill", style="cyan", no_wrap=True)
+    table.add_column("Hub", justify="center", width=3)
+    table.add_column("Repo", justify="center", width=4)
+    table.add_column("Retired", justify="center", width=7)
+    table.add_column("Status")
+
+    STATUS_DISPLAY = {
+        "in_sync": ("green", "in sync"),
+        "in_hub_only": ("green", "new (will push)"),
+        "in_repo_only": ("red", "orphan in repo"),
+        "retired_in_repo": ("yellow", "retired (in repo)"),
+        "retired_clean": ("dim", "retired (clean)"),
+        "conflict_retired_in_hub": ("red bold", "ERROR: retired in hub"),
+        "conflict_retired_everywhere": ("red bold", "ERROR: retired everywhere"),
+        "unknown": ("dim", "unknown"),
+    }
+
+    for row in report.rows:
+        color, label = STATUS_DISPLAY.get(row.status, ("dim", row.status))
+        table.add_row(
+            row.name,
+            "[green]\u2713[/green]" if row.in_hub else "[dim]\u00b7[/dim]",
+            "[green]\u2713[/green]" if row.in_repo else "[dim]\u00b7[/dim]",
+            "[yellow]\u2713[/yellow]" if row.in_manifest else "[dim]\u00b7[/dim]",
+            f"[{color}]{label}[/{color}]",
+        )
+
+    console.print(table)
+    console.print()
+
+    problems = [
+        r for r in report.rows
+        if r.status.startswith("conflict_") or r.status == "in_repo_only"
+    ]
+    if problems:
+        console.print(
+            f"[bold red]\u26a0 {len(problems)} problem(s) need attention:[/bold red]"
+        )
+        for r in problems:
+            if r.status == "in_repo_only":
+                fix = "run `agent-sync skills prune --yes` or `agent-sync push --prune`"
+            elif r.status == "conflict_retired_in_hub":
+                fix = "remove from hub or from `~/.agents/skills/RETIRED.md`"
+            else:
+                fix = "investigate; conflicting state"
+            console.print(f"  [red]\u2022[/red] [cyan]{r.name}[/cyan]: {fix}")
+        console.print()
+    else:
+        console.print("[green]\u2713 No problems found. Hub and repo are in sync.[/green]\n")
+
+
+@skills_group.command("explain")
+@click.argument("name")
+def explain_skill_cmd(name: str):
+    """Show lifecycle and current state of a single skill.
+
+    Useful for debugging "where did this skill go?". Shows:
+    - Current location: hub / repo / manifest / combinations
+    - When it was first added (commit + date)
+    - When it was last modified (commit + date)
+    - Total commits affecting it
+    - File count in the local hub
+    """
+    from .skills_audit import explain_skill as build_explanation
+
+    expl = build_explanation(name)
+
+    if not expl.in_hub and not expl.in_repo and not expl.in_manifest:
+        console.print(
+            f"\n[yellow]\u26a0 Skill [cyan]{name}[/cyan] is not tracked anywhere "
+            f"(not in hub, repo, or manifest).[/yellow]\n"
+        )
+        return
+
+    console.print(f"\n[bold]Skill: [cyan]{name}[/cyan][/bold]\n")
+
+    from rich.table import Table
+    state_table = Table(box=None, show_header=False, pad_edge=False)
+    state_table.add_column("Source", style="bold", width=14)
+    state_table.add_column("Status")
+    state_table.add_row(
+        "Local hub", "[green]present[/green]" if expl.in_hub else "[dim]absent[/dim]"
+    )
+    state_table.add_row(
+        "Repo (HEAD)", "[green]present[/green]" if expl.in_repo else "[dim]absent[/dim]"
+    )
+    state_table.add_row(
+        "Manifest", "[yellow]retired[/yellow]" if expl.in_manifest else "[dim]active[/dim]"
+    )
+    console.print(state_table)
+    console.print()
+
+    if expl.commit_count > 0:
+        console.print("[bold]Git lifecycle[/bold] (from private repo, [dim]follow renames[/dim]):")
+        if expl.first_added:
+            console.print(
+                f"  First added: [cyan]{expl.first_added[:10]}[/cyan] "
+                f"[dim]on {expl.first_added_at}[/dim]"
+            )
+        if expl.last_modified:
+            console.print(
+                f"  Last modified: [cyan]{expl.last_modified[:10]}[/cyan] "
+                f"[dim]on {expl.last_modified_at}[/dim]"
+            )
+        console.print(f"  Total commits: {expl.commit_count}")
+    else:
+        console.print(
+            "[dim]No git history for this skill "
+            "(it may only exist in the local hub).[/dim]"
+        )
+    console.print()
+
+    if expl.in_hub:
+        console.print(f"[bold]Local files:[/bold] {expl.file_count}")
+
+    if expl.manifest_line:
+        console.print()
+        console.print("[bold]Manifest entry:[/bold]")
+        console.print(f"  {expl.manifest_line}")
+
+
 @skills_group.command("prune")
 @click.option("--dry-run", is_flag=True, help="Show what would be pruned; do not modify anything")
 @click.option("--yes", "-y", is_flag=True, help="Skip the confirmation prompt")
