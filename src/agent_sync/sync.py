@@ -218,7 +218,7 @@ class SyncManager:
                 text=True,
                 check=False,
                 env=env,
-                timeout=timeout,
+                timeout=paths.GIT_TIMEOUT,
             )
         except subprocess.TimeoutExpired as e:
             raise RuntimeError(
@@ -290,7 +290,7 @@ class SyncManager:
             ["gh", "repo", "view", "--json", "name,isPrivate", "--", repo_name],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=paths.GIT_TIMEOUT,
         )
 
         if result.returncode == 0:
@@ -2887,7 +2887,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         try:
             result = subprocess.run(
                 ["git", "config", "--global", "core.excludesFile"],
-                capture_output=True, text=True, check=False, timeout=10,
+                capture_output=True, text=True, check=False, timeout=paths.GIT_TIMEOUT,
             )
             if result.returncode == 0 and result.stdout.strip():
                 path_str = os.path.expanduser(result.stdout.strip())

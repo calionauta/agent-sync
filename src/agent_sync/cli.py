@@ -202,6 +202,7 @@ def sync(force: bool, skills_only: bool, configs_only: bool, agents_only: bool):
 @click.option("--exclude-skill", multiple=True, help="Skill to exclude (can repeat)")
 @click.option("--exclude-agent", multiple=True, help="Agent to exclude (can repeat)")
 @click.option("--prune", is_flag=True, help="Remove orphan skills from the remote repo (in HEAD but not in local hub). Default: kept additively.")
+@click.option("--strict", is_flag=True, help="Exit with code 2 if orphan skills were detected (for CI/scripts).")
 def push(
     dry_run: bool,
     message: Optional[str],
@@ -212,6 +213,7 @@ def push(
     exclude_skill: tuple,
     exclude_agent: tuple,
     prune: bool,
+    strict: bool,
 ):
     """Push local changes to the remote repository.
 
@@ -364,6 +366,11 @@ def push(
     # they could have done, without being preachy.
     if orphans and not prune:
         _warn_about_orphans(orphans)
+
+    # CI-friendly strict mode: exit with code 2 if orphans were detected.
+    # Without --strict, the warning is console-only (exit stays 0).
+    if strict and orphans:
+        raise SystemExit(2)
 
 
 def _warn_about_orphans(orphans: list[str]) -> None:
@@ -1249,7 +1256,9 @@ def _skill_description_lines(skill_path: Path) -> list[str]:
 
 @skills_group.command("audit")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON (machine-readable)")
-def audit_skills(as_json: bool):
+@click.option("--limit", "-l", type=int, default=None, help="Maximum number of rows to show (for large outputs).")
+@click.option("--filter", "-f", type=str, default=None, help="Only show skills whose name contains this substring.")
+def audit_skills(as_json: bool, limit: int | None, filter: str | None):
     """Show every skill's status across hub, repo, and retirement manifest.
 
     Compares three sources of truth and flags drift:
@@ -1285,7 +1294,8 @@ def audit_skills(as_json: bool):
                     "status": r.status,
                 }
                 for r in report.rows
-            ],
+                if not filter or filter.lower() in r.name.lower()
+            ][:limit],
         }, indent=2))
         return
 
@@ -1296,6 +1306,13 @@ def audit_skills(as_json: bool):
         f"[green]{report.repo_count}[/green] in repo, "
         f"[yellow]{report.manifest_count}[/yellow] retired\n"
     )
+
+    # Apply `--filter` (substring match) and `--limit` before rendering
+    filtered_rows = list(report.rows)
+    if filter:
+        filtered_rows = [r for r in filtered_rows if filter.lower() in r.name.lower()]
+    if limit is not None:
+        filtered_rows = filtered_rows[:limit]
 
     from rich.table import Table
     table = Table(box=None, show_header=True, header_style="bold dim", pad_edge=False)
@@ -1316,7 +1333,7 @@ def audit_skills(as_json: bool):
         "unknown": ("dim", "unknown"),
     }
 
-    for row in report.rows:
+    for row in filtered_rows:
         color, label = STATUS_DISPLAY.get(row.status, ("dim", row.status))
         table.add_row(
             row.name,
@@ -1330,7 +1347,7 @@ def audit_skills(as_json: bool):
     console.print()
 
     problems = [
-        r for r in report.rows
+        r for r in filtered_rows
         if r.status.startswith("conflict_") or r.status == "in_repo_only"
     ]
     if problems:

@@ -289,7 +289,7 @@ class SkillsManager:
                 cwd=repo_dir,
                 capture_output=True,
                 text=True,
-                timeout=10,
+                timeout=paths.GIT_TIMEOUT,
             )
             if result.returncode != 0:
                 return set()
@@ -479,16 +479,22 @@ class SkillsManager:
 
         retired = self._get_retired_skill_names()
         synced = 0
-        for skill_dir in repo_skills_dir.iterdir():
-            if skill_dir.name.startswith("."):
+        for item in repo_skills_dir.iterdir():
+            if item.name.startswith("."):
                 continue
-            if skill_dir.name in retired:
+            if item.name in retired:
                 continue  # Don't resurrect retired skills
 
-            dest = self.global_skills_dir / skill_dir.name
+            dest = self.global_skills_dir / item.name
             if not dest.exists():
-                if skill_dir.is_dir():
-                    shutil.copytree(skill_dir, dest)
+                if item.is_dir():
+                    shutil.copytree(item, dest)
+                    synced += 1
+                elif item.is_file():
+                    # Copy non-directory entries (e.g. RETIRED.md manifest).
+                    # These are metadata files that restore the retirement
+                    # state on a fresh machine.
+                    shutil.copy2(item, dest)
                     synced += 1
 
         return synced
@@ -552,8 +558,10 @@ class SkillsManager:
         Returns:
             True if lock acquired, False if another process holds it.
         """
+        from . import paths
+
         lock = self._centralize_lock_dir()
-        STALE_TIMEOUT = 600  # 10 minutes
+        STALE_TIMEOUT = paths.LOCK_STALE_TIMEOUT
         try:
             os.mkdir(lock)
             return True
