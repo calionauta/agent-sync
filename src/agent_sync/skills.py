@@ -227,10 +227,12 @@ class SkillsManager:
     def _get_retired_skill_names(self) -> set[str]:
         """Get skill names explicitly listed as retired.
 
-        Reads `~/.agents/skills/RETIRED.md` (or `repo/skills/RETIRED.md`),
-        which is the user-editable source of truth for retired skills.
-        This replaces the old git-history-based detection that conflated
-        temporary deletions with intentional retirement.
+        Reads `~/.agents/skills/RETIRED.md`, the user-editable source of
+        truth for retired skills. The repo's `RETIRED.md` (if committed)
+        is a MIRROR of the hub's manifest; the hub always wins.
+
+        If the hub has no `RETIRED.md`, there is no retirement. A stale
+        manifest in the repo is not consulted — only the local hub.
 
         Manifest format (one skill per line, `#` for comments):
             cali-old-skill        # renamed to cali-new-skill  2026-05-01
@@ -238,18 +240,10 @@ class SkillsManager:
         Returns:
             Set of retired skill names. Empty if no manifest exists.
         """
-        from . import paths
-
-        repo_dir = paths.REPO_DIR
-        # Hub takes precedence over repo (local edits win)
-        candidates = [
-            self.global_skills_dir / "RETIRED.md",
-            repo_dir / "skills" / "RETIRED.md",
-        ]
-        for path in candidates:
-            if path.exists():
-                return self._parse_retired_manifest(path)
-        return set()
+        manifest = self.global_skills_dir / "RETIRED.md"
+        if not manifest.exists():
+            return set()
+        return self._parse_retired_manifest(manifest)
 
     def _parse_retired_manifest(self, path: Path) -> set[str]:
         """Parse a RETIRED.md manifest file.
