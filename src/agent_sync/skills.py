@@ -228,18 +228,62 @@ class SkillsManager:
         return orphans
 
     def _get_retired_skill_names(self) -> set[str]:
-        """Get skill names that were deleted from the private repo at some point.
+        """Get skill names explicitly listed as retired.
 
-        Uses git history of the private repo (`~/.config/agent-sync/repo/`)
-        to find every skill that was ever removed (commit type `D`). These
-        are treated as "retired" — `_find_orphans` and `_sync_from_repo`
-        will skip them even if stale copies linger in agent directories.
+        Reads `~/.agents/skills/RETIRED.md` (or `repo/skills/RETIRED.md`),
+        which is the user-editable source of truth for retired skills.
+        This replaces the old git-history-based detection that conflated
+        temporary deletions with intentional retirement.
 
-        This is the source of truth for skill retirement: no manual
-        `retired-skills.yaml` to maintain. The git history is authoritative.
+        Manifest format (one skill per line, `#` for comments):
+            cali-old-skill        # renamed to cali-new-skill  2026-05-01
 
         Returns:
-            Set of retired skill names. Empty if repo is unavailable.
+            Set of retired skill names. Empty if no manifest exists.
+        """
+        from .sync import SyncManager
+
+        repo_dir = SyncManager.DEFAULT_REPO_DIR
+        # Hub takes precedence over repo (local edits win)
+        candidates = [
+            self.global_skills_dir / "RETIRED.md",
+            repo_dir / "skills" / "RETIRED.md",
+        ]
+        for path in candidates:
+            if path.exists():
+                return self._parse_retired_manifest(path)
+        return set()
+
+    def _parse_retired_manifest(self, path: Path) -> set[str]:
+        """Parse a RETIRED.md manifest file.
+
+        Format: one skill name per line. Lines starting with `#` and
+        blank lines are ignored. Trailing text after the skill name
+        (e.g. comments and dates) is also ignored — only the first
+        whitespace-delimited token is the skill name.
+        """
+        retired: set[str] = set()
+        try:
+            content = path.read_text(encoding="utf-8")
+        except OSError:
+            return retired
+        for raw in content.splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            tokens = line.split()
+            if not tokens:
+                continue
+            name = tokens[0]
+            if name and not name.startswith("."):
+                retired.add(name)
+        return retired
+
+    def _get_active_skill_names(self) -> set[str]:
+        """Skills in the repo's HEAD:skills/ that are NOT retired.
+
+        This is the positive "what skills exist" API. Retirement is a
+        manifest-declared subtraction, not a git-history query.
         """
         from .sync import SyncManager
 
@@ -250,7 +294,7 @@ class SkillsManager:
         try:
             import subprocess
             result = subprocess.run(
-                ["git", "log", "--all", "--diff-filter=D", "--name-only", "--format=", "--", "skills/"],
+                ["git", "ls-tree", "--name-only", "HEAD", "skills/"],
                 cwd=repo_dir,
                 capture_output=True,
                 text=True,
@@ -258,44 +302,18 @@ class SkillsManager:
             )
             if result.returncode != 0:
                 return set()
-            retired: set[str] = set()
-            for line in result.stdout.splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                # Path is "skills/<name>/..." — strip prefix and trailing slash
-                if line.startswith("skills/"):
-                    bare = line[len("skills/"):]
-                    if "/" in bare:
-                        bare = bare.split("/", 1)[0]
-                    if bare and not bare.startswith("."):
-                        retired.add(bare)
-
-            # A skill deleted in a past commit and re-added in a later
-            # commit is NOT retired — only skills still absent from HEAD
-            # count. This prevents a temporary deletion (e.g. accidental
-            # `agent-sync centralize` with wrong filter) from permanently
-            # blacklisting a skill.
-            head_result = subprocess.run(
-                ["git", "ls-tree", "--name-only", "HEAD", "skills/"],
-                cwd=repo_dir,
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            if head_result.returncode == 0:
-                present: set[str] = set()
-                for line in head_result.stdout.splitlines():
-                    line = line.strip()
-                    if line.startswith("skills/"):
-                        bare = line[len("skills/"):].rstrip("/")
-                        if bare and "/" not in bare and not bare.startswith("."):
-                            present.add(bare)
-                retired -= present
-
-            return retired
         except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
             return set()
+
+        head: set[str] = set()
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if line.startswith("skills/"):
+                bare = line[len("skills/"):].rstrip("/")
+                if bare and "/" not in bare and not bare.startswith("."):
+                    head.add(bare)
+
+        return head - self._get_retired_skill_names()
 
     def _remove_retired_from_agents(self, retired: set[str]) -> dict[str, list[str]]:
         """Delete retired skill copies from all agent directories.

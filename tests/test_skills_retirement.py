@@ -1,12 +1,10 @@
-"""Regression tests for skill retirement detection.
+"""Regression tests for skill retirement and active-set detection.
 
-A skill deleted in a past commit and re-added in a later commit is NOT
-retired — only skills still absent from HEAD count. This prevents a
-temporary deletion (e.g. accidental `agent-sync centralize` with wrong
-filter) from permanently blacklisting a skill.
+Retirement is now manifest-based: a skill is retired if and only if it
+appears in `~/.agents/skills/RETIRED.md` (or `repo/skills/RETIRED.md`).
+`active = HEAD - manifest` (KISS, AD-1, AD-4).
 """
 
-import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
@@ -16,19 +14,93 @@ from agent_sync.skills import SkillsManager
 from agent_sync.sync import SyncManager
 
 
+# --- Manifest parser tests (no git, no repo) -------------------------------
+
+
+def test_manifest_empty_file(tmp_path):
+    """An empty manifest yields an empty retired set."""
+    manifest = tmp_path / "RETIRED.md"
+    manifest.write_text("")
+    sm = SkillsManager(global_skills_dir=tmp_path / "hub")
+    assert sm._parse_retired_manifest(manifest) == set()
+
+
+def test_manifest_missing_file(tmp_path):
+    """A missing manifest yields an empty retired set."""
+    sm = SkillsManager(global_skills_dir=tmp_path / "hub")
+    assert sm._parse_retired_manifest(tmp_path / "nonexistent.md") == set()
+
+
+def test_manifest_simple(tmp_path):
+    """One skill per line, parsed correctly."""
+    manifest = tmp_path / "RETIRED.md"
+    manifest.write_text(
+        "# Retired skills\n"
+        "cali-old-skill\n"
+        "cali-another-old\n"
+    )
+    sm = SkillsManager(global_skills_dir=tmp_path / "hub")
+    assert sm._parse_retired_manifest(manifest) == {"cali-old-skill", "cali-another-old"}
+
+
+def test_manifest_with_inline_comments_and_dates(tmp_path):
+    """Trailing text after the skill name is ignored."""
+    manifest = tmp_path / "RETIRED.md"
+    manifest.write_text(
+        "cali-old-skill   # renamed to cali-new  2026-05-01\n"
+        "cali-another     # replaced\n"
+    )
+    sm = SkillsManager(global_skills_dir=tmp_path / "hub")
+    assert sm._parse_retired_manifest(manifest) == {"cali-old-skill", "cali-another"}
+
+
+def test_manifest_blank_lines_and_comments_ignored(tmp_path):
+    manifest = tmp_path / "RETIRED.md"
+    manifest.write_text(
+        "\n"
+        "# Header comment\n"
+        "\n"
+        "cali-real-retired\n"
+        "  \n"
+        "# Another comment\n"
+        "cali-second\n"
+    )
+    sm = SkillsManager(global_skills_dir=tmp_path / "hub")
+    assert sm._parse_retired_manifest(manifest) == {"cali-real-retired", "cali-second"}
+
+
+def test_manifest_skips_dotfiles(tmp_path):
+    """Hidden skill names (starting with `.`) are ignored."""
+    manifest = tmp_path / "RETIRED.md"
+    manifest.write_text(
+        "cali-visible\n"
+        ".cali-internal\n"
+    )
+    sm = SkillsManager(global_skills_dir=tmp_path / "hub")
+    assert sm._parse_retired_manifest(manifest) == {"cali-visible"}
+
+
+def test_manifest_malformed_line_doesnt_crash(tmp_path):
+    """A line with only whitespace is skipped; a `#`-only line is skipped."""
+    manifest = tmp_path / "RETIRED.md"
+    manifest.write_text("   \n#\ncali-good\n")
+    sm = SkillsManager(global_skills_dir=tmp_path / "hub")
+    assert sm._parse_retired_manifest(manifest) == {"cali-good"}
+
+
+# --- _get_retired_skill_names with git + manifest ---------------------------
+
+
 def _git(cwd: Path, *args: str) -> str:
-    """Run a git command in cwd and return stdout."""
+    import subprocess
     result = subprocess.run(
         ["git", "-C", str(cwd)] + list(args),
-        capture_output=True,
-        text=True,
-        check=True,
+        capture_output=True, text=True, check=True,
     )
     return result.stdout
 
 
 def _commit_file(repo: Path, relpath: str, content: str, msg: str) -> None:
-    """Write a file and commit it under skills/."""
     full = repo / relpath
     full.parent.mkdir(parents=True, exist_ok=True)
     full.write_text(content)
@@ -36,164 +108,103 @@ def _commit_file(repo: Path, relpath: str, content: str, msg: str) -> None:
     _git(repo, "commit", "-m", msg)
 
 
-def _init_repo_with_skill(tmp_path: Path, name: str) -> Path:
-    """Init a git repo with a single skill under skills/<name>."""
+def _init_repo_with_skills(tmp_path: Path, names: list[str]) -> Path:
     repo = tmp_path / "repo"
     repo.mkdir()
     _git(repo, "init", "-b", "main")
     _git(repo, "config", "user.email", "test@test.local")
     _git(repo, "config", "user.name", "Test")
-    _commit_file(
-        repo,
-        f"skills/{name}/SKILL.md",
-        f"# {name}\n",
-        f"add {name}",
-    )
+    for name in names:
+        _commit_file(repo, f"skills/{name}/SKILL.md", f"# {name}\n", f"add {name}")
     return repo
 
 
-def test_re_added_skill_is_not_retired(tmp_path):
-    """A skill deleted in commit N and re-added in commit N+1 must NOT be retired."""
-    repo = _init_repo_with_skill(tmp_path, "cali-coding-tmp")
+def test_retired_skill_from_manifest(tmp_path):
+    """A skill in the manifest IS retired, regardless of HEAD state."""
+    repo = _init_repo_with_skills(tmp_path, ["alive", "old"])
+    manifest = tmp_path / "hub" / "RETIRED.md"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text("old\n")
 
-    # Delete the skill
-    _git(repo, "rm", "-r", "skills/cali-coding-tmp")
-    _git(repo, "commit", "-m", "delete cali-coding-tmp")
-
-    # Re-add the skill
-    _commit_file(
-        repo,
-        "skills/cali-coding-tmp/SKILL.md",
-        "# cali-coding-tmp\n",
-        "re-add cali-coding-tmp",
-    )
-
-    manager = SkillsManager(global_skills_dir=tmp_path / "hub")
+    sm = SkillsManager(global_skills_dir=tmp_path / "hub")
     with patch.object(SyncManager, "DEFAULT_REPO_DIR", repo):
-        retired = manager._get_retired_skill_names()
-
-    assert "cali-coding-tmp" not in retired, (
-        f"Skill re-added in HEAD must not be retired, got: {retired}"
-    )
+        retired = sm._get_retired_skill_names()
+    assert retired == {"old"}
 
 
-def test_never_deleted_skill_is_not_retired(tmp_path):
-    """A skill that was never deleted must obviously not be retired."""
-    repo = _init_repo_with_skill(tmp_path, "cali-coding-persistent")
-    # Add a second commit to make history non-trivial
-    _commit_file(
-        repo,
-        "skills/cali-coding-persistent/references/note.md",
-        "note",
-        "add note",
-    )
+def test_retired_uses_hub_manifest_over_repo_manifest(tmp_path):
+    """If both `~/.agents/skills/RETIRED.md` and `repo/skills/RETIRED.md`
+    exist, the hub one wins (local edits take precedence)."""
+    repo = _init_repo_with_skills(tmp_path, ["a", "b"])
+    _commit_file(repo, "skills/RETIRED.md", "a\n", "manifest in repo")
+    (tmp_path / "hub").mkdir(parents=True)
+    (tmp_path / "hub" / "RETIRED.md").write_text("b\n")
 
-    manager = SkillsManager(global_skills_dir=tmp_path / "hub")
+    sm = SkillsManager(global_skills_dir=tmp_path / "hub")
     with patch.object(SyncManager, "DEFAULT_REPO_DIR", repo):
-        retired = manager._get_retired_skill_names()
+        retired = sm._get_retired_skill_names()
+    assert retired == {"b"}
 
-    assert "cali-coding-persistent" not in retired
 
+def test_active_excludes_retired(tmp_path):
+    """`_get_active_skill_names()` = HEAD - manifest."""
+    repo = _init_repo_with_skills(tmp_path, ["alive", "old", "new"])
+    manifest = tmp_path / "hub" / "RETIRED.md"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text("old\n")
 
-def test_truly_deleted_skill_is_retired(tmp_path):
-    """A skill deleted in HEAD (no re-add) MUST be in retired set."""
-    repo = _init_repo_with_skill(tmp_path, "cali-legacy")
-    _git(repo, "rm", "-r", "skills/cali-legacy")
-    _git(repo, "commit", "-m", "delete cali-legacy for good")
-
-    manager = SkillsManager(global_skills_dir=tmp_path / "hub")
+    sm = SkillsManager(global_skills_dir=tmp_path / "hub")
     with patch.object(SyncManager, "DEFAULT_REPO_DIR", repo):
-        retired = manager._get_retired_skill_names()
-
-    assert "cali-legacy" in retired, (
-        f"Skill absent from HEAD must be retired, got: {retired}"
-    )
+        active = sm._get_active_skill_names()
+    assert active == {"alive", "new"}
 
 
-def test_mixed_history_only_truly_retired_count(tmp_path):
-    """Repo with multiple skills: some re-added, some gone, some untouched."""
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    _git(repo, "init", "-b", "main")
-    _git(repo, "config", "user.email", "test@test.local")
-    _git(repo, "config", "user.name", "Test")
+def test_active_unretire_by_removing_from_manifest(tmp_path):
+    """Removing a skill from the manifest re-activates it immediately."""
+    repo = _init_repo_with_skills(tmp_path, ["alive", "old"])
+    manifest = tmp_path / "hub" / "RETIRED.md"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text("old\n")
 
-    # Add three skills
-    for name in ("alive", "resurrected", "dead"):
-        _commit_file(
-            repo, f"skills/{name}/SKILL.md", f"# {name}\n", f"add {name}"
-        )
-
-    # Delete `resurrected`, then re-add it
-    _git(repo, "rm", "-r", "skills/resurrected")
-    _git(repo, "commit", "-m", "temp delete resurrected")
-    _commit_file(
-        repo,
-        "skills/resurrected/SKILL.md",
-        "# resurrected\n",
-        "re-add resurrected",
-    )
-
-    # Delete `dead` permanently
-    _git(repo, "rm", "-r", "skills/dead")
-    _git(repo, "commit", "-m", "perm delete dead")
-
-    manager = SkillsManager(global_skills_dir=tmp_path / "hub")
+    sm = SkillsManager(global_skills_dir=tmp_path / "hub")
     with patch.object(SyncManager, "DEFAULT_REPO_DIR", repo):
-        retired = manager._get_retired_skill_names()
+        assert "old" not in sm._get_active_skill_names()
 
-    assert "alive" not in retired
-    assert "resurrected" not in retired, (
-        f"resurrected (deleted+readded) must not be retired: {retired}"
-    )
-    assert "dead" in retired
-
-
-def test_empty_repo_returns_empty_set(tmp_path):
-    """A repo with no commits at all should yield no retired skills (defensive)."""
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    _git(repo, "init", "-b", "main")
-
-    manager = SkillsManager(global_skills_dir=tmp_path / "hub")
+    # Unretire by editing manifest
+    manifest.write_text("")
     with patch.object(SyncManager, "DEFAULT_REPO_DIR", repo):
-        retired = manager._get_retired_skill_names()
-
-    assert retired == set()
+        assert "old" in sm._get_active_skill_names()
 
 
-def test_subdir_paths_dont_pollute_retirement(tmp_path):
-    """Files nested inside a skill (e.g. references/foo.md) must contribute
-    the parent skill name, and re-adding the skill must still clear it.
-    """
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    _git(repo, "init", "-b", "main")
-    _git(repo, "config", "user.email", "test@test.local")
-    _git(repo, "config", "user.name", "Test")
+def test_active_returns_empty_set_without_repo(tmp_path):
+    """A non-git repo yields an empty active set (defensive)."""
+    sm = SkillsManager(global_skills_dir=tmp_path / "hub")
+    with patch.object(SyncManager, "DEFAULT_REPO_DIR", tmp_path / "no-repo"):
+        active = sm._get_active_skill_names()
+    assert active == set()
 
-    # Skill with nested files
+
+# --- Regression: 2026-06-06 incident ----------------------------------------
+#
+# The original bug: a skill was deleted in a past commit, re-added in a
+# later commit, and `git log --all --diff-filter=D` flagged it as retired
+# permanently. After this refactor, a skill that exists in HEAD is active
+# regardless of past deletions — IF it is not in the manifest.
+
+
+def test_regression_2026_06_06_re_added_skill_is_active(tmp_path):
+    """A skill deleted then re-added in HEAD is ACTIVE (not retired)."""
+    repo = _init_repo_with_skills(tmp_path, ["cali-resurrected"])
+    _git(repo, "rm", "-r", "skills/cali-resurrected")
+    _git(repo, "commit", "-m", "temp delete")
     _commit_file(
-        repo, "skills/cali-foo/SKILL.md", "# cali-foo\n", "add cali-foo"
-    )
-    _commit_file(
-        repo, "skills/cali-foo/references/deep.md", "deep", "add ref"
-    )
-
-    # Delete the whole skill
-    _git(repo, "rm", "-r", "skills/cali-foo")
-    _git(repo, "commit", "-m", "delete cali-foo")
-
-    # Re-add only the SKILL.md (skill exists in HEAD, but missing references)
-    _commit_file(
-        repo,
-        "skills/cali-foo/SKILL.md",
-        "# cali-foo\n",
-        "partial readd cali-foo",
+        repo, "skills/cali-resurrected/SKILL.md", "# cali-resurrected\n", "re-add"
     )
 
-    manager = SkillsManager(global_skills_dir=tmp_path / "hub")
+    sm = SkillsManager(global_skills_dir=tmp_path / "hub")
     with patch.object(SyncManager, "DEFAULT_REPO_DIR", repo):
-        retired = manager._get_retired_skill_names()
+        active = sm._get_active_skill_names()
+        retired = sm._get_retired_skill_names()
 
-    assert "cali-foo" not in retired
+    assert "cali-resurrected" in active
+    assert "cali-resurrected" not in retired
