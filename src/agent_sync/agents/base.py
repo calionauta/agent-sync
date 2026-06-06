@@ -5,8 +5,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-# Global skills directory (shared across all agents)
-GLOBAL_SKILLS_DIR = Path.home() / ".agents" / "skills"
+from ..paths import HUB_DIR
 
 
 class BaseAgent:
@@ -60,7 +59,7 @@ class BaseAgent:
     @property
     def global_skills_path(self) -> Path:
         """Path to global ~/.agents/skills directory."""
-        return GLOBAL_SKILLS_DIR
+        return HUB_DIR
 
     def is_available(self) -> bool:
         """Check if this agent is installed/configured based on check in YAML."""

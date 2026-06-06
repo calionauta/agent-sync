@@ -219,7 +219,7 @@ class TestDetectSkillDrifts:
         mgr = SyncManager(mock_config)
         mgr.repo_dir = tmp_path / "repo"
 
-        with patch.object(Path, "home", return_value=tmp_path / "local"):
+        with patch("agent_sync.paths.HUB_DIR", tmp_path / "local" / ".agents" / "skills"):
             drifts = mgr._detect_skill_drifts()
             assert drifts == []
 
@@ -243,7 +243,7 @@ class TestDetectSkillDrifts:
         mgr = SyncManager(mock_config)
         mgr.repo_dir = tmp_path / "repo"
 
-        with patch.object(Path, "home", return_value=tmp_path / "local"):
+        with patch("agent_sync.paths.HUB_DIR", tmp_path / "local" / ".agents" / "skills"):
             drifts = mgr._detect_skill_drifts()
             assert len(drifts) == 1
             assert drifts[0].name == "my-skill"
@@ -274,7 +274,7 @@ class TestDetectSkillDrifts:
         mgr = SyncManager(mock_config)
         mgr.repo_dir = tmp_path / "repo"
 
-        with patch.object(Path, "home", return_value=tmp_path / "local"):
+        with patch("agent_sync.paths.HUB_DIR", tmp_path / "local" / ".agents" / "skills"):
             drifts = mgr._detect_skill_drifts()
             assert drifts == []
 
@@ -299,7 +299,7 @@ class TestDetectSkillDrifts:
         mgr = SyncManager(mock_config)
         mgr.repo_dir = tmp_path / "repo"
 
-        with patch.object(Path, "home", return_value=tmp_path / "local"):
+        with patch("agent_sync.paths.HUB_DIR", tmp_path / "local" / ".agents" / "skills"):
             drifts = mgr._detect_skill_drifts(skills_filter=["skill-a"])
             assert len(drifts) == 1
             assert drifts[0].name == "skill-a"
@@ -325,7 +325,7 @@ class TestDetectSkillDrifts:
         mgr = SyncManager(mock_config)
         mgr.repo_dir = tmp_path / "repo"
 
-        with patch.object(Path, "home", return_value=tmp_path / "local"):
+        with patch("agent_sync.paths.HUB_DIR", tmp_path / "local" / ".agents" / "skills"):
             drifts = mgr._detect_skill_drifts(skills_exclude=["skill-a"])
             assert len(drifts) == 1
             assert drifts[0].name == "skill-b"
@@ -371,7 +371,7 @@ class TestApplySyncedSkillsWithDrifts:
         mgr, local_home = manager_with_skills
         local_skill = local_home / ".agents" / "skills" / "my-skill" / "SKILL.md"
 
-        with patch.object(Path, "home", return_value=local_home):
+        with patch("agent_sync.paths.HUB_DIR", local_home / ".agents" / "skills"):
             with patch("agent_sync.sync.console"):
                 changes = mgr._apply_synced_skills(force=True)
 
@@ -384,7 +384,7 @@ class TestApplySyncedSkillsWithDrifts:
         mgr, local_home = manager_with_skills
         local_skill = local_home / ".agents" / "skills" / "my-skill" / "SKILL.md"
 
-        with patch.object(Path, "home", return_value=local_home):
+        with patch("agent_sync.paths.HUB_DIR", local_home / ".agents" / "skills"):
             with patch("agent_sync.sync.console"):
                 changes = mgr._apply_synced_skills(interactive=False)
 
@@ -397,7 +397,7 @@ class TestApplySyncedSkillsWithDrifts:
         mgr, local_home = manager_with_skills
         local_skill = local_home / ".agents" / "skills" / "my-skill" / "SKILL.md"
 
-        with patch.object(Path, "home", return_value=local_home):
+        with patch("agent_sync.paths.HUB_DIR", local_home / ".agents" / "skills"):
             with patch("agent_sync.sync.console"):
                 changes = mgr._apply_synced_skills(
                     keep_local_skills={"my-skill"},
@@ -429,7 +429,7 @@ class TestApplySyncedSkillsWithDrifts:
         mgr = SyncManager(mock_config)
         mgr.repo_dir = repo_dir
 
-        with patch.object(Path, "home", return_value=local_home):
+        with patch("agent_sync.paths.HUB_DIR", local_home / ".agents" / "skills"):
             with patch("agent_sync.sync.console"):
                 changes = mgr._apply_synced_skills(force=True)
 

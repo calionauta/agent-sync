@@ -127,7 +127,7 @@ def test_retired_skill_from_manifest(tmp_path):
     manifest.write_text("old\n")
 
     sm = SkillsManager(global_skills_dir=tmp_path / "hub")
-    with patch.object(SyncManager, "DEFAULT_REPO_DIR", repo):
+    with patch("agent_sync.paths.REPO_DIR", repo):
         retired = sm._get_retired_skill_names()
     assert retired == {"old"}
 
@@ -141,7 +141,7 @@ def test_retired_uses_hub_manifest_over_repo_manifest(tmp_path):
     (tmp_path / "hub" / "RETIRED.md").write_text("b\n")
 
     sm = SkillsManager(global_skills_dir=tmp_path / "hub")
-    with patch.object(SyncManager, "DEFAULT_REPO_DIR", repo):
+    with patch("agent_sync.paths.REPO_DIR", repo):
         retired = sm._get_retired_skill_names()
     assert retired == {"b"}
 
@@ -154,7 +154,7 @@ def test_active_excludes_retired(tmp_path):
     manifest.write_text("old\n")
 
     sm = SkillsManager(global_skills_dir=tmp_path / "hub")
-    with patch.object(SyncManager, "DEFAULT_REPO_DIR", repo):
+    with patch("agent_sync.paths.REPO_DIR", repo):
         active = sm._get_active_skill_names()
     assert active == {"alive", "new"}
 
@@ -167,19 +167,19 @@ def test_active_unretire_by_removing_from_manifest(tmp_path):
     manifest.write_text("old\n")
 
     sm = SkillsManager(global_skills_dir=tmp_path / "hub")
-    with patch.object(SyncManager, "DEFAULT_REPO_DIR", repo):
+    with patch("agent_sync.paths.REPO_DIR", repo):
         assert "old" not in sm._get_active_skill_names()
 
     # Unretire by editing manifest
     manifest.write_text("")
-    with patch.object(SyncManager, "DEFAULT_REPO_DIR", repo):
+    with patch("agent_sync.paths.REPO_DIR", repo):
         assert "old" in sm._get_active_skill_names()
 
 
 def test_active_returns_empty_set_without_repo(tmp_path):
     """A non-git repo yields an empty active set (defensive)."""
     sm = SkillsManager(global_skills_dir=tmp_path / "hub")
-    with patch.object(SyncManager, "DEFAULT_REPO_DIR", tmp_path / "no-repo"):
+    with patch("agent_sync.paths.REPO_DIR", tmp_path / "no-repo"):
         active = sm._get_active_skill_names()
     assert active == set()
 
@@ -202,7 +202,7 @@ def test_regression_2026_06_06_re_added_skill_is_active(tmp_path):
     )
 
     sm = SkillsManager(global_skills_dir=tmp_path / "hub")
-    with patch.object(SyncManager, "DEFAULT_REPO_DIR", repo):
+    with patch("agent_sync.paths.REPO_DIR", repo):
         active = sm._get_active_skill_names()
         retired = sm._get_retired_skill_names()
 

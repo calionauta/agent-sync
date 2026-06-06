@@ -34,13 +34,13 @@ class TestConfigExporter:
     def test_export_includes_skills_hub(self):
         """export() includes skills_hub path."""
         from agent_sync.config_exporter import ConfigExporter
-        from agent_sync.agents.base import GLOBAL_SKILLS_DIR
+        from agent_sync.paths import HUB_DIR
 
         exporter = ConfigExporter()
         result = exporter.export()
 
         assert "skills_hub" in result
-        assert str(GLOBAL_SKILLS_DIR) in result["skills_hub"]
+        assert str(HUB_DIR) in result["skills_hub"]
 
     def test_export_has_agents_section(self):
         """export() has agents section (may not be empty due to real agents)."""
