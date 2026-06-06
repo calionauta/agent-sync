@@ -157,8 +157,9 @@ See [Skills Lifecycle](skills-lifecycle.md) for the full retirement flow.
 
 Remove orphan skills from the remote repo (in HEAD, missing from the
 local hub). Orphan skills accumulate when you remove a skill from
-`~/.agents/skills/` without also removing it from the repo. This
-subcommand is the dedicated, safe way to clean them up.
+`~/.agents/skills/` without also removing it from the repo. Use
+`skills prune` after editing `~/.agents/skills/` to keep the repo
+in sync.
 
 **Options:**
 - `--dry-run` — Show what would be pruned; do not modify anything
