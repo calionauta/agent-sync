@@ -3,7 +3,7 @@
 Single source of truth for:
 - The global skills hub (`~/.agents/skills/`) — the DotAgents-protocol
   canonical skills directory.
-- The retired-skills manifest (`RETIRED.md` inside the hub).
+- Retirement state (inferred from git history).
 - The agent-sync data directory (cross-platform via `platformdirs`).
 - The private sync repository (cloned inside the data directory).
 
@@ -26,10 +26,6 @@ APP_NAME = "agent-sync"
 #: here and exposed to all agents that support `native` or `config`
 #: skill paths.
 HUB_DIR: Path = Path.home() / ".agents" / "skills"
-
-#: User-editable manifest listing intentionally retired skills. Skills
-#: named here are NEVER re-imported to the hub by `centralize`.
-RETIRED_MANIFEST: Path = HUB_DIR / "RETIRED.md"
 
 #: Internal sync metadata (not user-editable). Auto-managed by agent-sync.
 INTERNAL_MANIFEST_FILENAME = ".agent-sync-manifest.json"

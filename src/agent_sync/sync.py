@@ -1345,10 +1345,6 @@ class SyncManager:
         the next commit) and returns a synthetic change entry so the caller
         can show it in the +/~/− summary.
 
-        Skills listed in the retirement manifest (`RETIRED.md`) are NEVER
-        pruned, even if they appear in `orphans`. The manifest is the
-        authoritative declaration of "intentionally not in the local hub".
-
         Args:
             orphans: Pre-detected orphan skill names. If None, calls
                      `_detect_orphan_skills()` to compute them (skips a
@@ -1356,20 +1352,10 @@ class SyncManager:
 
         Returns:
             List of change dicts (one per pruned skill) with status='D' and
-            label='deleted'. Skills in the manifest are filtered out.
+            label='deleted'.
         """
         if orphans is None:
             orphans = self._detect_orphan_skills()
-        if not orphans:
-            return []
-
-        # Filter out manifest-declared retired skills. They are
-        # intentionally absent from the local hub and should not be
-        # removed from the repo.
-        from .skills import SkillsManager
-        sm = SkillsManager(global_skills_dir=paths.HUB_DIR)
-        retired = sm._get_retired_skill_names()
-        orphans = [o for o in orphans if o not in retired]
         if not orphans:
             return []
 
@@ -2116,23 +2102,11 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         skills_manager = SkillsManager(global_skills_dir=global_skills_dir)
         skills_manager.scan_all_agents()
 
-        # Compute the set of manifest-declared retired skills ONCE so
-        # both the "remove from repo" step and the "copy from hub" step
-        # can respect it. A retired skill must stay in the repo even if
-        # it is missing from the local hub (that's the whole point of
-        # retirement).
-        retired_skill_names = skills_manager._get_retired_skill_names()
-
-        # 1. Remove skills from repo that no longer exist locally,
-        #    EXCEPT manifest-declared retired skills. Those stay put.
+        # 1. Remove skills from repo working tree that no longer exist
+        #    in the local hub. The hub is the source of truth.
         if repo_skills_dir.exists():
             for repo_skill in repo_skills_dir.iterdir():
                 if repo_skill.name.startswith("."):
-                    continue
-
-                if repo_skill.name in retired_skill_names:
-                    # Intentionally retired — keep in repo regardless of
-                    # local hub state.
                     continue
 
                 # Check if it's a global skill
@@ -2147,14 +2121,10 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                     else:
                         repo_skill.unlink()
 
-        # 2. Copy global skills to repo (skip retired ones — they
-        #    should NOT be re-imported from the hub even if a stale
-        #    copy lingers there).
+        # 2. Copy global skills from hub to repo (hub remains source of truth)
         if global_skills_dir.exists():
             for skill_item in global_skills_dir.iterdir():
                 if skill_item.name.startswith("."):
-                    continue
-                if skill_item.name in retired_skill_names:
                     continue
 
                 dest = repo_skills_dir / skill_item.name
