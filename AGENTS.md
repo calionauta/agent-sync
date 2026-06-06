@@ -50,7 +50,49 @@ Some agents (Claude Code, Gemini CLI, etc.) don't natively read from `~/.agents/
 - Gemini CLI: AI contributor overseeing architectural mandates.
 
 
-## 🧪 Testing Protocol
+#### Skill Lifecycle (for LLMs)
+
+Skills exist in three layers: **hub** (`~/.agents/skills/`), **private repo**
+(GitHub backup), and **agent directories** (`~/.claude/commands/`, etc.).
+
+The hub is the source of truth. `push` mirrors hub → repo working tree,
+then `git add .` + commit persists the change. There is no manifest file.
+
+**Concrete flows:**
+
+1. **User removes skill from hub → `push` (default)**
+   → `_stage_skills` mirrors hub to repo working tree (removes skills
+   not in hub). Deletion is staged. User sees the diff (including `D`
+   entries) plus a pre-confirmation warning, then presses Enter.
+   Commit → deletion is in `git log -D`. HEAD no longer has the skill.
+   → **retired**. `_sync_from_repo` checks `ever_deleted - current_head`
+   and won't re-import. Agent stale copies are also ignored.
+
+2. **User puts skill back in hub → `push`**
+   → `_stage_skills` copies hub → repo. Skill is back in HEAD.
+   `ever_deleted - current_head` empties it → NOT retired.
+   `centralize` re-imports on other machines. Full backup/sync restored.
+
+3. **`push --prune`** — same as default, plus `_prune_orphan_skills` runs
+   `git rm --cached` for index edge cases. The flag is about index
+   cleanup, not the deletion itself (`_stage_skills` handles that).
+
+**Key implementation details:**
+- `_get_retired_skill_names()` does `git log --all --diff-filter=D` →
+   parses deleted paths → subtract `git ls-tree -d HEAD skills/`.
+- `_sync_from_repo` filters by retired — never resurrects deleted skills.
+- `_prune_orphan_skills` does NOT filter by retired.
+- Default `push` safety comes from: (a) user sees complete diff before
+  confirming, (b) pre-confirmation warning lists orphans, (c) post-hoc
+  `--strict` flag exits 2 for CI.
+- `audit` shows `in_sync` | `in_hub_only` | `in_repo_only`. No retired
+  column — that's an implementation detail.
+
+**Do NOT re-introduce a RETIRED.md manifest** — the git-history approach
+is KISS (zero files), testable (12 integration tests), and avoids sync
+confusion across machines. Re-adding to the hub immediately unretires.
+
+# 🧪 Testing Protocol
 
 ### When to Run Tests
 
