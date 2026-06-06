@@ -4,8 +4,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from agent_sync.agents import get_agents
-from agent_sync.agents.base import GLOBAL_SKILLS_DIR
 from agent_sync.config import Config
+from agent_sync.paths import HUB_DIR
 
 
 class ConfigExporter:
@@ -32,7 +32,7 @@ class ConfigExporter:
             "version": self.VERSION,
             "generated_by": "agent-sync",
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "skills_hub": str(GLOBAL_SKILLS_DIR),
+            "skills_hub": str(HUB_DIR),
             "model": {},
             "agents": self._export_agents(),
             "sync": self._export_sync(),

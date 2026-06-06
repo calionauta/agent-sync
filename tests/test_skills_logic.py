@@ -486,7 +486,7 @@ def test_get_retired_skill_names_from_manifest(tmp_path):
     )
 
     manager = SkillsManager(global_skills_dir=hub)
-    with patch.object(SyncManager, 'DEFAULT_REPO_DIR', PropertyMock(return_value=repo_dir)):
+    with patch('agent_sync.paths.REPO_DIR', repo_dir):
         retired = manager._get_retired_skill_names()
 
     assert "old-skill" in retired, \

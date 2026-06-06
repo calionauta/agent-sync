@@ -60,7 +60,7 @@ class TestPruneOrphanSkills:
         _make_hub(tmp_path, ["cali-coding-go-stack", "cali-coding-starhtml"])
         sm = _make_sm(tmp_path, ["cali-coding-go-stack", "cali-coding-starhtml"])
 
-        with patch("agent_sync.sync.Path.home", return_value=tmp_path):
+        with patch("agent_sync.paths.HUB_DIR", tmp_path / ".agents" / "skills"):
             from agent_sync.sync import SyncManager
             pruned = SyncManager._prune_orphan_skills(sm)
 
@@ -79,7 +79,7 @@ class TestPruneOrphanSkills:
             "cali-starhtml",       # orphan
         ])
 
-        with patch("agent_sync.sync.Path.home", return_value=tmp_path):
+        with patch("agent_sync.paths.HUB_DIR", tmp_path / ".agents" / "skills"):
             from agent_sync.sync import SyncManager
             pruned = SyncManager._prune_orphan_skills(sm)
 
@@ -97,7 +97,7 @@ class TestPruneOrphanSkills:
         _make_hub(tmp_path, [])
         sm = _make_sm(tmp_path, ["orphan-a", "orphan-b", "orphan-c"])
 
-        with patch("agent_sync.sync.Path.home", return_value=tmp_path):
+        with patch("agent_sync.paths.HUB_DIR", tmp_path / ".agents" / "skills"):
             from agent_sync.sync import SyncManager
             pruned = SyncManager._prune_orphan_skills(sm)
 
@@ -116,7 +116,7 @@ class TestPruneOrphanSkills:
         """If ~/.agents/skills/ doesn't exist, prune is a no-op."""
         sm = _make_sm(tmp_path, ["cali-coding-go-stack"])
 
-        with patch("agent_sync.sync.Path.home", return_value=tmp_path):
+        with patch("agent_sync.paths.HUB_DIR", tmp_path / ".agents" / "skills"):
             from agent_sync.sync import SyncManager
             pruned = SyncManager._prune_orphan_skills(sm)
 
@@ -128,7 +128,7 @@ class TestPruneOrphanSkills:
         _make_hub(tmp_path, ["cali-coding-go-stack", "cali-starhtml"])
         sm = _make_sm(tmp_path, [])
 
-        with patch("agent_sync.sync.Path.home", return_value=tmp_path):
+        with patch("agent_sync.paths.HUB_DIR", tmp_path / ".agents" / "skills"):
             from agent_sync.sync import SyncManager
             pruned = SyncManager._prune_orphan_skills(sm)
 
@@ -144,7 +144,7 @@ class TestPruneOrphanSkills:
 
         sm = _make_sm(tmp_path, ["cali-coding-go-stack", ".cali-product-workflow"])
 
-        with patch("agent_sync.sync.Path.home", return_value=tmp_path):
+        with patch("agent_sync.paths.HUB_DIR", tmp_path / ".agents" / "skills"):
             from agent_sync.sync import SyncManager
             pruned = SyncManager._prune_orphan_skills(sm)
 
@@ -170,7 +170,7 @@ class TestPruneOrphanSkills:
 
         sm._run_git.side_effect = fake_run_git
 
-        with patch("agent_sync.sync.Path.home", return_value=tmp_path):
+        with patch("agent_sync.paths.HUB_DIR", tmp_path / ".agents" / "skills"):
             from agent_sync.sync import SyncManager
             pruned = SyncManager._prune_orphan_skills(sm)
 

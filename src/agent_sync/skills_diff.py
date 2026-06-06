@@ -4,6 +4,8 @@ from pathlib import Path
 
 from rich.console import Console
 
+from .paths import HUB_DIR
+
 console = Console()
 
 
@@ -25,7 +27,7 @@ class SkillsDiff:
         from .config import Config
 
         self.config = Config()
-        self.global_skills_dir = Path.home() / ".agents" / "skills"
+        self.global_skills_dir = HUB_DIR
         self.repo_dir = None
 
         if self.config.repo_url:

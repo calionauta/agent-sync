@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TypedDict
 
+from .paths import HUB_DIR
+
 
 class Issue(TypedDict):
     """Represents a detected security issue."""
@@ -49,7 +51,7 @@ SECRET_EXAMPLE_PATTERN = re.compile(r'(?i)(secret|password)[-_]?(abc|example|tes
 
 def _is_valid_skill(skill_name: str) -> bool:
     """Check if a skill exists in the skills directory."""
-    skill_path = Path.home() / ".agents" / "skills" / skill_name
+    skill_path = HUB_DIR / skill_name
     return skill_path.exists()
 
 # DEPRECATED: /skill: commands are now treated as legitimate agent commands

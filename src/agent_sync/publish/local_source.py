@@ -5,11 +5,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ..paths import HUB_DIR
 from .base import SkillSource, SourceStatus
 
 
 # Standard local skills directory
-SKILLS_DIR = Path.home() / ".agents" / "skills"
+SKILLS_DIR = HUB_DIR
 
 
 def discover_local_skills() -> list[SkillSource]:

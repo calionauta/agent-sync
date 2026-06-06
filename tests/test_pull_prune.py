@@ -51,7 +51,7 @@ class TestDetectLocalOrphanSkills:
         repo_dir = _make_privado_with(tmp_path, ["cali-coding-go-stack", "cali-coding-starhtml"])
 
         sm = _make_sync_manager(tmp_path / ".agents" / "skills", repo_dir)
-        with patch("agent_sync.sync.Path.home", return_value=tmp_path):
+        with patch("agent_sync.paths.HUB_DIR", tmp_path / ".agents" / "skills"):
             orphans = sm._detect_local_orphan_skills()
 
         assert orphans == []
@@ -62,7 +62,7 @@ class TestDetectLocalOrphanSkills:
         repo_dir = _make_privado_with(tmp_path, ["cali-coding-go-stack"])
 
         sm = _make_sync_manager(tmp_path / ".agents" / "skills", repo_dir)
-        with patch("agent_sync.sync.Path.home", return_value=tmp_path):
+        with patch("agent_sync.paths.HUB_DIR", tmp_path / ".agents" / "skills"):
             orphans = sm._detect_local_orphan_skills()
 
         assert sorted(orphans) == ["cali-go-stack", "cali-starhtml"]
@@ -72,7 +72,7 @@ class TestDetectLocalOrphanSkills:
         repo_dir = _make_privado_with(tmp_path, ["cali-coding-go-stack"])
         sm = _make_sync_manager(tmp_path / ".agents" / "skills", repo_dir)
 
-        with patch("agent_sync.sync.Path.home", return_value=tmp_path):
+        with patch("agent_sync.paths.HUB_DIR", tmp_path / ".agents" / "skills"):
             orphans = sm._detect_local_orphan_skills()
 
         assert orphans == []
@@ -84,7 +84,7 @@ class TestDetectLocalOrphanSkills:
         repo_dir.mkdir()  # no skills/ subdir
 
         sm = _make_sync_manager(tmp_path / ".agents" / "skills", repo_dir)
-        with patch("agent_sync.sync.Path.home", return_value=tmp_path):
+        with patch("agent_sync.paths.HUB_DIR", tmp_path / ".agents" / "skills"):
             orphans = sm._detect_local_orphan_skills()
 
         assert orphans == []
@@ -100,7 +100,7 @@ class TestDetectLocalOrphanSkills:
         repo_dir = _make_privado_with(tmp_path, ["cali-coding-go-stack"])
 
         sm = _make_sync_manager(hub, repo_dir)
-        with patch("agent_sync.sync.Path.home", return_value=tmp_path):
+        with patch("agent_sync.paths.HUB_DIR", tmp_path / ".agents" / "skills"):
             orphans = sm._detect_local_orphan_skills()
 
         # .cali-product-workflow is hidden state, not a skill
@@ -116,7 +116,7 @@ class TestPruneLocalOrphanSkills:
         repo_dir = _make_privado_with(tmp_path, ["cali-coding-go-stack"])
 
         sm = _make_sync_manager(tmp_path / ".agents" / "skills", repo_dir)
-        with patch("agent_sync.sync.Path.home", return_value=tmp_path):
+        with patch("agent_sync.paths.HUB_DIR", tmp_path / ".agents" / "skills"):
             pruned = sm._prune_local_orphan_skills()
 
         assert pruned == []
@@ -128,7 +128,7 @@ class TestPruneLocalOrphanSkills:
         repo_dir = _make_privado_with(tmp_path, ["cali-coding-go-stack"])
 
         sm = _make_sync_manager(tmp_path / ".agents" / "skills", repo_dir)
-        with patch("agent_sync.sync.Path.home", return_value=tmp_path):
+        with patch("agent_sync.paths.HUB_DIR", tmp_path / ".agents" / "skills"):
             pruned = sm._prune_local_orphan_skills()
 
         # Verify the return shape
@@ -149,7 +149,7 @@ class TestPruneLocalOrphanSkills:
         repo_dir = _make_privado_with(tmp_path, ["cali-coding-go-stack"])
         sm = _make_sync_manager(tmp_path / ".agents" / "skills", repo_dir)
 
-        with patch("agent_sync.sync.Path.home", return_value=tmp_path):
+        with patch("agent_sync.paths.HUB_DIR", tmp_path / ".agents" / "skills"):
             pruned = sm._prune_local_orphan_skills()
 
         assert pruned == []

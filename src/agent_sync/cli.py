@@ -15,6 +15,7 @@ from rich.table import Table
 from . import __version__
 from .agents import load_registry
 from .config import Config
+from .paths import HUB_DIR
 from .publish import (
     add_source,
     clear_cache as clear_publish_cache,
@@ -932,7 +933,7 @@ def publish_remove(url: str):
 def list_skills():
     """List and manage skills interactively."""
     from rich.box import ROUNDED
-    skills_dir = Path.home() / ".agents" / "skills"
+    skills_dir = HUB_DIR
 
     if not skills_dir.exists():
         console.print("[yellow]No skills directory found.[/yellow]")
@@ -1473,7 +1474,7 @@ def status():
     for agent in config.agents:
         console.print(f"  • {agent}")
     
-    skills_dir = Path.home() / ".agents" / "skills"
+    skills_dir = HUB_DIR
     if skills_dir.exists():
         skill_count = len([d for d in skills_dir.iterdir() if d.is_dir() and not d.name.startswith(".")])
         console.print(f"\n[cyan]Skills: {skill_count}[/cyan]")

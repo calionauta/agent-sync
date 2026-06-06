@@ -19,19 +19,16 @@ from rich.table import Table
 
 from ._tui import print_footer
 from .agents import BaseAgent, get_all_agents
+from .paths import HUB_DIR, INTERNAL_MANIFEST_FILENAME as MANIFEST_FILENAME
 
 console = Console()
-
-GLOBAL_SKILLS_DIR = Path.home() / ".agents" / "skills"
-
-MANIFEST_FILENAME = ".agent-sync-manifest.json"
 
 
 class SkillsManager:
     """Manages skills centralization and distribution."""
 
     def __init__(self, global_skills_dir: Path | None = None):
-        self.global_skills_dir = global_skills_dir or GLOBAL_SKILLS_DIR
+        self.global_skills_dir = global_skills_dir or HUB_DIR
         self.conflicts: list[dict] = []
         self.resolved_conflicts: dict[str, str] = {}
         self.extension_skills: dict[str, dict] = {}  # agent-extension -> info
@@ -241,9 +238,9 @@ class SkillsManager:
         Returns:
             Set of retired skill names. Empty if no manifest exists.
         """
-        from .sync import SyncManager
+        from . import paths
 
-        repo_dir = SyncManager.DEFAULT_REPO_DIR
+        repo_dir = paths.REPO_DIR
         # Hub takes precedence over repo (local edits win)
         candidates = [
             self.global_skills_dir / "RETIRED.md",
@@ -285,9 +282,9 @@ class SkillsManager:
         This is the positive "what skills exist" API. Retirement is a
         manifest-declared subtraction, not a git-history query.
         """
-        from .sync import SyncManager
+        from . import paths
 
-        repo_dir = SyncManager.DEFAULT_REPO_DIR
+        repo_dir = paths.REPO_DIR
         if not (repo_dir / ".git").exists():
             return set()
 
@@ -479,9 +476,9 @@ class SkillsManager:
         Returns:
             Number of skills synced from repo
         """
-        from .sync import SyncManager
+        from . import paths
 
-        repo_skills_dir = SyncManager.DEFAULT_REPO_DIR / "skills"
+        repo_skills_dir = paths.REPO_DIR / "skills"
 
         if not repo_skills_dir.exists():
             return 0

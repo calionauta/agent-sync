@@ -11,9 +11,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from platformdirs import user_data_dir
 from rich.console import Console
 
+from . import paths
 from .agents import BaseAgent
 from .skills import MANIFEST_FILENAME
 from .validators import validate_github_url
@@ -135,17 +135,8 @@ def _get_app_name() -> str:
         return "agent-sync"
 
 
-APP_NAME = "agent-sync"
-
-
 class SyncManager:
     """Manages synchronization with GitHub repository."""
-
-    # Cross-platform data directory (generic, not hardcoded)
-    DATA_DIR = Path(user_data_dir(APP_NAME, APP_NAME))
-    DEFAULT_REPO_DIR = DATA_DIR / "repo"
-    STATE_FILE = DATA_DIR / "sync-state.json"
-    MANIFEST_FILE = DATA_DIR / "repo" / ".agent-sync-manifest.json"
 
     # Files to NEVER sync (sensitive, local-only, or transient)
     EXCLUDE_PATTERNS = [
@@ -183,8 +174,8 @@ class SyncManager:
 
     def __init__(self, config):
         self.config = config
-        self.repo_dir = self.DEFAULT_REPO_DIR
-        self.state_file = self.STATE_FILE
+        self.repo_dir = paths.REPO_DIR
+        self.state_file = paths.STATE_FILE
 
         # Ensure directories exist BEFORE any operations
         try:
@@ -620,7 +611,7 @@ class SyncManager:
         """
         import shutil
 
-        local_hub = Path.home() / ".agents" / "skills"
+        local_hub = paths.HUB_DIR
         if not local_hub.exists():
             return []
 
@@ -891,7 +882,7 @@ class SyncManager:
         (exist in only one place) are left untouched.
         """
         synced_skills_dir = self.repo_dir / "skills"
-        global_skills_dir = Path.home() / ".agents" / "skills"
+        global_skills_dir = paths.HUB_DIR
 
         if not synced_skills_dir.exists() or not global_skills_dir.exists():
             return []
@@ -1082,7 +1073,7 @@ class SyncManager:
         pull preview and by tests. The actual deletion lives in
         `_prune_local_orphan_skills`.
         """
-        local_hub = Path.home() / ".agents" / "skills"
+        local_hub = paths.HUB_DIR
         synced_skills_dir = self.repo_dir / "skills"
         if not local_hub.exists() or not synced_skills_dir.exists():
             return []
@@ -1212,7 +1203,7 @@ class SyncManager:
         agents_count = len([a for a in get_all_agents()
                            if self.config.is_agent_enabled(a.name) and a.is_available()])
 
-        global_skills_dir = Path.home() / ".agents" / "skills"
+        global_skills_dir = paths.HUB_DIR
         skills_count = len([d for d in global_skills_dir.iterdir()
                            if d.is_dir() and (d / "SKILL.md").exists()]) if global_skills_dir.exists() else 0
 
@@ -1314,7 +1305,7 @@ class SyncManager:
             List of change dicts (one per pruned skill) with status='D' and
             label='deleted'.
         """
-        local_hub = Path.home() / ".agents" / "skills"
+        local_hub = paths.HUB_DIR
         if not local_hub.exists():
             return []
 
@@ -2076,7 +2067,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         """
         from .skills import SkillsManager
 
-        global_skills_dir = Path.home() / ".agents" / "skills"
+        global_skills_dir = paths.HUB_DIR
         repo_skills_dir = self.repo_dir / "skills"
 
         # Ensure repo skills directory exists
@@ -2562,7 +2553,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         """
         changes = []
         synced_skills_dir = self.repo_dir / "skills"
-        global_skills_dir = Path.home() / ".agents" / "skills"
+        global_skills_dir = paths.HUB_DIR
 
         # Load manifest to get extension info
         manifest = self._load_manifest()
@@ -2676,7 +2667,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                 manifest["extensions"][ext_name]["symlink"] = ext_info["symlink"]
 
         # List global skills
-        global_skills_dir = Path.home() / ".agents" / "skills"
+        global_skills_dir = paths.HUB_DIR
         if global_skills_dir.exists():
             for skill_item in global_skills_dir.iterdir():
                 if skill_item.name.startswith("."):
