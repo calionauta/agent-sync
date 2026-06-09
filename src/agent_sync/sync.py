@@ -2103,8 +2103,28 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         skills_manager.scan_all_agents()
 
         # 1. Remove skills from repo working tree that no longer exist
-        #    in the local hub. The hub is the source of truth.
+        #    in the local hub, UNLESS they are tracked by git HEAD.
+        #    Skills in HEAD are preserved as a safety net: if the hub
+        #    accidentally loses a skill (e.g. a centralize race or
+        #    manual deletion), push must NOT propagate that loss to
+        #    the repo. Removal from HEAD requires an explicit `git rm`.
         if repo_skills_dir.exists():
+            # Build set of skills that exist in git HEAD (tracked)
+            head_skills: set[str] = set()
+            try:
+                head_out = self._run_git(
+                    "ls-tree", "--name-only", "HEAD", "skills/",
+                    cwd=self.repo_dir,
+                )
+                for line in head_out.splitlines():
+                    line = line.strip()
+                    if line.startswith("skills/"):
+                        bare = line[len("skills/"):].rstrip("/")
+                        if bare and "/" not in bare and not bare.startswith("."):
+                            head_skills.add(bare)
+            except Exception:
+                pass  # No HEAD yet (fresh repo) — proceed without guard
+
             for repo_skill in repo_skills_dir.iterdir():
                 if repo_skill.name.startswith("."):
                     continue
@@ -2115,7 +2135,11 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                 # Check if it's an extension skill
                 is_extension = repo_skill.name in skills_manager.extension_skills
 
-                if not is_global and not is_extension:
+                # Preserve skills tracked by HEAD — they may have been
+                # removed from hub by accident; push must not delete them.
+                is_in_head = repo_skill.name in head_skills
+
+                if not is_global and not is_extension and not is_in_head:
                     if repo_skill.is_dir():
                         shutil.rmtree(repo_skill)
                     else:

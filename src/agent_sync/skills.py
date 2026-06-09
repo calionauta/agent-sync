@@ -479,7 +479,7 @@ class SkillsManager:
         self.conflicts = conflicts
         return conflicts
 
-    def _sync_from_repo(self) -> int:
+    def _sync_from_repo(self, dry_run: bool = False) -> int:
         """Sync skills from git repo to global skills directory.
 
         Skills that were previously deleted from the private repo (visible in
@@ -487,8 +487,12 @@ class SkillsManager:
         not be re-synced to the hub even if a stale copy lingers in the
         repo's working tree.
 
+        Args:
+            dry_run: If True, only report what would be copied without
+                     modifying the hub.
+
         Returns:
-            Number of skills synced from repo
+            Number of skills that would be synced from repo
         """
         from . import paths
 
@@ -508,13 +512,15 @@ class SkillsManager:
             dest = self.global_skills_dir / item.name
             if not dest.exists():
                 if item.is_dir():
-                    shutil.copytree(item, dest)
+                    if not dry_run:
+                        shutil.copytree(item, dest)
                     synced += 1
                 elif item.is_file():
                     # Copy non-directory entries (e.g. RETIRED.md manifest).
                     # These are metadata files that restore the retirement
                     # state on a fresh machine.
-                    shutil.copy2(item, dest)
+                    if not dry_run:
+                        shutil.copy2(item, dest)
                     synced += 1
 
         return synced
@@ -699,7 +705,7 @@ class SkillsManager:
         # Phase 2: Sync from repo → hub (authoritative source)
         # ─────────────────────────────────────────────────────────────────────
         console.print("[bold]📥 Syncing skills from repo to ~/.agents/skills/...[/]\n")
-        repo_synced = self._sync_from_repo()
+        repo_synced = self._sync_from_repo(dry_run=dry_run)
         if repo_synced > 0:
             console.print(f"  [green]✓ Synced {repo_synced} skills from repo[/green]\n")
         else:
