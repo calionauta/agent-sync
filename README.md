@@ -117,7 +117,6 @@ agent-sync share add https://github.com/YOUR_USERNAME/agent-sync-public.git
 - `init` - Initialize a new sync repository (first machine)
 - `link <url>` - Connect to an existing repository (other machines)
 - `backup` - Full backup of configs, skills, and agents to private repo `[-m, --skills-only, --configs-only]`
-- `push` - Legacy alias for `backup` (still works)
 - `pull` - Download and apply changes from GitHub `[--force, --skills-only, --configs-only]`
 - `status` - Check sync state per agent
 
@@ -193,7 +192,6 @@ agent-sync supports agent extensions that create subdirectories with skills (e.g
 
 **How it works:**
 - `backup` - Detects extensions, backs up skills + symlinks, creates `.agent-sync-manifest.json`
-- `push` - Legacy alias (same as `backup`)
 - `pull` - Reads manifest, restores extension skills and symlinks to original locations
 
 See full documentation: [Extension Support](docs/extensions.md)
@@ -239,7 +237,7 @@ and current location.
 
 Add its name to `~/.agents/skills/RETIRED.md` (one per line, `#` for
 comments). The skill is no longer re-imported by `centralize`, and
-won't be pruned from the repo by `push --prune` or `skills prune`.
+won't be pruned from the repo by `backup --prune` or `skills prune`.
 
 See [Skills Lifecycle](docs/skills-lifecycle.md) for the full flow.
 
@@ -286,7 +284,7 @@ The DotAgents Protocol provides a **vendor-neutral skills hub** — all your ski
 agent-sync skills centralize
 
 # Your skills are now in ~/.agents/skills/
-# Push to backup
+# Backup to private repo
 agent-sync backup
 ```
 

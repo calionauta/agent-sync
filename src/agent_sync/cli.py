@@ -50,7 +50,7 @@ def print_full_help(ctx, param, value):
     
     # Group commands by category
     categories = {
-        "Sync & Backup": ["init", "backup", "push", "pull", "status", "diff", "sync"],
+        "Sync & Backup": ["init", "backup", "pull", "status", "diff", "sync"],
         "Repositories": ["repos"],
         "Share": ["share"],
         "Configuration": ["config", "generate-config"],
@@ -201,34 +201,6 @@ def sync(force: bool, skills_only: bool, configs_only: bool, agents_only: bool):
 @click.option("--skill", "-s", multiple=True, help="Specific skill to push (can repeat)")
 @click.option("--agent", "-a", multiple=True, help="Specific agent config to push (can repeat)")
 @click.option("--exclude-skill", multiple=True, help="Skill to exclude (can repeat)")
-@click.option("--exclude-agent", multiple=True, help="Agent to exclude (can repeat)")
-@click.option("--prune", is_flag=True, help="Remove orphan skills from the remote repo (in HEAD but not in local hub). Default: kept additively.")
-@click.option("--strict", is_flag=True, help="Exit with code 2 if orphan skills were detected (for CI/scripts).")
-def push(
-    dry_run: bool,
-    message: Optional[str],
-    skills_only: bool,
-    configs_only: bool,
-    skill: tuple,
-    agent: tuple,
-    exclude_skill: tuple,
-    exclude_agent: tuple,
-    prune: bool,
-    strict: bool,
-):
-    """Push local changes to the remote repository."""
-    _internal_backup_flow(
-        dry_run=dry_run,
-        message=message,
-        skills_only=skills_only,
-        configs_only=configs_only,
-        skill=skill,
-        agent=agent,
-        exclude_skill=exclude_skill,
-        exclude_agent=exclude_agent,
-        prune=prune,
-        strict=strict,
-    )
 
 def _internal_backup_flow(
     dry_run: bool = False,
