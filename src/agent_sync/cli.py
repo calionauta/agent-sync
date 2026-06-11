@@ -50,8 +50,9 @@ def print_full_help(ctx, param, value):
     
     # Group commands by category
     categories = {
-        "Sync & Backup": ["init", "push", "pull", "status", "diff", "sync"],
-        "Repositories": ["repos", "publish"],
+        "Sync & Backup": ["init", "backup", "push", "pull", "status", "diff", "sync"],
+        "Repositories": ["repos"],
+        "Share": ["share"],
         "Configuration": ["config", "generate-config"],
         "Skills": ["skills"],
         "Agents": ["agents", "enable", "disable", "export"],
@@ -63,8 +64,8 @@ def print_full_help(ctx, param, value):
         for cmd in cmds:
             if cmd == "repos":
                 console.print(f"  [cyan]repos[/cyan]             list | target (list | remove) | source (add | list | remove)")
-            elif cmd == "publish":
-                console.print(f"  [cyan]publish[/cyan]           add | list | remove | run")
+            elif cmd == "share":
+                console.print(f"  [cyan]share[/cyan]              add | list | remove | run")
             elif cmd == "config":
                 console.print(f"  [cyan]config[/cyan]            show | repo | edit | reset")
             elif cmd == "skills":
@@ -674,15 +675,15 @@ def repos_list():
     published_repo = get_published_repo()
     if published_repo:
         pub_name = published_repo.replace("https://github.com/", "").replace(".git", "")
-        table.add_row("publish", pub_name, "[green]active[/green]")
+        table.add_row("share", pub_name, "[green]active[/green]")
     else:
-        table.add_row("publish", "[dim]not configured[/dim]", "[yellow]missing[/yellow]")
+        table.add_row("share", "[dim]not configured[/dim]", "[yellow]missing[/yellow]")
     
     console.print(table)
     console.print()
     console.print("[bold]Change repositories:[/]")
     console.print("  [cyan]agent-sync repos target private <url>[/cyan]  Set sync repository")
-    console.print("  [cyan]agent-sync repos target public <url>[/cyan]   Set publish repository")
+    console.print("  [cyan]agent-sync repos target public <url>[/cyan]   Set share repository")
     console.print("  [cyan]agent-sync repos source list[/cyan]          View skill sources\n")
 
 
@@ -896,41 +897,41 @@ def _publish_repos_list() -> None:
             repos.append({"url": src.url, "type": "source"})
     
     if not repos:
-        console.print("\n[yellow]No publish repositories configured.[/yellow]")
-        console.print("\n[dim]Add: agent-sync publish add <url>[/dim]\n")
+        console.print("\n[yellow]No share repositories configured.[/yellow]")
+        console.print("\n[dim]Add: agent-sync share add <url>[/dim]\n")
         return
     
-    console.print(f"\n[bold]📦 Publish Repos ({len(repos)} repos)[/]\n")
+    console.print(f"\n[bold]📦 Share Repos ({len(repos)} repos)[/]\n")
     for i, repo in enumerate(repos, 1):
         t = "published" if repo["type"] == "published" else "source"
         name = repo["url"].replace("https://github.com/", "")
         console.print(f"  {i:02d}. {name} [dim]({t})[/dim]")
-    console.print("\n[dim]Add/remove: agent-sync publish add|remove <url>[/dim]\n")
+    console.print("\n[dim]Add/remove: agent-sync share add|remove <url>[/dim]\n")
 
 
-@main.group("publish")
-def publish_group():
-    """Manage publish repositories.
+@main.group("share")
+def share_group():
+    """Publish skills and agents to a public repository.
     
     Commands:
-      add <url>     Add a publish repository
+      add <url>     Add a public repository
       list          List all configured repositories
       remove <url>  Remove a repository
-      run           Run interactive publish flow
+      run           Run interactive publish flow (TUI)
     
     Examples:
-      agent-sync publish add https://github.com/user/repo
-      agent-sync publish list
-      agent-sync publish remove https://github.com/user/repo
-      agent-sync publish run
+      agent-sync share add https://github.com/user/repo
+      agent-sync share list
+      agent-sync share remove https://github.com/user/repo
+      agent-sync share run
     
     """
     pass
 
 
-@publish_group.command("add")
+@share_group.command("add")
 @click.argument("url")
-def publish_add(url: str):
+def share_add(url: str):
     """Add a publish repository.
     
     Examples:
@@ -939,15 +940,15 @@ def publish_add(url: str):
     _publish_repos_add(url)
 
 
-@publish_group.command("list")
-def publish_list():
+@share_group.command("list")
+def share_list():
     """List all configured publish repositories."""
     _publish_repos_list()
 
 
-@publish_group.command("remove")
+@share_group.command("remove")
 @click.argument("url")
-def publish_remove(url: str):
+def share_remove(url: str):
     """Remove a publish repository.
     
     Examples:
@@ -1511,7 +1512,7 @@ def centralize_skills(copy: bool, push: bool, dry_run: bool):
             console.print(f"\n[dim]Manage repos: agent-sync repos list[/dim]\n")
         else:
             console.print(f"\n[dim]Nothing to push to {cfg.repo_url}[/dim]\n")
-@publish_group.command("run")
+@share_group.command("run")
 @click.option("--dry-run", is_flag=True, help="Show what would be published")
 @click.option("--repo", "repo_url", help="Set GitHub repository URL")
 @click.option("--add-source", "add_source_url", help="Add external skill source")
@@ -1520,7 +1521,7 @@ def centralize_skills(copy: bool, push: bool, dry_run: bool):
 @click.option("--clear-cache", is_flag=True, help="Clear skill cache")
 @click.option("--reset-selection", is_flag=True, help="Reset saved selection")
 @click.option("--no-private", is_flag=True, help="Skip auto-sync to the private repo after publishing to public")
-def publish(
+def share_run(
     dry_run: bool,
     repo_url: Optional[str],
     add_source_url: Optional[str],
@@ -1530,25 +1531,30 @@ def publish(
     reset_selection: bool,
     no_private: bool,
 ):
-    """Publish skills and agents to a public repository.
+    """Publish skills and agents to a public repository. See share run --help."""
+    _internal_share_flow(
+        dry_run=dry_run,
+        repo_url=repo_url,
+        add_source_url=add_source_url,
+        remove_source_url=remove_source_url,
+        list_sources_flag=list_sources_flag,
+        clear_cache=clear_cache,
+        reset_selection=reset_selection,
+        no_private=no_private,
+    )
 
-    Run without options to select and publish skills & agents interactively.
 
-    After publishing the curated subset to the public repo, the full local
-    state is also synced to the private repo (config.repo_url) as a normal
-    commit (preserves history). Skip with --no-private or set
-    PublishConfig.auto_push_private=false in ~/.config/agent-sync/publish.yaml.
-
-    Examples:
-
-      agent-sync publish                  Select and publish skills & agents
-      agent-sync publish --repo URL       Set repository URL
-      agent-sync publish --add-source URL  Add external skill source
-      agent-sync publish --list-sources   List configured sources
-      agent-sync publish --clear-cache    Clear cached repositories
-      agent-sync publish --no-private    Publish to public only, skip private sync
-    """
-    
+def _internal_share_flow(
+    dry_run: bool = False,
+    repo_url = None,
+    add_source_url = None,
+    remove_source_url = None,
+    list_sources_flag = False,
+    clear_cache = False,
+    reset_selection = False,
+    no_private = False,
+):
+    """Internal: execute share flow. Used by share_run and deprecated publish_run."""
     # Handle repo URL
     if repo_url:
         if not validate_github_url(repo_url):
@@ -1686,6 +1692,7 @@ def publish(
 # =============================================================================
 # DIFF COMMAND
 # =============================================================================
+
 
 @main.command()
 @click.option("--skills", is_flag=True, help="Show skills diff")
@@ -2012,3 +2019,58 @@ def mcp(dry_run: bool, force: bool, conflicts: bool, source: tuple[str, ...], ou
 
 if __name__ == "__main__":
     main()
+
+
+# =============================================================================
+# BACKUP COMMAND
+# =============================================================================
+
+@main.command()
+@click.option("--dry-run", is_flag=True, help="Show what would be pushed without pushing")
+@click.option("--message", "-m", default=None, help="Commit message")
+@click.option("--skills-only", is_flag=True, help="Only push skills")
+@click.option("--configs-only", is_flag=True, help="Only push configs")
+@click.option("--skill", "-s", multiple=True, help="Specific skill to push (can repeat)")
+@click.option("--agent", "-a", multiple=True, help="Specific agent config to push (can repeat)")
+@click.option("--exclude-skill", multiple=True, help="Skill to exclude (can repeat)")
+@click.option("--exclude-agent", multiple=True, help="Agent to exclude (can repeat)")
+@click.option("--prune", is_flag=True, help="Remove orphan skills from the remote repo (in HEAD but not in local hub). Default: kept additively.")
+@click.option("--strict", is_flag=True, help="Exit with code 2 if orphan skills were detected (for CI/scripts).")
+def backup(
+    dry_run,
+    message,
+    skills_only,
+    configs_only,
+    skill,
+    agent,
+    exclude_skill,
+    exclude_agent,
+    prune,
+    strict,
+):
+    """Backup all configs, skills, and agents to the private repository.
+    
+    This sends everything (configs, skills, agents) to the private GitHub repo
+    as a full backup. Configs may contain API keys and secrets, so this is
+    NOT published to public repos.
+    
+    For sharing individual skills to public repos, use 'agent-sync share'.
+    
+    Examples:
+      agent-sync backup                     # Full backup (default)
+      agent-sync backup --skill dogfood     # Specific skill
+      agent-sync backup --dry-run           # Preview
+      agent-sync backup --prune             # Remove remote orphans too
+    """
+    push(
+        dry_run=dry_run,
+        message=message,
+        skills_only=skills_only,
+        configs_only=configs_only,
+        skill=skill,
+        agent=agent,
+        exclude_skill=exclude_skill,
+        exclude_agent=exclude_agent,
+        prune=prune,
+        strict=strict,
+    )

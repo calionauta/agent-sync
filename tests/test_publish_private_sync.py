@@ -1,12 +1,12 @@
-"""Tests for the publish run auto-sync to private repo feature.
+"""Tests for the share run auto-sync to private repo feature.
 
 Covers:
 - --no-private CLI flag is registered
-- Post-publish sync calls SyncManager.push by default
+- Post-share sync calls SyncManager.push by default
 - --no-private flag suppresses the sync
 - Missing repo_url (no `agent-sync init`) skips sync with a hint
 - PublishConfig.auto_push_private = False skips sync
-- Push exception does not abort the publish (public already succeeded)
+- Push exception does not abort the share (public already succeeded)
 """
 
 from unittest.mock import MagicMock, patch
@@ -26,18 +26,18 @@ runner = CliRunner()
 
 
 class TestNoPrivateFlagRegistered:
-    """Verify --no-private is a real option on `publish run`."""
+    """Verify --no-private is a real option on `share run`."""
 
     def test_help_lists_no_private(self):
-        """`publish run --help` shows --no-private."""
-        result = runner.invoke(main, ["publish", "run", "--help"])
+        """`share run --help` shows --no-private."""
+        result = runner.invoke(main, ["share", "run", "--help"])
         assert result.exit_code == 0
         assert "--no-private" in result.output
         assert "private" in result.output.lower()
 
     def test_help_docstring_mentions_feature(self):
         """Docstring explains the auto-sync behavior."""
-        result = runner.invoke(main, ["publish", "run", "--help"])
+        result = runner.invoke(main, ["share", "run", "--help"])
         assert result.exit_code == 0
         # Docstring should describe the auto-sync behavior
         text = result.output.lower()
@@ -62,7 +62,7 @@ class TestPostPublishSync:
     """Verify the auto-sync to private repo behavior."""
 
     def test_default_calls_sync_manager_push(self, monkeypatch, tmp_path):
-        """Default behavior: SyncManager.push is called after public publish."""
+        """Default behavior: SyncManager.push is called after public share."""
         fake_cfg = MagicMock()
         fake_cfg.repo_url = "https://github.com/me/private"
 
@@ -87,7 +87,7 @@ class TestPostPublishSync:
                 raising=False,
             )
 
-            result = runner.invoke(main, ["publish", "run"])
+            result = runner.invoke(main, ["share", "run"])
 
         # Publish succeeded (or was short-circuited by run_publish_setup mock)
         assert result.exit_code in (0, 1)  # TUI may abort since no real run
@@ -112,7 +112,7 @@ class TestPostPublishSync:
                 raising=False,
             )
 
-            result = runner.invoke(main, ["publish", "run", "--no-private"])
+            result = runner.invoke(main, ["share", "run", "--no-private"])
 
         # No push call expected when --no-private is set
         assert not fake_sm.push.called, "SyncManager.push should NOT be called with --no-private"
@@ -137,7 +137,7 @@ class TestPostPublishSync:
                 raising=False,
             )
 
-            result = runner.invoke(main, ["publish", "run"])
+            result = runner.invoke(main, ["share", "run"])
 
         assert not fake_sm.push.called
         assert "No private repo configured" in result.output or "skip" in result.output.lower()
@@ -160,7 +160,7 @@ class TestPostPublishSync:
                 raising=False,
             )
 
-            result = runner.invoke(main, ["publish", "run"])
+            result = runner.invoke(main, ["share", "run"])
 
         assert not fake_sm.push.called, "SyncManager.push should NOT be called when auto_push_private=False"
         assert "Syncing to private" not in result.output
@@ -186,7 +186,7 @@ class TestPostPublishSync:
                 raising=False,
             )
 
-            result = runner.invoke(main, ["publish", "run"])
+            result = runner.invoke(main, ["share", "run"])
 
         # Public publish still considered successful (exit code 0, not aborted)
         assert "Private sync failed" in result.output
@@ -216,7 +216,7 @@ class TestPostPublishSync:
                 raising=False,
             )
 
-            result = runner.invoke(main, ["publish", "run"])
+            result = runner.invoke(main, ["share", "run"])
 
         assert "No local changes" in result.output
         # Green "Synced" must NOT appear
