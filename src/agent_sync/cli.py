@@ -216,41 +216,45 @@ def push(
     prune: bool,
     strict: bool,
 ):
-    """Push local changes to the remote repository.
+    """Push local changes to the remote repository."""
+    _internal_backup_flow(
+        dry_run=dry_run,
+        message=message,
+        skills_only=skills_only,
+        configs_only=configs_only,
+        skill=skill,
+        agent=agent,
+        exclude_skill=exclude_skill,
+        exclude_agent=exclude_agent,
+        prune=prune,
+        strict=strict,
+    )
 
-    By default, the remote repo is kept ADDITIVE: any skill that exists in
-    the remote `skills/` but is missing from `~/.agents/skills/` is left
-    alone. Use `--prune` to remove those orphans in the same commit
-    (history preserved as `D` entries). Use `agent-sync skills prune` for
-    a dedicated subcommand with `--dry-run` and `--yes` flags.
-
-    Examples:
-      agent-sync push                    # Push all (additive, default)
-      agent-sync push --skill dogfood   # Specific skill
-      agent-sync push --agent pi.dev    # Specific agent config
-      agent-sync push --exclude-skill deprecated-skill  # Exclude skill
-      agent-sync push --prune           # Remove remote orphans too
-      agent-sync push --dry-run         # Preview changes
-    """
+def _internal_backup_flow(
+    dry_run: bool = False,
+    message = None,
+    skills_only: bool = False,
+    configs_only: bool = False,
+    skill = None,
+    agent = None,
+    exclude_skill = None,
+    exclude_agent = None,
+    prune: bool = False,
+    strict: bool = False,
+):
+    """Execute backup/push flow. Called by both push and backup commands."""
     from ._tui import print_footer, build_footer_commands
 
     config = Config()
 
     if not config.repo_url:
-        console.print("[red]✗ Not initialized. Run 'agent-sync init' first.[/red]")
+        console.print("[red]\u2717 Not initialized. Run 'agent-sync init' first.[/red]")
         return
 
     sync_manager = SyncManager(config)
 
     commit_msg = message or "chore: sync config updates"
 
-    # Pass the raw flags directly. With neither flag, both are False and
-    # _push_stage_and_get_changes runs all three branches (skills, configs, agents).
-    # `--skills-only` / `--configs-only` flip the respective flag to True,
-    # which makes it skip the other branches. The previous
-    # `do_skills = not configs_only` dance effectively set configs_only=True
-    # by default, which made the prune check `not configs_only` always False
-    # — prune never ran on default pushes.
     changed_files, orphans = sync_manager._push_stage_and_get_changes(
         message=commit_msg,
         skills_filter=list(skill) if skill else None,
@@ -262,18 +266,12 @@ def push(
         prune=prune,
     )
 
-    # No changes?
     if not changed_files:
-        # Even if nothing was changed in this push, surface orphan info
-        # so the user knows they exist (educational).
         if orphans:
             _warn_about_orphans(orphans)
         console.print("\n[yellow]Nothing to push (no changes since last sync).[/yellow]\n")
         return
-        console.print("\n[yellow]Nothing to push (no changes since last sync).[/yellow]\n")
-        return
 
-    # Build category groups
     groups = {"skills": [], "configs": [], "agents": [], "other": []}
     for f in changed_files:
         path = f["path"]
@@ -286,20 +284,18 @@ def push(
         else:
             groups["other"].append(f)
 
-    # Print tree
-    console.print(f"\n[bold]📤 Changes to be pushed to [cyan]{config.repo_url.split('/')[-1]}[/cyan]:[/]")
+    console.print(f"\n[bold]\U0001f4e4 Changes to be pushed to [cyan]{config.repo_url.split('/')[-1]}[/cyan]:[/]")
 
     def status_label(f):
         s = f["status"]
         if s == "??": return "[green]+[/]"
         if "D" in s: return "[red]-[/]"
         if "A" in s: return "[green]+[/]"
-        return "[yellow]·[/]"
+        return "[yellow]\u00b7[/]"
 
     def sort_key(f):
         return f["path"].lower()
 
-    # Skills section
     if groups["skills"]:
         console.print("\n  [cyan]skills/[/cyan]")
         for f in sorted(groups["skills"], key=sort_key):
@@ -308,14 +304,12 @@ def push(
             extra = f" ({cnt} files)" if cnt else ""
             console.print(f"    {status_label(f)} {rel}{extra}")
 
-    # Configs section
     if groups["configs"]:
         console.print("\n  [cyan]configs/[/cyan]")
         for f in sorted(groups["configs"], key=sort_key):
             rel = f["path"].replace("configs/", "", 1)
             console.print(f"    {status_label(f)} {rel}")
 
-    # Agents section
     if groups["agents"]:
         console.print("\n  [cyan]agents/[/cyan]")
         for f in sorted(groups["agents"], key=sort_key):
@@ -324,7 +318,6 @@ def push(
             extra = f" ({cnt} files)" if cnt else ""
             console.print(f"    {status_label(f)} {rel}{extra}")
 
-    # Other
     if groups["other"]:
         console.print("\n  [cyan]other/[/cyan]")
         for f in sorted(groups["other"], key=sort_key):
@@ -333,45 +326,36 @@ def push(
     total = len(changed_files)
     console.print(f"\n[dim]{total} item(s)[/dim]\n")
 
-    # Orphan warning: skills in HEAD but missing from local hub
-    # are PRESERVED by default (HEAD guard). User can prune explicitly.
     if orphans and not prune:
         _warn_about_orphans(orphans)
 
-    # Dry run - stop here after preview
     if dry_run:
-        console.print("[dim]Dry run — no changes made.[/dim]\n")
+        console.print("[dim]Dry run \u2014 no changes made.[/dim]\n")
         return
 
-    # Build footer with standardized format
     footer_cmds = build_footer_commands([("Enter", "push"), ("q", "cancel")], default_key="Enter")
     print_footer(footer_cmds)
     choice = Prompt.ask(r"[Enter] push (default), [q] quit: ")
     if choice.lower() in ("q", "quit"):
-        console.print("\n[yellow]Cancelled — changes not pushed.[/yellow]\n")
-        # Unstage everything
+        console.print("\n[yellow]Cancelled \u2014 changes not pushed.[/yellow]\n")
         sync_manager._run_git("reset", "HEAD", "--")
         return
 
-    # User confirmed — commit and push
-    console.print(f"\n  [dim]📝 Committing to {config.repo_url.split('/')[-1]}...[/dim]")
+    console.print(f"\n  [dim]\U0001f4dd Committing to {config.repo_url.split('/')[-1]}...[/dim]")
     try:
         sync_manager._run_git("add", ".")
         sync_manager._run_git("commit", "-m", commit_msg)
-        console.print(f"  [dim]🚀 Pushing to {config.repo_url.split('/')[-1]}...[/dim]")
+        console.print(f"  [dim]\U0001f680 Pushing to {config.repo_url.split('/')[-1]}...[/dim]")
         sync_manager._run_git("push", "origin", "main")
         sync_manager._save_state("pushed", sync_manager.config.repo_url)
-        console.print(f"\n[green]✓ Pushed to {config.repo_url.split('/')[-1]}[/green]\n")
+        console.print(f"\n[green]\u2713 Pushed to {config.repo_url.split('/')[-1]}[/green]\n")
     except subprocess.CalledProcessError as e:
         from .sync import _sanitize_git_output
-        console.print(f"\n[red]✗ Push failed:[/red] {_sanitize_git_output(e.stderr) or e}")
+        console.print(f"\n[red]\u2717 Push failed:[/red] {_sanitize_git_output(e.stderr) or e}")
         return
 
-    # CI-friendly strict mode: exit with code 2 if orphans were detected.
-    # Without --strict, the warning is console-only (exit stays 0).
     if strict and orphans:
         raise SystemExit(2)
-
 
 def _warn_about_orphans(orphans: list[str]) -> None:
     """Print a yellow warning about orphan skills preserved by HEAD guard.
@@ -2062,7 +2046,7 @@ def backup(
       agent-sync backup --dry-run           # Preview
       agent-sync backup --prune             # Remove remote orphans too
     """
-    push(
+    _internal_backup_flow(
         dry_run=dry_run,
         message=message,
         skills_only=skills_only,
