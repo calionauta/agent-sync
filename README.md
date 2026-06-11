@@ -56,7 +56,7 @@ pip install agent-sync
 ### First Machine — Create Repo
 ```bash
 agent-sync init                    # Create repo + wizard
-agent-sync push                    # Backup to GitHub
+agent-sync backup                  # Backup to GitHub
 ```
 
 ### Additional Machines — Link
@@ -97,14 +97,14 @@ agent-sync init --name agent-sync-configs
 # Link on additional machines
 agent-sync link https://github.com/YOUR_USERNAME/agent-sync-configs.git
 
-# Publish your skills (share with community)
-# Note: agent-sync publish is for CREATING a public repo, not installing from one.
+# Share your skills with the community
+# Note: agent-sync share is for CREATING a public repo, not installing from one.
 # To install skills from a public repo, use npx skills:
 #
 #   npx skills add renatocaliari/agent-sync-public
 #   npx skills add https://github.com/user/skill-repo
 
-agent-sync publish add https://github.com/YOUR_USERNAME/agent-sync-public.git
+agent-sync share add https://github.com/YOUR_USERNAME/agent-sync-public.git
 ```
 
 ---
@@ -116,7 +116,8 @@ agent-sync publish add https://github.com/YOUR_USERNAME/agent-sync-public.git
 #### 🔄 Sync & Backup
 - `init` - Initialize a new sync repository (first machine)
 - `link <url>` - Connect to an existing repository (other machines)
-- `push` - Backup local changes to GitHub `[-m, --skills-only, --configs-only]`
+- `backup` - Full backup of configs, skills, and agents to private repo `[-m, --skills-only, --configs-only]`
+- `push` - Legacy alias for `backup` (still works)
 - `pull` - Download and apply changes from GitHub `[--force, --skills-only, --configs-only]`
 - `status` - Check sync state per agent
 
@@ -142,16 +143,16 @@ agent-sync publish add https://github.com/YOUR_USERNAME/agent-sync-public.git
   - `--dry-run` - Preview only
   - `--yes` / `-y` - Skip the confirmation prompt
 
-  > 🛡️ **Safe-by-default push** (v0.35+): `agent-sync push` is additive — it does NOT delete orphan skills from the remote repo. Use `push --prune` or the dedicated `skills prune` subcommand for explicit destruction. See [Skills Lifecycle](docs/skills-lifecycle.md).
+  > 🛡️ **Safe-by-default backup** (v0.35+): `agent-sync backup` is additive — it does NOT delete orphan skills from the remote repo. Use `backup --prune` or the dedicated `skills prune` subcommand for explicit destruction. See [Skills Lifecycle](docs/skills-lifecycle.md).
 - `skills diff` - Show differences between local and remote skills
 - `skills reconcile` - Resolve divergences between local and remote
 - `skills delete` - Delete skills from hub and all agent directories (interactive)
 
-#### 📤 Publish
-- `publish run` - Run interactive publish flow (select skills/agents to share)
-- `publish add <url>` - Add a publish repository (where YOU will publish your skills)
-- `publish list` - List configured publish repositories
-- `publish remove <url>` - Remove a publish repository
+#### 📤 Share
+- `share run` - Interactive TUI to select skills/agents and publish to public repo
+- `share add <url>` - Add a public repository
+- `share list` - List configured public repositories
+- `share remove <url>` - Remove a public repository
 
 > 💡 **Install skills from public repos**: Use `npx skills add <source>` from [vercel-labs/skills](https://github.com/vercel-labs/skills). Example: `npx skills add renatocaliari/agent-sync-public`
 
@@ -191,7 +192,8 @@ agent-sync supports agent extensions that create subdirectories with skills (e.g
 - Skills with special characters (`__`, `-`)
 
 **How it works:**
-- `push` - Detects extensions, backs up skills + symlinks, creates `.agent-sync-manifest.json`
+- `backup` - Detects extensions, backs up skills + symlinks, creates `.agent-sync-manifest.json`
+- `push` - Legacy alias (same as `backup`)
 - `pull` - Reads manifest, restores extension skills and symlinks to original locations
 
 See full documentation: [Extension Support](docs/extensions.md)
@@ -250,7 +252,7 @@ hub on the next sync.
 ### "I accidentally pruned a skill from the repo"
 
 If you have the skill in your local `~/.agents/skills/`, just run
-`agent-sync push` (without `--prune`) — the skill will be re-committed.
+`agent-sync backup` (without `--prune`) — the skill will be re-committed.
 
 If you DON'T have it locally, restore from the repo's git history:
 
@@ -285,7 +287,7 @@ agent-sync skills centralize
 
 # Your skills are now in ~/.agents/skills/
 # Push to backup
-agent-sync push
+agent-sync backup
 ```
 
 Learn more at [dotagentsprotocol.com](https://dotagentsprotocol.com/)
