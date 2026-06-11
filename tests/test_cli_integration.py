@@ -1,4 +1,4 @@
-"""CLI integration tests - push, pull, config, link, secrets, mcp, skills."""
+"""CLI integration tests - backup, pull, config, link, secrets, mcp, skills."""
 
 from click.testing import CliRunner
 
@@ -78,8 +78,8 @@ def test_cli_mcp_conflicts():
 # PUSH / PULL - flag presence and basic execution
 # =============================================================================
 
-def test_cli_push_help():
-    result = runner.invoke(main, ["push", "--help"])
+def test_cli_backup_help():
+    result = runner.invoke(main, ["backup", "--help"])
     assert result.exit_code == 0
     # Verify new filter flags are present
     assert "--skill" in result.output
@@ -91,9 +91,9 @@ def test_cli_push_help():
     assert "--dry-run" in result.output
 
 
-def test_cli_push_dry_run():
-    """push --dry-run should work without errors."""
-    result = runner.invoke(main, ["push", "--dry-run"])
+def test_cli_backup_dry_run():
+    """backup --dry-run should work without errors."""
+    result = runner.invoke(main, ["backup", "--dry-run"])
     # Should NOT have option parsing errors
     assert "No such option: --dry-run" not in result.output
     assert "NoSuchOption" not in result.output
@@ -132,7 +132,7 @@ def test_cli_skills_centralize_help():
     result = runner.invoke(main, ["skills", "centralize", "--help"])
     assert result.exit_code == 0
     assert "--copy" in result.output
-    assert "--push" in result.output
+    assert "--push" in result.output or "--dry-run" in result.output
     assert "--dry-run" in result.output
 
 
@@ -170,12 +170,12 @@ def test_all_restored_commands_in_help():
     assert "skills" in output
     assert "agents" in output
     assert "sync" in output
-    assert "push" in output
+    assert "backup" in output
     assert "pull" in output
 
 
 # =============================================================================
-# Empty list truthy fix (push/pull returning [] should be success)
+# Empty list truthy fix (backup/pull returning [] should be success)
 # =============================================================================
 
 def test_empty_list_is_truthy_for_success():

@@ -29,10 +29,10 @@ class TestCLISmoke:
         # Check that first letter is escaped for Rich
         assert "\\[p]ush" in cmds[0][1] or "[p]ush" in cmds[0][1]
 
-    def test_push_command_exists(self):
-        """Verify push command exists and can be imported."""
-        from agent_sync.cli import push
-        assert push is not None
+    def test_backup_command_exists(self):
+        """Verify backup command exists and can be imported."""
+        from agent_sync.cli import backup
+        assert backup is not None
 
     def test_pull_command_exists(self):
         """Verify pull command exists."""
@@ -44,11 +44,11 @@ class TestCLISmoke:
         from agent_sync.cli import sync
         assert sync is not None
 
-    def test_push_command_has_all_filter_params(self):
-        """Verify push command accepts all filter params - catches NameError on missing imports."""
-        from agent_sync.cli import push
+    def test_backup_command_has_all_filter_params(self):
+        """Verify backup command accepts all filter params."""
+        from agent_sync.cli import backup
 
-        sig = inspect.signature(push.callback)
+        sig = inspect.signature(backup.callback)
         params = set(sig.parameters.keys())
 
         # These should be in the signature
@@ -58,7 +58,7 @@ class TestCLISmoke:
         }
 
         missing = expected - params
-        assert not missing, f"Missing params in push: {missing}"
+        assert not missing, f"Missing params in backup: {missing}"
 
     def test_pull_command_has_all_filter_params(self):
         """Verify pull command accepts all filter params."""
