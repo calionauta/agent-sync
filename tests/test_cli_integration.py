@@ -166,7 +166,7 @@ def test_all_restored_commands_in_help():
     assert "repos" in output
     assert "mcp" in output
     assert "secrets" in output
-    assert "publish" in output
+    assert "share" in output
     assert "skills" in output
     assert "agents" in output
     assert "sync" in output

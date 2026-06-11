@@ -17,36 +17,36 @@ class TestReposList:
         assert "Repository" in result.output or "not configured" in result.output
 
 
-class TestPublishRepos:
-    """Tests for 'publish add/list/remove' commands."""
+class TestShareRepos:
+    """Tests for 'share add/list/remove' commands."""
 
     def test_publish_add_validates_url(self):
-        """publish add validates GitHub URL format."""
-        result = runner.invoke(main, ["publish", "add", "invalid-url"])
+        """share add validates GitHub URL format."""
+        result = runner.invoke(main, ["share", "add", "invalid-url"])
         # Should show Invalid URL error (either exit code or output)
         assert "Invalid" in result.output or result.exit_code != 0 or "URL" in result.output
 
     def test_publish_add_requires_url(self):
-        """publish add requires URL argument."""
-        result = runner.invoke(main, ["publish", "add"])
+        """share add requires URL argument."""
+        result = runner.invoke(main, ["share", "add"])
         assert result.exit_code != 0
 
-    def test_publish_list(self):
-        """publish list shows configured repositories."""
-        result = runner.invoke(main, ["publish", "list"])
+    def test_share_list(self):
+        """share list shows configured repositories."""
+        result = runner.invoke(main, ["share", "list"])
         assert result.exit_code == 0
 
     def test_publish_remove_requires_url(self):
-        """publish remove requires URL argument."""
-        result = runner.invoke(main, ["publish", "remove"])
+        """share remove requires URL argument."""
+        result = runner.invoke(main, ["share", "remove"])
         assert result.exit_code != 0
 
 
-class TestPublishRun:
+class TestShareRun:
     """Tests for 'publish run' command."""
 
-    def test_publish_run_documented_in_help(self):
+    def test_share_run_documented_in_help(self):
         """publish run is documented in main help."""
         result = runner.invoke(main, ["--help"])
         # Should appear in help text
-        assert "publish" in result.output
+        assert "share" in result.output
