@@ -332,6 +332,11 @@ def push(
     total = len(changed_files)
     console.print(f"\n[dim]{total} item(s)[/dim]\n")
 
+    # Orphan warning: skills in HEAD but missing from local hub
+    # are PRESERVED by default (HEAD guard). User can prune explicitly.
+    if orphans and not prune:
+        _warn_about_orphans(orphans)
+
     # Dry run - stop here after preview
     if dry_run:
         console.print("[dim]Dry run — no changes made.[/dim]\n")
@@ -368,58 +373,24 @@ def push(
 
 
 def _warn_about_orphans(orphans: list[str]) -> None:
-    """Print a yellow warning listing orphan skills and how to prune them.
+    """Print a yellow warning about orphan skills preserved by HEAD guard.
 
-    Called after a successful `push` that detected orphans but did NOT
-    prune them (the default). The user can then choose to run
-    `agent-sync skills prune` or `agent-sync push --prune`.
+    Skills exist in git HEAD but are missing from the local hub
+    (~/.agents/skills/). With the HEAD guard they are PRESERVED --
+    push will NOT delete them. Use --prune to confirm removal.
     """
     n = len(orphans)
     sample = ", ".join(orphans[:5])
     more = f" (+{n - 5} more)" if n > 5 else ""
     console.print(
-        f"\n[yellow]⚠  {n} orphan skill(s) in the remote repo "
-        f"(missing from local hub): {sample}{more}[/yellow]"
-    )
-    console.print(
-        "[yellow]   To remove them, run one of:[/yellow]\n"
+        f"\n[yellow]\u26a0  {n} orphan skill(s) in HEAD but missing from local hub:[/yellow]\n"
+        f"      {sample}{more}\n"
+        "[yellow]  They are PRESERVED (HEAD guard) -- push will NOT delete them.\n"
+        "  To remove from the repo, run one of:[/yellow]\n"
         "    [cyan]agent-sync skills prune --dry-run[/cyan]  # preview\n"
         "    [cyan]agent-sync skills prune --yes[/cyan]       # execute\n"
         "    [cyan]agent-sync push --prune[/cyan]            # prune in next push\n"
     )
-
-
-def _warn_about_orphans(orphans: list[str]) -> None:
-    """Print a yellow warning listing orphan skills.
-
-    Called BEFORE the user confirms the push, right after the diff is
-
-    shown. The user can still cancel (press q). Once committed, the
-
-    deletion is permanent and the skill enters the retired set.
-
-    """
-
-    n = len(orphans)
-
-    sample = ", ".join(orphans[:5])
-
-    more = f" (+{n - 5} more)" if n > 5 else ""
-
-    console.print(
-
-        f"\n[yellow]\u26a0  {n} orphan skill(s) will be removed from the remote repo "
-
-        f"(they exist in HEAD but not in the local hub): {sample}{more}[/yellow]\n"
-
-        "[yellow]  The hub is the source of truth. Skills missing from the hub are\n"
-
-        "  mirrored out of the repo on every push. To keep a skill, place\n"
-
-        "  it back in the hub and re-run push.[/yellow]\n"
-
-    )
-
 
 
 # =============================================================================

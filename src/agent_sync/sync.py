@@ -2123,7 +2123,10 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                         if bare and "/" not in bare and not bare.startswith("."):
                             head_skills.add(bare)
             except Exception:
-                pass  # No HEAD yet (fresh repo) — proceed without guard
+                console.print(
+                    "  [yellow]⚠ Could not determine HEAD skills — "
+                    "HEAD guard disabled (fresh repo?)[/yellow]"
+                )
 
             for repo_skill in repo_skills_dir.iterdir():
                 if repo_skill.name.startswith("."):
