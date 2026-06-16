@@ -4,6 +4,53 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.41.0-alpha] - 2026-06-16
+
+### 🐛 Fixes
+
+#### `sync.exclude` now recurses into subdirectories (custom user config)
+
+User-supplied patterns in `config.yaml` (`agents_config.<agent>.sync.exclude`) used to use a bare `fnmatch` call, so `exclude: ["node_modules/"]` only matched the literal `node_modules` filename — not `node_modules/foo.js`, `a/node_modules/b.js`, etc. The hardcoded `EXCLUDE_PATTERNS` had special-case recursion for `pattern.endswith('/')` but the user list did not. **Now both go through the same `_matches_pattern` helper**, so:
+
+- `node_modules/`, `node_modules` (no slash), `node_modules/**` — all recurse
+- `**/state.json` — matches at any depth
+- `*.bak`, `*.log`, `**/*.lock` — standard globs work as before
+
+Backups using `sync.all_files + sync.exclude` now correctly exclude heavy subdirs (`node_modules/`, `sessions/`, `git/`, `npm/`) instead of just the top-level dirs.
+
+#### Nested `.git/` directories excluded by default
+
+Added `.git/` to the hardcoded `EXCLUDE_PATTERNS`. This prevents the "git in git" problem when syncing a subdir that contains its own versioned state (e.g. `agentmemory-snapshots/.git/` was being copied into the private repo, creating nested version control).
+
+#### `state.json` no longer excluded by default (regression doc, fixed in v0.40.0-alpha)
+
+The bare `state.json` pattern was removed in v0.40.0-alpha. Users who need to exclude specific state files (e.g. for tools that store transient state at the top of their config dir) can do so via `sync.exclude`.
+
+### 🧪 Tests
+
+- `tests/test_sync_paths.py::TestExcludePatternMatching` (new class) — 8 tests covering:
+  - `state.json` defaults (top-level, subdir, subdir-of-subdir) are no longer excluded
+  - Nested `.git/` at any depth is excluded
+  - Custom `node_modules/` and `node_modules` (no slash) recurse
+  - Custom globs (`*.bak`, `**/*.lock`) still work
+  - `**/name` style matches at any depth
+  - User patterns are checked before defaults
+  - Empty patterns are defensive no-op
+
+559/559 tests passing (was 551; +8 new).
+
+## [0.40.0-alpha] - 2026-06-16
+
+### 🐛 Fixes
+
+- **Remove generic `state.json` from `EXCLUDE_PATTERNS`**: pattern was too broad, excluded legitimate `state.json` files in tool subdirs (e.g. agentmemory-snapshots). See `sync.py:142` for the inline comment. User can still exclude specific paths via `sync.exclude` in `config.yaml`.
+- **Remove 21 lines of unreachable code in `_should_exclude`**: leftover from commit `0a4d11e7` (2026-05-21) that replaced the function body but left the old version as dead code below the new `return False`. The 23 lines had been sitting there silently since then; Python's parser ignored them, but they confused code review.
+
+### 📝 Other commits in this release
+
+- `9f43c04` cleanup: remove `push` command entirely, no legacy
+- `76a8301` docs: update README with backup/share commands
+
 ## [0.32.0-alpha] - 2026-06-04
 
 ### ✨ New Features

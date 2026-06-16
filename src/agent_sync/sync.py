@@ -153,6 +153,8 @@ class SyncManager:
 
         # System files
         ".DS_Store",
+        # Nested VCS metadata (avoid copying .git/ inside a synced subdir)
+        ".git/",
 
         # Agent session state (not configuration)
         "history/",
@@ -2204,38 +2206,79 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         except Exception:
             return False
 
+    @staticmethod
+    def _matches_pattern(filename: str, pattern: str) -> bool:
+        """Check if a filename matches a single exclude pattern.
+
+        Supports the following pattern styles:
+        - Bare filename: `state.json` — matches `state.json` (exact) or any
+          component whose last segment is `state.json` (e.g. `foo/state.json`).
+        - Glob on path: `*.bak` — fnmatch against full relative path and basename.
+        - Directory: `node_modules/` or `node_modules` — recursive: matches
+          `node_modules`, `node_modules/foo.js`, `a/node_modules/b.js`.
+        - `**`-style prefix: `**/state.json` — matches `state.json`,
+          `foo/state.json`, `a/b/state.json` (any depth).
+        - Leading slash: `/state.json` — matches only at the root of the
+          agent config dir (relative paths start without leading slash in
+          practice, so this is effectively a bare-name match).
+        """
+        import fnmatch
+
+        if not pattern:
+            return False
+
+        just_name = Path(filename).name
+
+        # Directory pattern (with or without trailing slash): recurse.
+        if pattern.endswith("/"):
+            dir_name = pattern.rstrip("/")
+            return (
+                filename == dir_name
+                or filename.startswith(f"{dir_name}/")
+                or f"/{dir_name}/" in filename
+                or filename.endswith(f"/{dir_name}")
+            )
+
+        # Bare directory name (no glob chars, no slashes): recurse.
+        # e.g. "node_modules" matches "node_modules", "node_modules/x", "a/node_modules".
+        if "/" not in pattern and not any(c in pattern for c in "*?["):
+            return (
+                filename == pattern
+                or filename.startswith(f"{pattern}/")
+                or f"/{pattern}/" in filename
+                or filename.endswith(f"/{pattern}")
+            )
+
+        # `**/name` style: match at any depth.
+        if pattern.startswith("**/"):
+            tail = pattern[3:]
+            return (
+                filename == tail
+                or filename.endswith(f"/{tail}")
+                or fnmatch.fnmatch(filename, pattern)
+                or fnmatch.fnmatch(just_name, tail)
+            )
+
+        # Standard glob: try full path then basename.
+        return fnmatch.fnmatch(filename, pattern) or fnmatch.fnmatch(just_name, pattern)
+
     def _should_exclude(self, filename: str, exclude_patterns: list[str] | None = None) -> bool:
         """Check if a file should be excluded from sync.
 
         Args:
             filename: Name or relative path of the file
-            exclude_patterns: Optional list of glob patterns to exclude
+            exclude_patterns: Optional list of glob patterns to exclude.
+                Each pattern follows the rules in :meth:`_matches_pattern`.
         """
-        import fnmatch
-
-        # Get just the filename for pattern matching
-        just_name = Path(filename).name
-
-        # Check custom exclude patterns first
+        # Check custom exclude patterns first (user config takes priority)
         if exclude_patterns:
             for pattern in exclude_patterns:
-                if fnmatch.fnmatch(filename, pattern):
-                    return True
-                if fnmatch.fnmatch(just_name, pattern):
+                if self._matches_pattern(filename, pattern):
                     return True
 
-        # Check default exclude patterns
+        # Then check the hardcoded defaults
         for pattern in self.EXCLUDE_PATTERNS:
-            # Handle directory patterns (e.g., "history/")
-            if pattern.endswith('/'):
-                dir_name = pattern.rstrip('/')
-                # Check if filename starts with dir_name/ or contains /dir_name/
-                if filename.startswith(f"{dir_name}/") or f"/{dir_name}/" in filename or filename.endswith(f"/{dir_name}") or just_name == dir_name:
-                    return True
-            # Handle file patterns
-            elif fnmatch.fnmatch(filename, pattern):
-                return True
-            elif fnmatch.fnmatch(just_name, pattern):
+            if self._matches_pattern(filename, pattern):
                 return True
 
         return False
