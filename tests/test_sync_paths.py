@@ -276,3 +276,98 @@ agents_config:
     assert options["all_files"] is False
     assert options["paths"] is None
     assert options["exclude"] == []
+
+
+class TestExcludePatternMatching:
+    """Tests for SyncManager._should_exclude and _matches_pattern.
+
+    Regression coverage for two bugs fixed in v0.40.0-alpha and v0.41.0-alpha:
+    - Generic `state.json` no longer excluded from backups.
+    - Custom user `sync.exclude` patterns now recurse into subdirectories
+      (the same as the hardcoded EXCLUDE_PATTERNS).
+    """
+
+    def test_default_state_json_is_not_excluded(self):
+        """`state.json` must not be excluded by default — it broke backups
+        for tools (e.g. agentmemory-snapshots) that store state in subdirs.
+        """
+        sync = SyncManager.__new__(SyncManager)
+
+        assert sync._should_exclude("state.json", None) is False
+        assert sync._should_exclude("agentmemory-snapshots/state.json", None) is False
+        assert sync._should_exclude("skills/x/state.json", None) is False
+
+    def test_default_nested_git_dir_excluded(self):
+        """Nested `.git/` directories must be excluded (avoids git-in-git in
+        backups of tools that version their own subdirs).
+        """
+        sync = SyncManager.__new__(SyncManager)
+
+        assert sync._should_exclude(".git", None) is True
+        assert sync._should_exclude(".git/HEAD", None) is True
+        assert sync._should_exclude(".git/objects/abc", None) is True
+        assert sync._should_exclude("a/.git/HEAD", None) is True
+        assert sync._should_exclude("agentmemory-snapshots/.git/HEAD", None) is True
+
+    def test_custom_dir_pattern_with_slash_recurses(self):
+        """`node_modules/` (trailing slash) should exclude subdirs at any depth."""
+        sync = SyncManager.__new__(SyncManager)
+        exclude = ["node_modules/"]
+
+        assert sync._should_exclude("node_modules", exclude) is True
+        assert sync._should_exclude("node_modules/foo.js", exclude) is True
+        assert sync._should_exclude("node_modules/sub/file.js", exclude) is True
+        assert sync._should_exclude("a/node_modules/b.js", exclude) is True
+        # Unrelated files must NOT be excluded
+        assert sync._should_exclude("node_modules_helper.txt", exclude) is False
+        assert sync._should_exclude("state.json", exclude) is False
+
+    def test_custom_dir_pattern_without_slash_recurses(self):
+        """`node_modules` (no trailing slash) should also recurse — convenience."""
+        sync = SyncManager.__new__(SyncManager)
+        exclude = ["node_modules"]
+
+        assert sync._should_exclude("node_modules/foo.js", exclude) is True
+        assert sync._should_exclude("a/node_modules/b.js", exclude) is True
+        assert sync._should_exclude("node_modules", exclude) is True
+
+    def test_custom_glob_pattern_still_works(self):
+        """Glob patterns in custom exclude must still work as before."""
+        sync = SyncManager.__new__(SyncManager)
+        exclude = ["*.bak", "**/*.lock"]
+
+        assert sync._should_exclude("file.bak", exclude) is True
+        assert sync._should_exclude("sub/dir/file.bak", exclude) is True
+        assert sync._should_exclude("test.lock", exclude) is True
+        assert sync._should_exclude("sub/test.lock", exclude) is True
+        assert sync._should_exclude("file.txt", exclude) is False
+
+    def test_custom_doublestar_prefix_recurses(self):
+        """`**/name` style patterns should match at any depth."""
+        sync = SyncManager.__new__(SyncManager)
+        exclude = ["**/state.json"]
+
+        assert sync._should_exclude("state.json", exclude) is True
+        assert sync._should_exclude("foo/state.json", exclude) is True
+        assert sync._should_exclude("a/b/state.json", exclude) is True
+        # `state.json.bak` is excluded by default *.bak pattern, not by
+        # `**/state.json`. Use a path that doesn't trigger other excludes.
+        assert sync._should_exclude("foo/state.json", exclude) is True
+        assert sync._should_exclude("state.jsonx", exclude) is False
+
+    def test_custom_exclude_priority_over_default(self):
+        """Custom patterns in user config should be checked before defaults."""
+        sync = SyncManager.__new__(SyncManager)
+        # `state.json` is no longer in defaults, but if user adds it
+        # explicitly via sync.exclude, it should still work.
+        custom = ["state.json"]
+
+        assert sync._should_exclude("state.json", custom) is True
+        assert sync._should_exclude("foo/state.json", custom) is True
+
+    def test_empty_pattern_does_not_match(self):
+        """Empty pattern must not match anything (defensive)."""
+        sync = SyncManager.__new__(SyncManager)
+
+        assert sync._should_exclude("state.json", [""]) is False
+        assert sync._should_exclude("anything", [""]) is False
