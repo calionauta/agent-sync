@@ -157,9 +157,11 @@ class SyncManager:
         # Agent session state (not configuration)
         "history/",
         "tmp/",
-        "state.json",
         "projects.json",
         "installation_id",
+        # NOTE: "state.json" removed — too generic, caused false positives
+        # (e.g. agentmemory-snapshots/state.json was excluded).
+        # User can exclude specific state.json via sync.exclude if needed.
 
         # Transient files
         "*.bak",
@@ -2234,29 +2236,6 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             elif fnmatch.fnmatch(filename, pattern):
                 return True
             elif fnmatch.fnmatch(just_name, pattern):
-                return True
-
-        return False
-        """Check if a file should be excluded from sync.
-
-        Args:
-            filename: Name or relative path of the file
-            exclude_patterns: Optional list of glob patterns to exclude
-        """
-        import fnmatch
-
-        # Check custom exclude patterns first
-        if exclude_patterns:
-            for pattern in exclude_patterns:
-                if fnmatch.fnmatch(filename, pattern):
-                    return True
-                # Also check just the filename against pattern
-                if fnmatch.fnmatch(Path(filename).name, pattern):
-                    return True
-
-        # Check default exclude patterns
-        for pattern in self.EXCLUDE_PATTERNS:
-            if fnmatch.fnmatch(filename, pattern):
                 return True
 
         return False
