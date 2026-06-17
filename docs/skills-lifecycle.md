@@ -16,7 +16,7 @@ then `git add` + commit persists the change. There is no manifest file.
 ### Adding a Skill
 
 1. Place the skill directory in `~/.agents/skills/<name>/SKILL.md`
-2. Run `agent-sync backup` (or `agent-sync push` if still available)
+2. Run `agent-sync backup`
 3. The skill is copied to the private repo, committed, and pushed
 
 ### Removing a Skill (Retirement)

@@ -29,7 +29,7 @@ pipx install agent-sync
 
 # First machine - create repo
 agent-sync init
-agent-sync push
+agent-sync backup
 
 # Other machines - link to existing repo
 agent-sync link https://github.com/user/repo.git

@@ -23,10 +23,10 @@ This will:
 - Initialize git in your config directory
 - Configure agent-sync settings
 
-### 2. Push Your Configs
+### 2. Back Up Your Configs
 
 ```bash
-agent-sync push
+agent-sync backup
 ```
 
 This backs up:
@@ -52,10 +52,10 @@ Your configs are now restored on this machine.
 
 ## Daily Workflow
 
-### Push Changes
+### Back Up Changes
 
 ```bash
-agent-sync push -m "Update my skills"
+agent-sync backup -m "Update my skills"
 ```
 
 ### Pull Changes
