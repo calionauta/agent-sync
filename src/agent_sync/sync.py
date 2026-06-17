@@ -167,6 +167,7 @@ class SyncManager:
 
         # Transient files
         "*.bak",
+        "pi-cache-optimizer-stats.json",
         "*.log",
         "*.log.*",
 
