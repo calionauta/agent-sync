@@ -951,42 +951,45 @@ transition: opacity 400ms ease-out, transform 400ms ease-out, border-color 200ms
             <pre class="terminal-output">Usage: agent-sync [OPTIONS] COMMAND [ARGS]...
 
 
-  agent-sync Commands
 
-  Sync &amp; Backup:
-    init
-    link
-    push
-    pull
-    status
-    diff
-    sync
+agent-sync Commands
 
-  Repositories:
-    repos             list | target (private | public | remove | list) | source 
-(add | list | remove)
-    publish           add | list | remove | run
+Sync &amp; Backup:
+  init
+  backup
+  pull
+  status
+  diff
+  sync
 
-  Configuration:
-    config            show | repo | edit | reset
-    generate-config
+Repositories:
+  repos             list | target (list | remove) | source (add | list | remove)
 
-  Skills:
-    skills           list | centralize
+Share:
+  share              add | list | remove | run
 
-  Agents:
-    agents           list
-    enable
-    disable
-    export
+Configuration:
+  config            show | repo | edit | reset
+  generate-config
 
-  System:
-    secrets          list | edit | enable | disable
-    mcp
-    update
-    version
+Skills:
+  skills           list | centralize
 
-  Run 'agent-sync &lt;command&gt; --help' for more details on a command.</pre>
+Agents:
+  agents           list
+  enable
+  disable
+  export
+
+System:
+  secrets          list | edit | enable | disable
+  mcp
+  update
+  version
+
+Run &#x27;agent-sync &lt;command&gt; --help&#x27; for more details on a command.
+
+</pre>
 
           </div>
         </div>

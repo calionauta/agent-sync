@@ -152,12 +152,13 @@ agent-sync is a unified CLI tool to sync, centralize, and share AI agent configu
     
     # Group commands by category
     categories = {
-        "Sync & Backup": ["push", "pull", "link", "status"],
-        "Configuration": ["init", "setup", "config", "generate-config"],
+        "Sync & Backup": ["init", "backup", "pull", "status", "diff", "sync"],
+        "Repositories": ["repos"],
+        "Share": ["share"],
+        "Configuration": ["config", "generate-config"],
         "Skills": ["skills"],
-        "Publishing": ["publish"],
-        "Agents": ["agents", "enable", "disable", "custom-agents"],
-        "System": ["update", "version", "mcp", "secrets"],
+        "Agents": ["agents", "enable", "disable", "export"],
+        "System": ["secrets", "mcp", "update", "version"],
     }
     
     if hasattr(main, 'commands'):

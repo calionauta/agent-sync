@@ -26,8 +26,8 @@ agent-sync uses `~/.agents/skills/` as the central hub:
 # Move scattered skills to hub
 agent-sync skills centralize
 
-# Push to backup
-agent-sync push
+# Back up to private repo
+agent-sync backup
 
 # Pull on new machine
 agent-sync pull
