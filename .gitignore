@@ -21,3 +21,4 @@ incident-analysis.md
 *.jsonl
 temp_*.py
 debug_*.md
+pi-cache-optimizer-stats.json
