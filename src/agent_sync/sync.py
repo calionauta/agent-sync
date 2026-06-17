@@ -2449,26 +2449,54 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
         # Copy all files (entire directory)
         if all_files:
-            console.print(f"  [dim]Backing up all files: {agent.name}[/dim]")
-            self._copy_directory(
+            _home = str(Path.home())
+            _short = lambda p: str(p).replace(_home, "~")
+            console.print(f"  [bold]Backing up all files: [cyan]{agent.name}[/cyan] from [underline]{_short(agent_config_dir)}[/underline]:[/]")
+            copied = self._copy_directory(
                 src=agent_config_dir,
                 dest=repo_agent_dir,
                 exclude=exclude,
                 preserve_symlinks=True,
             )
+            console.print(f"    [green]✓[/] all files  ([dim]{copied} file{'s' if copied != 1 else ''}[/dim])")
             return
 
         # Copy specific paths
         if paths:
-            console.print(f"  [dim]Backing up paths: {agent.name} - {len(paths)} patterns[/dim]")
+            _home = str(Path.home())
+            _short = lambda p: str(p).replace(_home, "~")
+            console.print(f"  [bold]Backing up [cyan]{agent.name}[/cyan] from [underline]{_short(agent_config_dir)}[/underline]:[/]")
             for path_pattern in paths:
-                self._copy_path_pattern(
-                    src=agent_config_dir,
-                    dest=repo_agent_dir,
-                    pattern=path_pattern,
-                    exclude=exclude,
-                    preserve_symlinks=True,
-                )
+                resolved = agent_config_dir / path_pattern.rstrip("/")
+                if path_pattern.endswith("/"):
+                    # Directory pattern
+                    if resolved.exists():
+                        copied = self._copy_path_pattern(
+                            src=agent_config_dir,
+                            dest=repo_agent_dir,
+                            pattern=path_pattern,
+                            exclude=exclude,
+                            preserve_symlinks=True,
+                        )
+                        console.print(f"    [green]✓[/] {path_pattern} [dim]→ {_short(resolved)}  ({copied} file{'s' if copied != 1 else ''})[/dim]")
+                    else:
+                        console.print(f"    [dim]✗[/] {path_pattern} → {_short(resolved)}  [yellow]not found[/yellow]")
+                else:
+                    # File or glob pattern — always attempt copy
+                    copied = self._copy_path_pattern(
+                        src=agent_config_dir,
+                        dest=repo_agent_dir,
+                        pattern=path_pattern,
+                        exclude=exclude,
+                        preserve_symlinks=True,
+                    )
+                    if copied:
+                        console.print(f"    [green]✓[/] {path_pattern}  ([dim]{copied} file{'s' if copied != 1 else ''}[/dim])")
+                    else:
+                        console.print(f"    [dim]✗[/] {path_pattern}  [yellow]not found[/yellow]")
+            if exclude:
+                for ex in exclude:
+                    console.print(f"    [dim]⊙ exclude:[/dim] {ex}")
 
     def _apply_synced_configs(
         self,
