@@ -190,17 +190,8 @@ def sync(force: bool, skills_only: bool, configs_only: bool, agents_only: bool):
 
 
 # =============================================================================
-# PUSH COMMAND
+# INTERNAL BACKUP FLOW
 # =============================================================================
-
-@main.command()
-@click.option("--dry-run", is_flag=True, help="Show what would be pushed without pushing")
-@click.option("--message", "-m", default=None, help="Commit message")
-@click.option("--skills-only", is_flag=True, help="Only push skills")
-@click.option("--configs-only", is_flag=True, help="Only push configs")
-@click.option("--skill", "-s", multiple=True, help="Specific skill to push (can repeat)")
-@click.option("--agent", "-a", multiple=True, help="Specific agent config to push (can repeat)")
-@click.option("--exclude-skill", multiple=True, help="Skill to exclude (can repeat)")
 
 def _internal_backup_flow(
     dry_run: bool = False,

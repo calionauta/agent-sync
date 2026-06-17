@@ -4,6 +4,49 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.42.0-alpha] - 2026-06-17
+
+### 🐛 Fixes
+
+#### `backup` command crash after `push` removal
+
+The `_internal_backup_flow` function had stale `@main.command()` and `@click.option(...)`
+decorators left over from the `push` → `backup` refactor. Calling `agent-sync backup`
+kicked Click into command-invocation mode, passing `dry_run` as a positional kwarg to
+`Context.__init__()` → `TypeError: unexpected keyword argument 'dry_run'`.
+**Removed the orphan decorators** — the function is internal-only, called directly from
+`backup`.
+
+#### `agentmemory-snapshots/state.json` never committed (nested `.git/` gitlink)
+
+a gentmemory stores its snapshot data in `agentmemory-snapshots/` which contains an
+internal `.git/` for its own versioning. The `.git/` directory was copied to the private
+repo staging area before the `EXCLUDE_PATTERNS` fix in v0.41.0-alpha, causing git to
+treat `agentmemory-snapshots/` as a gitlink/submodule. `state.json` existed on disk but
+was **never tracked**. Cleaned the stale `.git/` from the staging copy and removed the
+gitlink from the index. Source `agentmemory-snapshots/.git/` untouched.
+
+### 💄 UX
+
+#### Backup path visibility
+
+`agent-sync backup` now shows each sync path pattern with resolved source directory and
+file count, including ✓/✗ status and user-configured exclude patterns:
+
+```
+Backing up pi.dev from ~/.pi/agent:
+  ✓ settings.json  (1 file)
+  ✓ extensions/ → ~/.pi/agent/extensions  (8 files)
+  ✗ missing-dir/ → ~/.pi/agent/missing-dir  not found
+  ⊙ exclude: node_modules
+```
+
+### 🧪 Tests
+
+- 559/559 passing (unchanged)
+
+---
+
 ## [0.41.0-alpha] - 2026-06-16
 
 ### 🐛 Fixes
