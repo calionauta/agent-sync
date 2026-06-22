@@ -16,7 +16,7 @@ class AgentInstructionFile:
     """Represents a discovered agent instruction file."""
     agent_name: str  # e.g., "pi.dev", "gemini-cli"
     filename: str  # e.g., "AGENTS.md", "GEMINI.md"
-    full_path: Path  # e.g., Path("/Users/cali/.pi/agent/AGENTS.md")
+    full_path: Path  # e.g., Path.home() / ".pi/agent/AGENTS.md"
     exists: bool  # False if file doesn't exist on disk
 
 
@@ -155,7 +155,7 @@ def get_available_agents() -> list[dict]:
             "name": "pi.dev/AGENTS.md",
             "agent": "pi.dev",
             "filename": "AGENTS.md",
-            "path": Path("/Users/cali/.pi/agent/AGENTS.md")
+            "path": Path.home() / ".pi/agent/AGENTS.md"
         }
     """
     files = discover_agent_instructions()
