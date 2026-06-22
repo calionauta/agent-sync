@@ -15,15 +15,17 @@ class TestAgentSource:
 
     def test_creates_agent_source(self):
         """AgentSource stores agent info."""
+        from pathlib import Path
+
         agent = AgentSource(
             name="pi.dev",
             filename="AGENTS.md",
-            path="/Users/cali/.pi/agent/AGENTS.md",
+            path=str(Path.home() / ".pi" / "agent" / "AGENTS.md"),
         )
-        
+
         assert agent.name == "pi.dev"
         assert agent.filename == "AGENTS.md"
-        assert "pi" in agent.path
+        assert ".pi" in agent.path
 
 
 class TestAgentSourceStatus:
