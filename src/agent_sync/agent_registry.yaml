@@ -86,23 +86,22 @@ pi.dev:
     path: "~/.pi/agent/settings.json"
   extra_paths:
     # NOTE: pi.dev migrated from flat ~/.pi/ to ~/.pi/agent/ (commit 4faa0f9).
+    # On this machine, ~/.pi/extensions and ~/.pi/themes are symlinks to
+    # ~/.pi/agent/{extensions,themes} — single source of truth, no drift.
     # All keys below are wired to code via Agent._get_extra_paths() — do not
-    # remove. The second list entry (e.g. "~/.pi/extensions") is a legacy
-    # fallback kept for users on older installs. It no-ops if the path is empty.
+    # remove.
     # Configurações principais em ~/.pi/agent/
-    extensions: ["~/.pi/agent/extensions", "~/.pi/extensions"]  # legacy fallback: usually empty post-migration
-    prompts: ["~/.pi/agent/prompts", "~/.pi/prompts"]  # legacy fallback: still has shared content
-    themes: ["~/.pi/agent/themes", "~/.pi/themes"]  # legacy fallback: still has shared content
+    extensions: ["~/.pi/agent/extensions"]
+    prompts: ["~/.pi/agent/prompts", "~/.pi/prompts"]  # prompts shared at root, not symlinked
+    themes: ["~/.pi/agent/themes"]
     # Outros diretivos e arquivos importantes
     bin: ["~/.pi/agent/bin"]
     git: ["~/.pi/agent/git"]
     lsp: ["~/.pi/agent/lsp-settings.json"]
     models: ["~/.pi/agent/models.json"]
     # Diretórios globais em ~/.pi/ (fora de ~/.pi/agent/) — compat layer
-    global_extensions: ["~/.pi/extensions"]  # legacy: usually empty post-migration
-    global_prompts: ["~/.pi/prompts"]  # legacy: still has shared content
+    global_prompts: ["~/.pi/prompts"]  # shared content at root
     global_skills_local: ["~/.pi/skills"]  # legacy: hub moved to ~/.agents/skills/ per DotAgents
-    global_themes: ["~/.pi/themes"]  # legacy: still has shared content
     # Arquivos na raiz de ~/.pi/
     pyrightconfig: ["~/.pi/pyrightconfig.json"]  # legacy root file: still has content
 

@@ -62,7 +62,7 @@ def _find_skills_in_repo(cache_path: Path, source: SourceConfig) -> list[SkillSo
 class AgentInstructionFile:
     agent_name: str      # e.g., "pi.dev", "gemini-cli"
     filename: str       # e.g., "AGENTS.md", "GEMINI.md"
-    full_path: Path     # e.g., Path("/Users/cali/.pi/agent/AGENTS.md")
+    full_path: Path     # e.g., Path.home() / ".pi/agent/AGENTS.md"
     exists: bool
 
 def discover_agent_instructions(...) -> list[AgentInstructionFile]:
