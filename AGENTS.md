@@ -19,9 +19,28 @@ This project uses `hatch-vcs` for dynamic versioning based on Git Tags.
 ## 🏗️ Architecture Mandates
 
 -   **Agent Registry**: New agent CLI support must be added to `src/agent_sync/agent_registry.yaml`, not hardcoded in Python.
--   **No Symlinks**: Always prefer `Native`, `Config`, or `Copy` methods. Do not re-introduce symlink fallbacks.
+-   **No Symlinks**: Always prefer `Native`, `Config`, or `Copy` methods. Do not re-introduce symlink fallbacks *as a sync method*. User-side FS symlinks (e.g. `~/.pi/extensions → ~/.pi/agent/extensions` to avoid dual-path duplication) are out of scope.
 -   **UX/DX First**: CLI outputs must be categorized, visual (using Rich panels/tables), and provide clear guidance on errors.
 -   **VS Code Extensions & IDEs**: Support for RooCode, Cline, Cursor, and Windsurf uses specialized handlers in `src/agent_sync/agents/` with transform support (e.g., Cursor's flatten transform).
+
+## 🛠️ Dev Workflow
+
+**Verify editable install before testing.** A system-installed `agent-sync` at `/opt/homebrew/bin/agent-sync` will silently use a stale package, not your source edits:
+
+```bash
+which agent-sync && head -1 $(which agent-sync)
+# Expected: /Users/cali/Development/sync-agents-configs/.venv/bin/agent-sync
+# Sympt: /opt/homebrew/bin/agent-sync  → tests pass against OLD code, not yours
+```
+
+If the wrong binary is active, override it:
+
+```bash
+mv /opt/homebrew/bin/agent-sync /opt/homebrew/bin/agent-sync.system.bak
+ln -sf "$(pwd)/.venv/bin/agent-sync" /opt/homebrew/bin/agent-sync
+```
+
+Bootstrap from scratch with `uv venv .venv --python 3.14 && source .venv/bin/activate && uv pip install -e ".[dev]"`.
 
 ## 📦 Distribution
 
