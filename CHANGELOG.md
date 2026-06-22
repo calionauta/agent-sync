@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.43.1-alpha] - 2026-06-22
+
+### 🐛 Fixes
+
+#### `pre-commit` hook tested system agent_sync, not local source
+
+The `run-tests` hook used `python -m pytest` which resolved to `/opt/homebrew/bin/python3` — importing the stale system-installed `agent_sync` package (v0.42.0a0) instead of local source edits. Same trap that the CLI symlink fix addressed for the `agent-sync` command itself. **Changed entry to `.venv/bin/python -m pytest`** so the venv python (which uses the editable install) is the unambiguous pytest runner. Also removed the dead `pygrep-primary` repo block (upstream gone) and the invalid `rev: v0.0.1` from the `local` repo that blocked all hooks.
+
+### 🧪 Tests
+
+- 562/562 passing (unchanged)
+
+---
+
 ## [0.43.0-alpha] - 2026-06-22
 
 ### 🐛 Fixes
