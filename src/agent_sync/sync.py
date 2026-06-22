@@ -1728,13 +1728,15 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
     def _stage_pi_extra_paths(self, agent) -> None:
         """Backup pi.dev extra paths to the repo directory.
 
-        Handles directory copies (extensions, bin, global_*) and single-file
-        copies (lsp-settings.json, models.json, pyrightconfig.json).
+        Handles directory copies (extensions, prompts, themes, bin, global_*)
+        and single-file copies (lsp-settings.json, models.json, pyrightconfig.json).
         Git worktrees are skipped (200MB+ of cache data).
         """
         pi_dir = self.repo_dir / "configs" / agent.name
         category_map = {
             "extensions": "extensions",
+            "prompts": "prompts",
+            "themes": "themes",
             "bin": "bin",
             "global_extensions": "global_extensions",
             "global_prompts": "global_prompts",
