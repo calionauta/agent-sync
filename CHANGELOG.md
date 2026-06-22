@@ -4,6 +4,59 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.43.0-alpha] - 2026-06-22
+
+### 🐛 Fixes
+
+#### `prompts/` and `themes/` never backed up via pi.dev extra_paths
+
+`_stage_pi_extra_paths` had a `category_map` that omitted `prompts` and `themes`,
+while the matching `_restore_pi_extra_paths` listed both. Result: any content added to
+`~/.pi/agent/prompts/` or `~/.pi/agent/themes/` was never backed up to the private
+repo, but restore expected to find it there. Real-world impact: `themes/opencode.json`
+on disk (mtime Jun 21) was not being refreshed in the private repo, leaving a stale
+copy from May 21 that would have been restored on rollback. **Added both entries to
+`category_map`** (`src/agent_sync/sync.py:1738-1739`).
+
+### 💄 Refactor
+
+#### Single-source-of-truth symlinks for `~/.pi/{extensions,themes,prompts}`
+
+The dual-path registry entries (`~/.pi/agent/X` + `~/.pi/X`) caused three problems
+on every backup: double-load in pi, double-backup in the private repo, and drift
+risk between canonical and legacy copies. Resolution:
+
+- `~/.pi/extensions → ~/.pi/agent/extensions`
+- `~/.pi/themes → ~/.pi/agent/themes`
+- `~/.pi/prompts → ~/.pi/agent/prompts`
+
+Registry reduced to single entries; `global_extensions`, `global_themes`, and
+`global_prompts` keys removed. `extra_paths.extensions`/`themes`/`prompts` now
+contain only the canonical `~/.pi/agent/...` paths.
+
+#### Hardcoded `/Users/cali/.pi/agent/AGENTS.md` literals replaced
+
+Two docstring examples in `agent_discovery.py` and one test fixture in
+`test_publish_agents.py` had the literal username path. Replaced with
+`Path.home() / ".pi/agent/AGENTS.md"` form so CI on `ubuntu-latest` (no
+`/Users/cali/`) exercises the same contract.
+
+### 📚 Docs
+
+#### AGENTS.md — dev workflow + no-symlinks clarification
+
+- **Dev Workflow** section: `which agent-sync` check, override recipe, `uv`-based
+  bootstrap. Documents the workflow gap that allowed the recent "tests pass against
+  OLD code" incident to go undetected for several commits.
+- **No Symlinks** mandate scope clarified: applies to agent-sync's sync method,
+  not to user-side FS symlinks used to avoid dual-path duplication.
+
+### 🧪 Tests
+
+- 562/562 passing (+3 from new `test_sync_stage.py` covering prompts/themes staging)
+
+---
+
 ## [0.42.0-alpha] - 2026-06-17
 
 ### 🐛 Fixes
