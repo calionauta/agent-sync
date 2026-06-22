@@ -18,19 +18,18 @@ repos:
         args: ['--maxkb=500']
 
   # Python syntax check
-  - repo: https://github.com/pycqa/pygrep-primary
-    rev: v1.0.0
-    hooks:
-      - id: python-no-logging-format
-      - id: python-no-eval
+  # NOTE: pygrep-primary was removed — repo no longer exists upstream. Use
+  # ruff for additional checks if needed.
 
   # Run tests before commit (skip slow tests)
   - repo: local
-    rev: v0.0.1
     hooks:
       - id: run-tests
         name: Run Tests
-        entry: python -m pytest tests/ -x -q --tb=short
+        # Use the venv python explicitly so pre-commit exercises local source
+        # edits, not the system-installed agent_sync package. See AGENTS.md
+        # Dev Workflow section.
+        entry: .venv/bin/python -m pytest tests/ -x -q --tb=short
         language: system
         pass_filenames: false
         always_run: true
