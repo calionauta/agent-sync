@@ -92,7 +92,7 @@ pi.dev:
     # remove.
     # Configurações principais em ~/.pi/agent/
     extensions: ["~/.pi/agent/extensions"]
-    prompts: ["~/.pi/agent/prompts", "~/.pi/prompts"]  # prompts shared at root, not symlinked
+    prompts: ["~/.pi/agent/prompts"]
     themes: ["~/.pi/agent/themes"]
     # Outros diretivos e arquivos importantes
     bin: ["~/.pi/agent/bin"]
@@ -100,7 +100,6 @@ pi.dev:
     lsp: ["~/.pi/agent/lsp-settings.json"]
     models: ["~/.pi/agent/models.json"]
     # Diretórios globais em ~/.pi/ (fora de ~/.pi/agent/) — compat layer
-    global_prompts: ["~/.pi/prompts"]  # shared content at root
     global_skills_local: ["~/.pi/skills"]  # legacy: hub moved to ~/.agents/skills/ per DotAgents
     # Arquivos na raiz de ~/.pi/
     pyrightconfig: ["~/.pi/pyrightconfig.json"]  # legacy root file: still has content
