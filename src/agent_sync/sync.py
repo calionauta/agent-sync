@@ -1,5 +1,6 @@
 """Sync management for agent-sync."""
 
+import collections.abc
 import fnmatch
 import json
 import os
@@ -9,7 +10,6 @@ import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from rich.console import Console
 
@@ -28,11 +28,11 @@ console = Console()
 # Patterns for tokens that could appear in git remote URLs or error output.
 _TOKEN_PATTERNS = [
     # GitHub PATs, OAuth, App tokens (ghp_, gho_, ghu_, ghs_, ghr_)
-    re.compile(r'gh[pousr]_[A-Za-z0-9_]{20,}'),
+    re.compile(r"gh[pousr]_[A-Za-z0-9_]{20,}"),
     # Generic token-like strings in URLs: https://<token>@github.com
-    re.compile(r'(https?://)[^@/\s]+(@github\.com)'),
+    re.compile(r"(https?://)[^@/\s]+(@github\.com)"),
     # x-access-token: <token>@github.com
-    re.compile(r'(https?://x-access-token:)[^@/\s]+(@github\.com)'),
+    re.compile(r"(https?://x-access-token:)[^@/\s]+(@github\.com)"),
 ]
 
 
@@ -46,7 +46,7 @@ def _sanitize_git_output(text: str) -> str:
     if not text:
         return text
     for pattern in _TOKEN_PATTERNS:
-        text = pattern.sub(r'\1***\2' if pattern in _TOKEN_PATTERNS[1:] else '***', text)
+        text = pattern.sub(r"\1***\2" if pattern in _TOKEN_PATTERNS[1:] else "***", text)
     return text
 
 
@@ -63,9 +63,11 @@ class PullConflict:
     filename: str  # e.g., "AGENTS.md", "settings.json"
     local_path: Path  # Local file path
     remote_path: Path  # Path in repo (relative to repo root)
-    local_modified: Optional[datetime] = None
-    remote_modified: Optional[datetime] = None
-    diff_stats: dict = field(default_factory=lambda: {"added": 0, "removed": 0})  # Lines added/removed
+    local_modified: datetime | None = None
+    remote_modified: datetime | None = None
+    diff_stats: dict = field(
+        default_factory=lambda: {"added": 0, "removed": 0}
+    )  # Lines added/removed
 
     @property
     def display_name(self) -> str:
@@ -89,6 +91,7 @@ class PullConflict:
 @dataclass
 class SkillDrift:
     """Represents a skill whose local content differs from the repo version."""
+
     name: str
     files_changed: int
     local_path: Path
@@ -107,6 +110,7 @@ class SkillDrift:
 @dataclass
 class PullSummary:
     """Summary of a pull operation."""
+
     conflicts: list[PullConflict] = field(default_factory=list)
     skill_drifts: list[SkillDrift] = field(default_factory=list)
     new_files: int = 0
@@ -123,13 +127,20 @@ class PullSummary:
 
     @property
     def total_changes(self) -> int:
-        return len(self.conflicts) + len(self.skill_drifts) + self.new_files + self.updated_files + self.deleted_files
+        return (
+            len(self.conflicts)
+            + len(self.skill_drifts)
+            + self.new_files
+            + self.updated_files
+            + self.deleted_files
+        )
 
 
 def _get_app_name() -> str:
     """Get app name from package metadata (or fallback)."""
     try:
         from importlib.metadata import version
+
         return version("agent-sync").split(".")[0]
     except Exception:
         return "agent-sync"
@@ -145,17 +156,14 @@ class SyncManager:
         "*accounts*.json",
         "*overrides*.json*",
         "*credentials*.json",
-
         # Lock files
         "*.lock",
         "package-lock.json",
         "bun.lock",
-
         # System files
         ".DS_Store",
         # Nested VCS metadata (avoid copying .git/ inside a synced subdir)
         ".git/",
-
         # Agent session state (not configuration)
         "history/",
         "tmp/",
@@ -164,13 +172,11 @@ class SyncManager:
         # NOTE: "state.json" removed — too generic, caused false positives
         # (e.g. agentmemory-snapshots/state.json was excluded).
         # User can exclude specific state.json via sync.exclude if needed.
-
         # Transient files
         "*.bak",
         "pi-cache-optimizer-stats.json",
         "*.log",
         "*.log.*",
-
         # Database files
         "*.db",
         "*.mdb",
@@ -238,7 +244,8 @@ class SyncManager:
 
         if result.returncode != 0:
             raise subprocess.CalledProcessError(
-                result.returncode, cmd,
+                result.returncode,
+                cmd,
                 _sanitize_git_output(result.stdout),
                 _sanitize_git_output(result.stderr),
             )
@@ -253,7 +260,9 @@ class SyncManager:
         """Check if GitHub CLI is installed."""
         return shutil.which("gh") is not None
 
-    def init_repo(self, name: str = None, private: bool = True, agents: tuple[str, ...] = ()) -> str:
+    def init_repo(
+        self, name: str = None, private: bool = True, agents: tuple[str, ...] = ()
+    ) -> str:
         """
         Initialize a new sync repository or link to existing one.
 
@@ -328,7 +337,9 @@ class SyncManager:
                 # Empty directory, clone
                 repo_url_to_clone = f"https://github.com/{repo_name}.git"
                 if not validate_github_url(repo_url_to_clone):
-                    raise ValueError(f"Invalid repository name resulted in invalid URL: {repo_url_to_clone}")
+                    raise ValueError(
+                        f"Invalid repository name resulted in invalid URL: {repo_url_to_clone}"
+                    )
 
                 result = subprocess.run(
                     ["git", "clone", repo_url_to_clone, str(self.repo_dir)],
@@ -339,7 +350,8 @@ class SyncManager:
                 )
                 if result.returncode != 0:
                     raise subprocess.CalledProcessError(
-                        result.returncode, result.args,
+                        result.returncode,
+                        result.args,
                         _sanitize_git_output(result.stdout),
                         _sanitize_git_output(result.stderr),
                     )
@@ -366,7 +378,18 @@ class SyncManager:
 
         # Create repository on GitHub
         result = subprocess.run(
-            ["gh", "repo", "create", f"--{visibility}", "--source", ".", "--remote", "origin", "--", name],
+            [
+                "gh",
+                "repo",
+                "create",
+                f"--{visibility}",
+                "--source",
+                ".",
+                "--remote",
+                "origin",
+                "--",
+                name,
+            ],
             cwd=self.repo_dir,
             capture_output=True,
             text=True,
@@ -384,7 +407,8 @@ class SyncManager:
             )
             if alt_result.returncode != 0:
                 raise subprocess.CalledProcessError(
-                    alt_result.returncode, alt_result.args,
+                    alt_result.returncode,
+                    alt_result.args,
                     _sanitize_git_output(alt_result.stdout),
                     _sanitize_git_output(alt_result.stderr),
                 )
@@ -436,7 +460,8 @@ class SyncManager:
             )
             if result.returncode != 0:
                 raise subprocess.CalledProcessError(
-                    result.returncode, result.args,
+                    result.returncode,
+                    result.args,
                     _sanitize_git_output(result.stdout),
                     _sanitize_git_output(result.stderr),
                 )
@@ -470,11 +495,11 @@ class SyncManager:
         skills_only: bool = False,
         configs_only: bool = False,
         agents_only: bool = False,
-        conflict_resolver: Optional[callable] = None,
-        skills_filter: Optional[list[str]] = None,
-        agents_filter: Optional[list[str]] = None,
-        skills_exclude: Optional[list[str]] = None,
-        agents_exclude: Optional[list[str]] = None,
+        conflict_resolver: collections.abc.Callable | None = None,
+        skills_filter: list[str] | None = None,
+        agents_filter: list[str] | None = None,
+        skills_exclude: list[str] | None = None,
+        agents_exclude: list[str] | None = None,
         prune: bool = False,
     ) -> tuple[list[str], PullSummary]:
         """
@@ -546,12 +571,11 @@ class SyncManager:
         # Ignore manifest file which is auto-generated
         status = self._run_git("status", "--porcelain")
         # Filter out manifest file (it's auto-generated, not user content)
-        relevant_changes = [line for line in status.split('\n')
-                         if line and '.agent-sync-manifest.json' not in line]
+        relevant_changes = [
+            line for line in status.split("\n") if line and ".agent-sync-manifest.json" not in line
+        ]
         if relevant_changes and not force:
-            raise RuntimeError(
-                "You have local changes. Commit them first or use --force"
-            )
+            raise RuntimeError("You have local changes. Commit them first or use --force")
 
         # Pull changes
         self._run_git("pull", "origin", "main")
@@ -560,7 +584,11 @@ class SyncManager:
 
         # Apply configs (or skip based on flags)
         if not skills_only and not agents_only:
-            changes.extend(self._apply_synced_configs(agents_filter=agents_filter, agents_exclude=agents_exclude))
+            changes.extend(
+                self._apply_synced_configs(
+                    agents_filter=agents_filter, agents_exclude=agents_exclude
+                )
+            )
         else:
             console.print("[dim]Skipping configs (skills/agents-only mode)[/dim]")
 
@@ -626,14 +654,12 @@ class SyncManager:
             return []
 
         privado_skill_names = {
-            d.name for d in synced_skills_dir.iterdir()
-            if d.is_dir() and not d.name.startswith(".")
+            d.name for d in synced_skills_dir.iterdir() if d.is_dir() and not d.name.startswith(".")
         }
 
         # Skills in the local hub
         local_skill_names = {
-            d.name for d in local_hub.iterdir()
-            if d.is_dir() and not d.name.startswith(".")
+            d.name for d in local_hub.iterdir() if d.is_dir() and not d.name.startswith(".")
         }
 
         orphan_locals = sorted(local_skill_names - privado_skill_names)
@@ -646,16 +672,16 @@ class SyncManager:
             try:
                 shutil.rmtree(path)
             except Exception as e:
-                console.print(
-                    f"[yellow]⚠ Could not remove local skill {orphan}: {e}[/yellow]"
-                )
+                console.print(f"[yellow]⚠ Could not remove local skill {orphan}: {e}[/yellow]")
                 continue
-            pruned.append({
-                "path": f"~/.agents/skills/{orphan}/",
-                "status": "D",
-                "label": "deleted (prune)",
-                "directory_count": None,
-            })
+            pruned.append(
+                {
+                    "path": f"~/.agents/skills/{orphan}/",
+                    "status": "D",
+                    "label": "deleted (prune)",
+                    "directory_count": None,
+                }
+            )
         return pruned
 
     def _detect_conflicts(
@@ -688,7 +714,9 @@ class SyncManager:
         unstaged_files = set()
 
         for line in status_output.strip().split("\n"):
-            if line and line[1] == " " and not line.startswith("?"):  # Unstaged changes (not untracked)
+            if (
+                line and line[1] == " " and not line.startswith("?")
+            ):  # Unstaged changes (not untracked)
                 # Format: XY filename, XY is status (M = modified, D = deleted, etc.)
                 parts = line.split(" ", 1)
                 if len(parts) >= 2:
@@ -792,11 +820,13 @@ class SyncManager:
             stats = {"added": 0, "removed": 0}
             if "insertion" in result:
                 import re
+
                 match = re.search(r"(\d+) insertion", result)
                 if match:
                     stats["added"] = int(match.group(1))
             if "deletion" in result:
                 import re
+
                 match = re.search(r"(\d+) deletion", result)
                 if match:
                     stats["removed"] = int(match.group(1))
@@ -844,29 +874,35 @@ class SyncManager:
                 repo_lines = repo_p.read_bytes().count(b"\n")
                 added = max(0, repo_lines - local_lines)
                 removed = max(0, local_lines - repo_lines)
-                file_details.append({
-                    "path": rel_path,
-                    "local": local_p,
-                    "repo": repo_p,
-                    "added": added,
-                    "removed": removed,
-                })
+                file_details.append(
+                    {
+                        "path": rel_path,
+                        "local": local_p,
+                        "repo": repo_p,
+                        "added": added,
+                        "removed": removed,
+                    }
+                )
             elif local_p and not repo_p:
-                file_details.append({
-                    "path": rel_path,
-                    "local": local_p,
-                    "repo": None,
-                    "added": 0,
-                    "removed": local_p.read_bytes().count(b"\n") + 1,
-                })
+                file_details.append(
+                    {
+                        "path": rel_path,
+                        "local": local_p,
+                        "repo": None,
+                        "added": 0,
+                        "removed": local_p.read_bytes().count(b"\n") + 1,
+                    }
+                )
             elif repo_p and not local_p:
-                file_details.append({
-                    "path": rel_path,
-                    "local": None,
-                    "repo": repo_p,
-                    "added": repo_p.read_bytes().count(b"\n") + 1,
-                    "removed": 0,
-                })
+                file_details.append(
+                    {
+                        "path": rel_path,
+                        "local": None,
+                        "repo": repo_p,
+                        "added": repo_p.read_bytes().count(b"\n") + 1,
+                        "removed": 0,
+                    }
+                )
 
         if not file_details:
             return None
@@ -878,8 +914,8 @@ class SyncManager:
 
     def _detect_skill_drifts(
         self,
-        skills_filter: Optional[list[str]] = None,
-        skills_exclude: Optional[list[str]] = None,
+        skills_filter: list[str] | None = None,
+        skills_exclude: list[str] | None = None,
     ) -> list[SkillDrift]:
         """Detect skills whose local content differs from the repo version.
 
@@ -909,13 +945,15 @@ class SyncManager:
 
             diff = self._compare_skill_dirs(local_skill, skill_item)
             if diff is not None:
-                drifts.append(SkillDrift(
-                    name=skill_item.name,
-                    files_changed=diff["files_changed"],
-                    file_details=diff["file_details"],
-                    local_path=local_skill,
-                    repo_path=skill_item,
-                ))
+                drifts.append(
+                    SkillDrift(
+                        name=skill_item.name,
+                        files_changed=diff["files_changed"],
+                        file_details=diff["file_details"],
+                        local_path=local_skill,
+                        repo_path=skill_item,
+                    )
+                )
 
         return drifts
 
@@ -926,6 +964,7 @@ class SyncManager:
         import tempfile
 
         from rich.console import Console
+
         console = Console()
 
         if not drifts:
@@ -950,12 +989,15 @@ class SyncManager:
 
                 # Generate unified diff (unified_diff already outputs ---/+++ headers)
                 import difflib
-                diff_lines = list(difflib.unified_diff(
-                    local_content.splitlines(keepends=True),
-                    remote_content.splitlines(keepends=True),
-                    fromfile=f"a/{label}",
-                    tofile=f"b/{label}",
-                ))
+
+                diff_lines = list(
+                    difflib.unified_diff(
+                        local_content.splitlines(keepends=True),
+                        remote_content.splitlines(keepends=True),
+                        fromfile=f"a/{label}",
+                        tofile=f"b/{label}",
+                    )
+                )
                 if diff_lines:
                     diff_segments.extend(diff_lines)
                     diff_segments.append("\n")
@@ -965,12 +1007,12 @@ class SyncManager:
             console.print("[dim]Files differ but could not generate diff.[/dim]")
             return
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.diff', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".diff", delete=False) as f:
             f.write(full_diff)
             diff_path = f.name
 
         try:
-            pager = os.environ.get('PAGER', 'less')
+            pager = os.environ.get("PAGER", "less")
             subprocess.run(
                 [pager, diff_path],
                 stdin=subprocess.DEVNULL,
@@ -997,7 +1039,9 @@ class SyncManager:
             return False
 
         console.print("\n[bold yellow]⚠️  Skill Differences Detected[/bold yellow]\n")
-        console.print("[dim]Some skills have local changes that differ from the repository.[/dim]\n")
+        console.print(
+            "[dim]Some skills have local changes that differ from the repository.[/dim]\n"
+        )
 
         for i, drift in enumerate(drifts, 1):
             console.print(f"{i}. {drift.name} ({drift.diff_summary})")
@@ -1030,8 +1074,6 @@ class SyncManager:
     def _show_pull_preview(self, summary: PullSummary) -> None:
         """Show a preview of what would be pulled."""
         from rich.console import Console
-        from rich.panel import Panel
-        from rich.table import Table
 
         console = Console()
 
@@ -1044,7 +1086,9 @@ class SyncManager:
             console.print()
 
         if summary.has_skill_drifts:
-            console.print(f"[yellow]⚠️  {len(summary.skill_drifts)} skill(s) with differences:[/yellow]")
+            console.print(
+                f"[yellow]⚠️  {len(summary.skill_drifts)} skill(s) with differences:[/yellow]"
+            )
             for drift in summary.skill_drifts:
                 console.print(f"  • {drift.name} ({drift.diff_summary})")
             console.print()
@@ -1066,10 +1110,17 @@ class SyncManager:
         if other > 0:
             console.print(f"[green]+ {other} file(s) to update (auto-apply)[/green]")
 
-        if not summary.has_conflicts and not summary.has_skill_drifts and other == 0 and not local_orphans:
+        if (
+            not summary.has_conflicts
+            and not summary.has_skill_drifts
+            and other == 0
+            and not local_orphans
+        ):
             console.print("[dim]No changes to pull.[/dim]")
 
-        console.print("\n[dim]Run without --dry-run to apply changes. Add --prune to remove local orphans.[/dim]")
+        console.print(
+            "\n[dim]Run without --dry-run to apply changes. Add --prune to remove local orphans.[/dim]"
+        )
 
     def _detect_local_orphan_skills(self) -> list[str]:
         """Return the list of skill names in local hub that are missing from privado.
@@ -1084,12 +1135,10 @@ class SyncManager:
             return []
 
         local_skill_names = {
-            d.name for d in local_hub.iterdir()
-            if d.is_dir() and not d.name.startswith(".")
+            d.name for d in local_hub.iterdir() if d.is_dir() and not d.name.startswith(".")
         }
         privado_skill_names = {
-            d.name for d in synced_skills_dir.iterdir()
-            if d.is_dir() and not d.name.startswith(".")
+            d.name for d in synced_skills_dir.iterdir() if d.is_dir() and not d.name.startswith(".")
         }
         return sorted(local_skill_names - privado_skill_names)
 
@@ -1145,6 +1194,7 @@ class SyncManager:
             return
 
         from rich.console import Console
+
         console = Console()
 
         # Get remote version to temp file
@@ -1160,22 +1210,27 @@ class SyncManager:
             local_content = ""
 
         # Create temp files for diff
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.local', delete=False) as local_file:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".local", delete=False) as local_file:
             local_file.write(local_content)
             local_temp = local_file.name
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.remote', delete=False) as remote_file:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".remote", delete=False) as remote_file:
             remote_file.write(remote_content)
             remote_temp = remote_file.name
 
         try:
             # Show diff using pager
-            pager = os.environ.get('PAGER', 'less')
+            pager = os.environ.get("PAGER", "less")
             subprocess.run(
-                [pager, '-d', '-c',
-                 f'--- Local: {conflict.display_name}\n+++ Remote: {conflict.display_name}',
-                 local_temp, remote_temp],
-                stdin=subprocess.DEVNULL
+                [
+                    pager,
+                    "-d",
+                    "-c",
+                    f"--- Local: {conflict.display_name}\n+++ Remote: {conflict.display_name}",
+                    local_temp,
+                    remote_temp,
+                ],
+                stdin=subprocess.DEVNULL,
             )
         finally:
             os.unlink(local_temp)
@@ -1187,10 +1242,10 @@ class SyncManager:
         skills_only: bool = False,
         configs_only: bool = False,
         agents_only: bool = False,
-        skills_filter: Optional[list[str]] = None,
-        agents_filter: Optional[list[str]] = None,
-        skills_exclude: Optional[list[str]] = None,
-        agents_exclude: Optional[list[str]] = None,
+        skills_filter: list[str] | None = None,
+        agents_filter: list[str] | None = None,
+        skills_exclude: list[str] | None = None,
+        agents_exclude: list[str] | None = None,
         prune: bool = False,
     ) -> tuple[list[dict], list[str]]:
         """Stage files and return (changed_files, orphans).
@@ -1210,12 +1265,22 @@ class SyncManager:
 
         # Show progress spinner based on what's being synced
         # Count only available agents that are enabled (not all registry entries)
-        agents_count = len([a for a in get_all_agents()
-                           if self.config.is_agent_enabled(a.name) and a.is_available()])
+        agents_count = len(
+            [
+                a
+                for a in get_all_agents()
+                if self.config.is_agent_enabled(a.name) and a.is_available()
+            ]
+        )
 
         global_skills_dir = paths.HUB_DIR
-        skills_count = len([d for d in global_skills_dir.iterdir()
-                           if d.is_dir() and (d / "SKILL.md").exists()]) if global_skills_dir.exists() else 0
+        skills_count = (
+            len(
+                [d for d in global_skills_dir.iterdir() if d.is_dir() and (d / "SKILL.md").exists()]
+            )
+            if global_skills_dir.exists()
+            else 0
+        )
 
         if skills_only and not configs_only:
             console.print(f"  [dim]📦 Syncing {skills_count} skills...[/dim]")
@@ -1227,9 +1292,9 @@ class SyncManager:
         else:
             console.print(f"  [dim]⚙️  Syncing {agents_count} agents...[/dim]")
             self._stage_all_agent_files()
-            console.print(f"  [dim]📦 Syncing skills...[/dim]")
+            console.print("  [dim]📦 Syncing skills...[/dim]")
             self._stage_skills()
-            console.print(f"  [dim]🤖 Syncing custom agent definitions...[/dim]")
+            console.print("  [dim]🤖 Syncing custom agent definitions...[/dim]")
             self._stage_agents()
 
         # Parse BOTH staged and unstaged changes
@@ -1242,67 +1307,67 @@ class SyncManager:
         if not skills_only:
             gitignore_file = self._stage_gitignore_global()
             if gitignore_file:
-                changed_files.append({
-                    'path': gitignore_file,
-                    'status': 'M',
-                    'label': 'global gitignore',
-                    'directory_count': 0,
-                })
+                changed_files.append(
+                    {
+                        "path": gitignore_file,
+                        "status": "M",
+                        "label": "global gitignore",
+                        "directory_count": 0,
+                    }
+                )
         for line in status.split("\n"):
             stripped = line.strip()
             if not stripped:
                 continue
 
             # Parse porcelain format: XY PATH or R100 OLD\tNEW (tab-separated)
-            if '\t' in stripped:
+            if "\t" in stripped:
                 status_code = stripped[:1]
-                path = stripped.split('\t')[-1]
+                path = stripped.split("\t")[-1]
             else:
                 parts = stripped.split()
                 status_code = parts[0]
                 path = parts[-1]
 
             # Skip manifest file
-            if path == '.agent-sync-manifest.json':
+            if path == ".agent-sync-manifest.json":
                 continue
 
             # Skip if already in list
-            if any(c['path'] == path for c in changed_files):
+            if any(c["path"] == path for c in changed_files):
                 continue
 
             # Classify the status for a human-readable label
-            if status_code == '??':
-                label = 'added'
-            elif 'D' in status_code:
-                label = 'deleted'
-            elif 'A' in status_code:
-                label = 'added'
+            if status_code == "??":
+                label = "added"
+            elif "D" in status_code:
+                label = "deleted"
+            elif "A" in status_code:
+                label = "added"
             else:
-                label = 'modified'
+                label = "modified"
 
             # Count files if git reported a whole directory (trailing slash)
             directory_count = None
-            if path.endswith('/'):
-                dir_path = self.repo_dir / path.rstrip('/')
+            if path.endswith("/"):
+                dir_path = self.repo_dir / path.rstrip("/")
                 if dir_path.exists():
-                    directory_count = sum(1 for _ in dir_path.rglob('*') if _.is_file())
-                path = path.rstrip('/')
+                    directory_count = sum(1 for _ in dir_path.rglob("*") if _.is_file())
+                path = path.rstrip("/")
 
-            changed_files.append({
-                'path': path,
-                'status': status_code,
-                'label': label,
-                'directory_count': directory_count,
-            })
+            changed_files.append(
+                {
+                    "path": path,
+                    "status": status_code,
+                    "label": label,
+                    "directory_count": directory_count,
+                }
+            )
 
         # Detect orphan skills (in HEAD but missing from local hub) so the
         # caller can warn the user. We ALWAYS detect (cheap read-only git
         # query); we only actually prune if the user explicitly asked.
-        orphans = (
-            self._detect_orphan_skills()
-            if not configs_only and not agents_only
-            else []
-        )
+        orphans = self._detect_orphan_skills() if not configs_only and not agents_only else []
 
         if prune and orphans and not configs_only and not agents_only:
             changed_files.extend(self._prune_orphan_skills(orphans))
@@ -1321,8 +1386,7 @@ class SyncManager:
             return []
 
         local_skill_names = {
-            d.name for d in local_hub.iterdir()
-            if d.is_dir() and not d.name.startswith(".")
+            d.name for d in local_hub.iterdir() if d.is_dir() and not d.name.startswith(".")
         }
 
         try:
@@ -1337,7 +1401,7 @@ class SyncManager:
         for name in head_ls.split("\n"):
             if not name:
                 continue
-            bare = name[len("skills/"):] if name.startswith("skills/") else name
+            bare = name[len("skills/") :] if name.startswith("skills/") else name
             if bare and not bare.startswith("."):
                 head_skill_names.add(bare)
 
@@ -1377,18 +1441,21 @@ class SyncManager:
                     else:
                         file_path.unlink(missing_ok=True)
             except subprocess.CalledProcessError as e:
-                console.print(
-                    f"[yellow]⚠ Could not prune {path}: {e.stderr.strip()}[/yellow]"
-                )
+                console.print(f"[yellow]⚠ Could not prune {path}: {e.stderr.strip()}[/yellow]")
                 continue
-            pruned.append({
-                "path": path + "/",
-                "status": "D",
-                "label": "deleted",
-                "directory_count": None,
-            })
+            pruned.append(
+                {
+                    "path": path + "/",
+                    "status": "D",
+                    "label": "deleted",
+                    "directory_count": None,
+                }
+            )
         return pruned
-    def sync(self, force: bool = False, skills: bool = True, configs: bool = True, agents: bool = False) -> bool:
+
+    def sync(
+        self, force: bool = False, skills: bool = True, configs: bool = True, agents: bool = False
+    ) -> bool:
         """
         Run full sync cycle (pull + push).
 
@@ -1403,14 +1470,26 @@ class SyncManager:
         """
         try:
             # Pull first
-            self.pull(force=force, skills_only=not skills, configs_only=not configs and not agents, agents_only=agents)
+            self.pull(
+                force=force,
+                skills_only=not skills,
+                configs_only=not configs and not agents,
+                agents_only=agents,
+            )
             # Then push
             self.push(skills_only=not skills, configs_only=not configs, agents_only=agents)
             return True
         except Exception:
             return False
 
-    def push(self, message: str = "chore: sync config updates", skills_only: bool = False, configs_only: bool = False, agents_only: bool = False, prune: bool = False) -> tuple[list[dict], list[str]]:
+    def push(
+        self,
+        message: str = "chore: sync config updates",
+        skills_only: bool = False,
+        configs_only: bool = False,
+        agents_only: bool = False,
+        prune: bool = False,
+    ) -> tuple[list[dict], list[str]]:
         """Commit and push local changes to the private repo.
 
         By default (`prune=False`), the private repo is additive: skills
@@ -1427,6 +1506,14 @@ class SyncManager:
             message, skills_only, configs_only, agents_only, prune=prune
         )
         if not changed_files:
+            if orphans:
+                console.print(
+                    f"\n[yellow]⚠ {len(orphans)} orphan skill(s) in HEAD "
+                    f"but missing from local hub.[/yellow]"
+                )
+                console.print(
+                    "  Run [cyan]agent-sync skills prune[/cyan] " "to remove them from the repo.\n"
+                )
             return []
 
         self._run_git("add", ".")
@@ -1487,8 +1574,9 @@ class SyncManager:
                 if self.repo_dir.exists():
                     try:
                         changes = self._run_git(
-                            "diff", "--name-only",
-                            cwd=agent.config_path.parent if agent.config_path.exists() else None
+                            "diff",
+                            "--name-only",
+                            cwd=agent.config_path.parent if agent.config_path.exists() else None,
                         )
                         if changes:
                             agent_status["changes"] = f"{len(changes.split())} files"
@@ -1612,11 +1700,12 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
     def _stage_agent_configs(
         self,
-        agents_filter: Optional[list[str]] = None,
-        agents_exclude: Optional[list[str]] = None,
+        agents_filter: list[str] | None = None,
+        agents_exclude: list[str] | None = None,
     ) -> None:
         """Stage agent configurations for commit."""
         import subprocess
+
         from .agents import get_all_agents
 
         def _is_submodule(path: Path) -> bool:
@@ -1624,7 +1713,10 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             try:
                 result = subprocess.run(
                     ["git", "ls-files", "--stage", str(path)],
-                    capture_output=True, text=True, cwd=path.parent if path.is_dir() else path, timeout=5
+                    capture_output=True,
+                    text=True,
+                    cwd=path.parent if path.is_dir() else path,
+                    timeout=5,
                 )
                 # If git ls-files shows it as a submodule (mode 160000)
                 for line in result.stdout.splitlines():
@@ -1721,7 +1813,12 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                                     continue
                                 dest = repo_category_dir / item.name
                                 if item.is_dir():
-                                    shutil.copytree(item, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns('.git'))
+                                    shutil.copytree(
+                                        item,
+                                        dest,
+                                        dirs_exist_ok=True,
+                                        ignore=shutil.ignore_patterns(".git"),
+                                    )
                                 else:
                                     shutil.copy2(item, dest)
 
@@ -1761,7 +1858,12 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                     for item in src_path.iterdir():
                         item_dest = dest / item.name
                         if item.is_dir():
-                            shutil.copytree(item, item_dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns('.git'))
+                            shutil.copytree(
+                                item,
+                                item_dest,
+                                dirs_exist_ok=True,
+                                ignore=shutil.ignore_patterns(".git"),
+                            )
                         else:
                             shutil.copy2(item, item_dest)
 
@@ -1777,21 +1879,27 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                     shutil.copy2(src_path, dest_file)
 
         # Git worktrees - skip (cache, not config)
-        if hasattr(agent, 'git_paths'):
+        if hasattr(agent, "git_paths"):
             for git_path in agent.git_paths:
                 if git_path.exists():
-                    total_mb = sum(f.stat().st_size for f in git_path.rglob('*') if f.is_file()) // 1024 // 1024
-                    console.print(f"  [dim]Skipping git clones backup ({total_mb}MB) - these are cache, not config[/dim]")
+                    total_mb = (
+                        sum(f.stat().st_size for f in git_path.rglob("*") if f.is_file())
+                        // 1024
+                        // 1024
+                    )
+                    console.print(
+                        f"  [dim]Skipping git clones backup ({total_mb}MB) - these are cache, not config[/dim]"
+                    )
 
         # Packages (special: copies each package by name)
-        if hasattr(agent, 'packages_paths'):
+        if hasattr(agent, "packages_paths"):
             for package_path in agent.packages_paths:
                 if package_path.exists():
                     pkg_dest = pi_dir / "packages" / package_path.name
                     pkg_dest.mkdir(parents=True, exist_ok=True)
                     if pkg_dest.exists():
                         shutil.rmtree(pkg_dest)
-                    shutil.copytree(package_path, pkg_dest, ignore=shutil.ignore_patterns('.git'))
+                    shutil.copytree(package_path, pkg_dest, ignore=shutil.ignore_patterns(".git"))
 
     def _restore_pi_extra_paths(self, agent, synced_config_dir: Path, changes: list[str]) -> None:
         """Restore pi.dev extra paths from repo to their original locations.
@@ -1830,7 +1938,12 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                     dest = dst_path / item.name
                     if not dest.exists() or (item.is_file() and self._same_content(dest, item)):
                         if item.is_dir():
-                            shutil.copytree(item, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns('.git'))
+                            shutil.copytree(
+                                item,
+                                dest,
+                                dirs_exist_ok=True,
+                                ignore=shutil.ignore_patterns(".git"),
+                            )
                         else:
                             shutil.copy2(item, dest)
                         changes.append(f"{agent.name}/{subdir}: {item.name}")
@@ -1853,8 +1966,14 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         # Git worktrees - skip (cache, not config)
         synced_git_dir = synced_config_dir / "git"
         if synced_git_dir.exists():
-            total_mb = sum(f.stat().st_size for f in synced_git_dir.rglob('*') if f.is_file()) // 1024 // 1024
-            console.print(f"  [dim]Skipping git clones restore ({total_mb}MB) - these are cache, not config[/dim]")
+            total_mb = (
+                sum(f.stat().st_size for f in synced_git_dir.rglob("*") if f.is_file())
+                // 1024
+                // 1024
+            )
+            console.print(
+                f"  [dim]Skipping git clones restore ({total_mb}MB) - these are cache, not config[/dim]"
+            )
 
         # Packages - special: copies each package by name with rmtree
         synced_packages_dir = synced_config_dir / "packages"
@@ -1866,14 +1985,14 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                     if package_item.is_dir():
                         if dest.exists():
                             shutil.rmtree(dest)
-                        shutil.copytree(package_item, dest, ignore=shutil.ignore_patterns('.git'))
+                        shutil.copytree(package_item, dest, ignore=shutil.ignore_patterns(".git"))
                         changes.append(f"{agent.name}/package: {package_item.name}")
 
     def _stage_agents(self) -> None:
         """
         Stage agent files (.md definitions) to the repo.
         """
-        console.print(f"  [dim]  └─ Cleaning up unavailable agents...[/dim]")
+        console.print("  [dim]  └─ Cleaning up unavailable agents...[/dim]")
         """
         Stage custom agents for commit.
 
@@ -1909,8 +2028,9 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             if agent.is_available():
                 continue
             # If agent has local agents dirs, keep (might have custom agents)
-            has_local = (agent.agents_path and agent.agents_path.exists()) or \
-                        (agent.agents_path_global and agent.agents_path_global.exists())
+            has_local = (agent.agents_path and agent.agents_path.exists()) or (
+                agent.agents_path_global and agent.agents_path_global.exists()
+            )
             if has_local:
                 continue
             # Agent not available and no local agents dirs - remove
@@ -1942,21 +2062,32 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                 continue
 
             # Auto-clean: if sync_mode='all' but no local files, clean repo
-            has_project = agent.agents_path and agent.agents_path.exists() and any(agent.agents_path.rglob("*.md"))
-            has_global = agent.agents_path_global and agent.agents_path_global.exists() and any(agent.agents_path_global.rglob("*.md"))
+            has_project = (
+                agent.agents_path
+                and agent.agents_path.exists()
+                and any(agent.agents_path.rglob("*.md"))
+            )
+            has_global = (
+                agent.agents_path_global
+                and agent.agents_path_global.exists()
+                and any(agent.agents_path_global.rglob("*.md"))
+            )
 
             if sync_mode == "always" and not has_project and not has_global:
                 # Clean repo directory for this agent
                 if agent_repo_dir.exists():
-                    console.print(f"  [dim]  └─ Cleaning up {agent.name} (no local agents)...[/dim]")
+                    console.print(
+                        f"  [dim]  └─ Cleaning up {agent.name} (no local agents)...[/dim]"
+                    )
                     shutil.rmtree(agent_repo_dir)
                 continue
-
 
             # 1. Stage project-level agents (.claude/agents/, .opencode/agents/)
             if has_project:
                 project_agent_count = len(list(agent.agents_path.rglob("*.md")))
-                console.print(f"  [dim]  └─ Syncing {project_agent_count} project agents for {agent.name}...[/dim]")
+                console.print(
+                    f"  [dim]  └─ Syncing {project_agent_count} project agents for {agent.name}...[/dim]"
+                )
 
                 project_agents_dir = agent_repo_dir / "project"
                 project_agents_dir.mkdir(parents=True, exist_ok=True)
@@ -1964,7 +2095,9 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                 # Remove agents from repo that no longer exist locally
                 if project_agents_dir.exists():
                     for repo_agent_file in project_agents_dir.rglob("*.md"):
-                        local_file = agent.agents_path / repo_agent_file.relative_to(project_agents_dir)
+                        local_file = agent.agents_path / repo_agent_file.relative_to(
+                            project_agents_dir
+                        )
                         if not local_file.exists():
                             repo_agent_file.unlink()
                     # Clean up empty directories
@@ -1988,14 +2121,18 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             # 2. Stage global agents (~/.claude/agents/, ~/.config/opencode/agents/)
             if has_global:
                 global_agent_count = len(list(agent.agents_path_global.rglob("*.md")))
-                console.print(f"  [dim]  └─ Syncing {global_agent_count} global agents for {agent.name}...[/dim]")
+                console.print(
+                    f"  [dim]  └─ Syncing {global_agent_count} global agents for {agent.name}...[/dim]"
+                )
                 global_agents_dir = agent_repo_dir / "global"
                 global_agents_dir.mkdir(parents=True, exist_ok=True)
 
                 # Remove agents from repo that no longer exist locally
                 if global_agents_dir.exists():
                     for repo_agent_file in global_agents_dir.rglob("*.md"):
-                        local_file = agent.agents_path_global / repo_agent_file.relative_to(global_agents_dir)
+                        local_file = agent.agents_path_global / repo_agent_file.relative_to(
+                            global_agents_dir
+                        )
                         if not local_file.exists():
                             repo_agent_file.unlink()
                     # Clean up empty directories
@@ -2023,20 +2160,26 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             if agent.agents_path and agent.agents_path.exists():
                 project_agent_count = len(list(agent.agents_path.rglob("*.md")))
                 if project_agent_count > 0:
-                    console.print(f"  [dim]  └─ Syncing {project_agent_count} project agents for {agent.name}...[/dim]")
+                    console.print(
+                        f"  [dim]  └─ Syncing {project_agent_count} project agents for {agent.name}...[/dim]"
+                    )
 
                 project_agents_dir = agent_repo_dir / "project"
                 project_agents_dir.mkdir(parents=True, exist_ok=True)
                 project_agent_count = len(list(agent.agents_path.rglob("*.md")))
                 if project_agent_count > 0:
-                    console.print(f"  [dim]  └─ Syncing {project_agent_count} project agents for {agent.name}...[/dim]")
+                    console.print(
+                        f"  [dim]  └─ Syncing {project_agent_count} project agents for {agent.name}...[/dim]"
+                    )
                 project_agents_dir = agent_repo_dir / "project"
                 project_agents_dir.mkdir(parents=True, exist_ok=True)
 
                 # Remove agents from repo that no longer exist locally
                 if project_agents_dir.exists():
                     for repo_agent_file in project_agents_dir.rglob("*.md"):
-                        local_file = agent.agents_path / repo_agent_file.relative_to(project_agents_dir)
+                        local_file = agent.agents_path / repo_agent_file.relative_to(
+                            project_agents_dir
+                        )
                         if not local_file.exists():
                             repo_agent_file.unlink()
                     # Clean up empty directories
@@ -2061,14 +2204,18 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             if agent.agents_path_global and agent.agents_path_global.exists():
                 global_agent_count = len(list(agent.agents_path_global.rglob("*.md")))
                 if global_agent_count > 0:
-                    console.print(f"  [dim]  └─ Syncing {global_agent_count} global agents for {agent.name}...[/dim]")
+                    console.print(
+                        f"  [dim]  └─ Syncing {global_agent_count} global agents for {agent.name}...[/dim]"
+                    )
                 global_agents_dir = agent_repo_dir / "global"
                 global_agents_dir.mkdir(parents=True, exist_ok=True)
 
                 # Remove agents from repo that no longer exist locally
                 if global_agents_dir.exists():
                     for repo_agent_file in global_agents_dir.rglob("*.md"):
-                        local_file = agent.agents_path_global / repo_agent_file.relative_to(global_agents_dir)
+                        local_file = agent.agents_path_global / repo_agent_file.relative_to(
+                            global_agents_dir
+                        )
                         if not local_file.exists():
                             repo_agent_file.unlink()
                     # Clean up empty directories
@@ -2120,13 +2267,16 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             head_skills: set[str] = set()
             try:
                 head_out = self._run_git(
-                    "ls-tree", "--name-only", "HEAD", "skills/",
+                    "ls-tree",
+                    "--name-only",
+                    "HEAD",
+                    "skills/",
                     cwd=self.repo_dir,
                 )
                 for line in head_out.splitlines():
                     line = line.strip()
                     if line.startswith("skills/"):
-                        bare = line[len("skills/"):].rstrip("/")
+                        bare = line[len("skills/") :].rstrip("/")
                         if bare and "/" not in bare and not bare.startswith("."):
                             head_skills.add(bare)
             except Exception:
@@ -2324,7 +2474,14 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
         return copied
 
-    def _copy_item(self, item: Path, src: Path, dest: Path, exclude: list[str] | None = None, preserve_symlinks: bool = True) -> int:
+    def _copy_item(
+        self,
+        item: Path,
+        src: Path,
+        dest: Path,
+        exclude: list[str] | None = None,
+        preserve_symlinks: bool = True,
+    ) -> int:
         """Copy a single item (symlink, file, or directory) preserving relative path."""
         rel_path = item.relative_to(src)
         dest_item = dest / rel_path
@@ -2386,7 +2543,9 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             for item in src.rglob("*"):
                 rel_path_str = str(item.relative_to(src))
                 file_pattern = pattern.replace("**/", "*").replace("**", "*")
-                if fnmatch.fnmatch(rel_path_str, pattern) or fnmatch.fnmatch(item.name, file_pattern):
+                if fnmatch.fnmatch(rel_path_str, pattern) or fnmatch.fnmatch(
+                    item.name, file_pattern
+                ):
                     copied += self._copy_item(item, src, dest, exclude, preserve_symlinks)
         else:
             # Simple path or single wildcard
@@ -2397,8 +2556,8 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
     def _stage_all_agent_files(
         self,
-        agents_filter: Optional[list[str]] = None,
-        agents_exclude: Optional[list[str]] = None,
+        agents_filter: list[str] | None = None,
+        agents_exclude: list[str] | None = None,
     ) -> None:
         """Stage all agent files for backup.
 
@@ -2454,21 +2613,27 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         if all_files:
             _home = str(Path.home())
             _short = lambda p: str(p).replace(_home, "~")
-            console.print(f"  [bold]Backing up all files: [cyan]{agent.name}[/cyan] from [underline]{_short(agent_config_dir)}[/underline]:[/]")
+            console.print(
+                f"  [bold]Backing up all files: [cyan]{agent.name}[/cyan] from [underline]{_short(agent_config_dir)}[/underline]:[/]"
+            )
             copied = self._copy_directory(
                 src=agent_config_dir,
                 dest=repo_agent_dir,
                 exclude=exclude,
                 preserve_symlinks=True,
             )
-            console.print(f"    [green]✓[/] all files  ([dim]{copied} file{'s' if copied != 1 else ''}[/dim])")
+            console.print(
+                f"    [green]✓[/] all files  ([dim]{copied} file{'s' if copied != 1 else ''}[/dim])"
+            )
             return
 
         # Copy specific paths
         if paths:
             _home = str(Path.home())
             _short = lambda p: str(p).replace(_home, "~")
-            console.print(f"  [bold]Backing up [cyan]{agent.name}[/cyan] from [underline]{_short(agent_config_dir)}[/underline]:[/]")
+            console.print(
+                f"  [bold]Backing up [cyan]{agent.name}[/cyan] from [underline]{_short(agent_config_dir)}[/underline]:[/]"
+            )
             for path_pattern in paths:
                 resolved = agent_config_dir / path_pattern.rstrip("/")
                 if path_pattern.endswith("/"):
@@ -2481,9 +2646,13 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                             exclude=exclude,
                             preserve_symlinks=True,
                         )
-                        console.print(f"    [green]✓[/] {path_pattern} [dim]→ {_short(resolved)}  ({copied} file{'s' if copied != 1 else ''})[/dim]")
+                        console.print(
+                            f"    [green]✓[/] {path_pattern} [dim]→ {_short(resolved)}  ({copied} file{'s' if copied != 1 else ''})[/dim]"
+                        )
                     else:
-                        console.print(f"    [dim]✗[/] {path_pattern} → {_short(resolved)}  [yellow]not found[/yellow]")
+                        console.print(
+                            f"    [dim]✗[/] {path_pattern} → {_short(resolved)}  [yellow]not found[/yellow]"
+                        )
                 else:
                     # File or glob pattern — always attempt copy
                     copied = self._copy_path_pattern(
@@ -2494,7 +2663,9 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                         preserve_symlinks=True,
                     )
                     if copied:
-                        console.print(f"    [green]✓[/] {path_pattern}  ([dim]{copied} file{'s' if copied != 1 else ''}[/dim])")
+                        console.print(
+                            f"    [green]✓[/] {path_pattern}  ([dim]{copied} file{'s' if copied != 1 else ''}[/dim])"
+                        )
                     else:
                         console.print(f"    [dim]✗[/] {path_pattern}  [yellow]not found[/yellow]")
             if exclude:
@@ -2503,8 +2674,8 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
     def _apply_synced_configs(
         self,
-        agents_filter: Optional[list[str]] = None,
-        agents_exclude: Optional[list[str]] = None,
+        agents_filter: list[str] | None = None,
+        agents_exclude: list[str] | None = None,
     ) -> list[str]:
         """Apply synced configurations to local agent directories.
 
@@ -2550,12 +2721,18 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                             source_path.mkdir(parents=True, exist_ok=True)
                             for item in synced_category_dir.iterdir():
                                 dest = source_path / item.name
-                                if dest.exists() and item.is_file() and self._same_content(dest, item):
+                                if (
+                                    dest.exists()
+                                    and item.is_file()
+                                    and self._same_content(dest, item)
+                                ):
                                     continue
                                 if item.is_dir():
                                     if dest.exists():
                                         shutil.rmtree(dest)
-                                    shutil.copytree(item, dest, ignore=shutil.ignore_patterns('.git'))
+                                    shutil.copytree(
+                                        item, dest, ignore=shutil.ignore_patterns(".git")
+                                    )
                                 else:
                                     shutil.copy2(item, dest)
                                 changes.append(f"{agent.name}/{category}: {item.name}")
@@ -2635,11 +2812,11 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
     def _apply_synced_skills(
         self,
-        skills_filter: Optional[list[str]] = None,
-        skills_exclude: Optional[list[str]] = None,
+        skills_filter: list[str] | None = None,
+        skills_exclude: list[str] | None = None,
         force: bool = False,
         interactive: bool = True,
-        keep_local_skills: Optional[set[str]] = None,
+        keep_local_skills: set[str] | None = None,
     ) -> list[str]:
         """
         Apply synced skills to local directories.
@@ -2885,17 +3062,22 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
             # Get agent config
             from .agents import get_agent
+
             agent = get_agent(agent_name)
 
             if not agent:
-                console.print(f"[yellow]Warning: Agent {agent_name} not found, skipping extension {ext_name}[/yellow]")
+                console.print(
+                    f"[yellow]Warning: Agent {agent_name} not found, skipping extension {ext_name}[/yellow]"
+                )
                 continue
 
             # Source in repo
             source_dir = self.repo_dir / "skills" / ext_name
 
             if not source_dir.exists():
-                console.print(f"[yellow]Warning: Extension skills not found in repo: {ext_name}[/yellow]")
+                console.print(
+                    f"[yellow]Warning: Extension skills not found in repo: {ext_name}[/yellow]"
+                )
                 continue
 
             # Destination: ~/.config/opencode/superpowers/skills/
@@ -2925,19 +3107,32 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
     # Global gitignore sync
     # -----------------------------------------------------------------------
 
-    CRITICAL_GITIGNORE_PATTERNS = frozenset({
-        "*.pem", "*.key", "*.secret", "*.token",
-        ".env", ".env.*", "*.env.*",
-        "secrets/", "credentials/", "tokens/", "api_keys/",
-        "mcp-secrets",
-    })
+    CRITICAL_GITIGNORE_PATTERNS = frozenset(
+        {
+            "*.pem",
+            "*.key",
+            "*.secret",
+            "*.token",
+            ".env",
+            ".env.*",
+            "*.env.*",
+            "secrets/",
+            "credentials/",
+            "tokens/",
+            "api_keys/",
+            "mcp-secrets",
+        }
+    )
 
-    def _get_global_gitignore_path(self) -> Optional[Path]:
+    def _get_global_gitignore_path(self) -> Path | None:
         """Return the user's global gitignore path, or None if not configured."""
         try:
             result = subprocess.run(
                 ["git", "config", "--global", "core.excludesFile"],
-                capture_output=True, text=True, check=False, timeout=paths.GIT_TIMEOUT,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=paths.GIT_TIMEOUT,
             )
             if result.returncode == 0 and result.stdout.strip():
                 path_str = os.path.expanduser(result.stdout.strip())
@@ -2956,7 +3151,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                 return candidate
         return None
 
-    def _stage_gitignore_global(self) -> Optional[str]:
+    def _stage_gitignore_global(self) -> str | None:
         """Backup the user's global gitignore to the repo.
 
         Returns the repo-relative filename if staged, None otherwise.
@@ -2990,8 +3185,11 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             return changes
 
         remote_content = repo_file.read_text(encoding="utf-8")
-        remote_patterns = {l.strip() for l in remote_content.splitlines()
-                           if l.strip() and not l.strip().startswith("#")}
+        remote_patterns = {
+            l.strip()
+            for l in remote_content.splitlines()
+            if l.strip() and not l.strip().startswith("#")
+        }
 
         local_path = self._get_global_gitignore_path()
 
@@ -3007,6 +3205,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
             try:
                 from rich.prompt import Confirm
+
                 console.print("\n[yellow]📄 .gitignore_global not found on this machine.[/yellow]")
                 console.print("[dim]Remote repo contains:")
                 for line in remote_content.splitlines()[:15]:
@@ -3030,8 +3229,11 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             if local_content == remote_content:
                 return changes  # Identical
 
-            local_patterns = {l.strip() for l in local_content.splitlines()
-                               if l.strip() and not l.strip().startswith("#")}
+            local_patterns = {
+                l.strip()
+                for l in local_content.splitlines()
+                if l.strip() and not l.strip().startswith("#")
+            }
 
             added = remote_patterns - local_patterns
             removed = local_patterns - remote_patterns
@@ -3052,6 +3254,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             # --- Interactive prompt ---
             try:
                 from rich.prompt import Confirm, Prompt
+
                 console.print("\n[yellow]📄 .gitignore_global - differences found:[/yellow]")
                 if added:
                     console.print("  [green]+ New patterns (in remote):[/green]")
@@ -3066,7 +3269,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                 missing_critical = self.CRITICAL_GITIGNORE_PATTERNS - local_patterns
                 if missing_critical:
                     console.print(
-                        f"\n  [bold red]⚠  Your local gitignore is missing critical security patterns:[/bold red]"
+                        "\n  [bold red]⚠  Your local gitignore is missing critical security patterns:[/bold red]"
                     )
                     for p in sorted(missing_critical):
                         console.print(f"    ⚠  {p}")
@@ -3111,7 +3314,8 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         )
         if result.returncode != 0:
             raise subprocess.CalledProcessError(
-                result.returncode, result.args,
+                result.returncode,
+                result.args,
                 _sanitize_git_output(result.stdout),
                 _sanitize_git_output(result.stderr),
             )
