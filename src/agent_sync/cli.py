@@ -1,9 +1,7 @@
 """CLI commands for agent-sync."""
 
-import shutil
 import subprocess
 from pathlib import Path
-from typing import Optional
 
 import click
 import yaml
@@ -13,27 +11,28 @@ from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from . import __version__
+from ._tui import build_footer_commands, print_footer
 from .agents import load_registry
 from .config import Config
+from .mcp_merger import MCPMerger
 from .paths import HUB_DIR
 from .publish import (
     add_source,
-    clear_cache as clear_publish_cache,
-    get_published_repo,
-    list_sources,
-    load_config as load_publish_config,
     remove_source,
     run_publish_setup,
     save_selected_skills,
     set_published_repo,
 )
+from .publish import (
+    clear_cache as clear_publish_cache,
+)
+from .publish import (
+    load_config as load_publish_config,
+)
+from .secrets import SecretsManager
+from .skills_delete import SkillsDeleter
 from .sync import SyncManager
 from .validators import validate_github_url
-from .mcp_merger import MCPMerger
-from .secrets import SecretsManager
-from ._tui import print_footer, build_footer_commands
-from .skills_delete import SkillsDeleter
-
 
 console = Console()
 
@@ -41,13 +40,13 @@ console = Console()
 def print_full_help(ctx, param, value):
     if not value:
         return
-    
+
     from rich.console import Console
-    from rich.table import Table
+
     console = Console()
-    
+
     console.print("\n[bold cyan]agent-sync Commands[/bold cyan]\n")
-    
+
     # Group commands by category
     categories = {
         "Sync & Backup": ["init", "backup", "pull", "status", "diff", "sync"],
@@ -58,32 +57,36 @@ def print_full_help(ctx, param, value):
         "Agents": ["agents", "enable", "disable", "export"],
         "System": ["secrets", "mcp", "update", "version"],
     }
-    
+
     for cat_name, cmds in categories.items():
         console.print(f"[bold]{cat_name}:[/]")
         for cmd in cmds:
             if cmd == "repos":
-                console.print(f"  [cyan]repos[/cyan]             list | target (list | remove) | source (add | list | remove)")
+                console.print(
+                    "  [cyan]repos[/cyan]             list | target (list | remove) | source (add | list | remove)"
+                )
             elif cmd == "share":
-                console.print(f"  [cyan]share[/cyan]              add | list | remove | run")
+                console.print("  [cyan]share[/cyan]              add | list | remove | run")
             elif cmd == "config":
-                console.print(f"  [cyan]config[/cyan]            show | repo | edit | reset")
+                console.print("  [cyan]config[/cyan]            show | repo | edit | reset")
             elif cmd == "skills":
-                console.print(f"  [cyan]skills[/cyan]           list | centralize")
+                console.print("  [cyan]skills[/cyan]           list | centralize")
             elif cmd == "secrets":
-                console.print(f"  [cyan]secrets[/cyan]          list | edit | enable | disable")
+                console.print("  [cyan]secrets[/cyan]          list | edit | enable | disable")
             elif cmd == "agents":
-                console.print(f"  [cyan]agents[/cyan]           list")
+                console.print("  [cyan]agents[/cyan]           list")
             else:
                 console.print(f"  [cyan]{cmd}[/cyan]")
         console.print()
-    
+
     console.print("[dim]Run 'agent-sync <command> --help' for more details on a command.[/dim]\n")
     ctx.exit()
 
 
 @click.group()
-@click.option('-h', '--help', is_flag=True, callback=print_full_help, expose_value=False, is_eager=True)
+@click.option(
+    "-h", "--help", is_flag=True, callback=print_full_help, expose_value=False, is_eager=True
+)
 @click.version_option(version=__version__)
 def main():
     """agent-sync - Sync configs and skills across multiple AI agents."""
@@ -94,25 +97,26 @@ def main():
 # INIT COMMAND
 # =============================================================================
 
+
 @main.command()
 @click.option("--name", "name", help="Repository name")
 @click.option("--agents", multiple=True, help="Agents to sync")
 @click.option("--no-wizard", is_flag=True, help="Skip interactive prompts")
 @click.option("--force", is_flag=True, help="Force overwrite existing config")
-def init(name: Optional[str], agents: tuple[str, ...], no_wizard: bool, force: bool):
+def init(name: str | None, agents: tuple[str, ...], no_wizard: bool, force: bool):
     """Initialize agent-sync in the current directory."""
     config = Config()
     sync_manager = SyncManager(config)
-    
+
     # Check if already initialized
     if sync_manager.is_initialized() and not force:
         console.print("[yellow]⚠ Already initialized. Use --force to reinitialize.[/yellow]")
         return
-    
+
     if not no_wizard:
         console.print("\n[bold cyan]agent-sync Initializer[/bold cyan]\n")
         console.print("This will create a .sync/ directory with your agent configurations.\n")
-    
+
     # Get agents to sync
     if not agents:
         console.print("[cyan]Available agents:[/cyan]")
@@ -121,29 +125,29 @@ def init(name: Optional[str], agents: tuple[str, ...], no_wizard: bool, force: b
         console.print("  • gemini-cli - Gemini CLI")
         console.print("  • pi.dev - Pi.dev")
         console.print("  • qwen-code - Qwen Code\n")
-        
+
         agents_input = Prompt.ask(
             "\n[cyan]Which agents?[/cyan] (comma-separated)",
             default="all",
         )
-        
+
         if agents_input.lower() == "all":
             agents = ("opencode", "claude-code", "gemini-cli", "pi.dev", "qwen-code")
         else:
             agents = tuple(a.strip() for a in agents_input.split(","))
-    
+
     private = not no_wizard and Confirm.ask("Create private repository?", default=False)
-    
+
     if no_wizard:
         repo_name = name or "agent-sync"
     else:
         repo_name = name or Prompt.ask("Repository name", default="agent-sync")
-    
+
     success = sync_manager.init_repo(name=repo_name, private=private, agents=agents)
-    
+
     if success:
         console.print("\n[green]✓ Initialized![/green]")
-        console.print(f"   Commit and push the [.sync/] directory to start syncing.")
+        console.print("   Commit and push the [.sync/] directory to start syncing.")
     else:
         console.print("\n[red]✗ Failed to initialize.[/red]")
 
@@ -151,6 +155,7 @@ def init(name: Optional[str], agents: tuple[str, ...], no_wizard: bool, force: b
 # =============================================================================
 # SYNC COMMAND
 # =============================================================================
+
 
 @main.command()
 @click.option("--force", is_flag=True, help="Force pull even if up to date")
@@ -161,28 +166,28 @@ def sync(force: bool, skills_only: bool, configs_only: bool, agents_only: bool):
     """Sync skills and configs with the remote repository."""
     config = Config()
     sync_manager = SyncManager(config)
-    
+
     if not config.repo_url:
         console.print("[red]✗ Not initialized. Run 'agent-sync init' first.[/red]")
         return
-    
+
     # Determine what to sync
     do_skills = skills_only or (not configs_only and not agents_only)
     do_configs = configs_only or (not skills_only and not agents_only)
     do_agents = agents_only
-    
+
     if not (do_skills or do_configs or do_agents):
         do_skills = do_configs = do_agents = True
-    
+
     console.print(f"\n[bold]🔄 Syncing with [cyan]{config.repo_url.split('/')[-1]}[/cyan]...[/]\n")
-    
+
     success = sync_manager.sync(
         force=force,
         skills=do_skills,
         configs=do_configs,
         agents=do_agents,
     )
-    
+
     if success:
         console.print("\n[green]✓ Synced![/green]")
     else:
@@ -193,20 +198,21 @@ def sync(force: bool, skills_only: bool, configs_only: bool, agents_only: bool):
 # INTERNAL BACKUP FLOW
 # =============================================================================
 
+
 def _internal_backup_flow(
     dry_run: bool = False,
-    message = None,
+    message=None,
     skills_only: bool = False,
     configs_only: bool = False,
-    skill = None,
-    agent = None,
-    exclude_skill = None,
-    exclude_agent = None,
+    skill=None,
+    agent=None,
+    exclude_skill=None,
+    exclude_agent=None,
     prune: bool = False,
     strict: bool = False,
 ):
     """Execute backup/push flow. Called by both push and backup commands."""
-    from ._tui import print_footer, build_footer_commands
+    from ._tui import print_footer
 
     config = Config()
 
@@ -247,13 +253,18 @@ def _internal_backup_flow(
         else:
             groups["other"].append(f)
 
-    console.print(f"\n[bold]\U0001f4e4 Changes to be pushed to [cyan]{config.repo_url.split('/')[-1]}[/cyan]:[/]")
+    console.print(
+        f"\n[bold]\U0001f4e4 Changes to be pushed to [cyan]{config.repo_url.split('/')[-1]}[/cyan]:[/]"
+    )
 
     def status_label(f):
         s = f["status"]
-        if s == "??": return "[green]+[/]"
-        if "D" in s: return "[red]-[/]"
-        if "A" in s: return "[green]+[/]"
+        if s == "??":
+            return "[green]+[/]"
+        if "D" in s:
+            return "[red]-[/]"
+        if "A" in s:
+            return "[green]+[/]"
         return "[yellow]\u00b7[/]"
 
     def sort_key(f):
@@ -314,11 +325,13 @@ def _internal_backup_flow(
         console.print(f"\n[green]\u2713 Pushed to {config.repo_url.split('/')[-1]}[/green]\n")
     except subprocess.CalledProcessError as e:
         from .sync import _sanitize_git_output
+
         console.print(f"\n[red]\u2717 Push failed:[/red] {_sanitize_git_output(e.stderr) or e}")
         return
 
     if strict and orphans:
         raise SystemExit(2)
+
 
 def _warn_about_orphans(orphans: list[str]) -> None:
     """Print a yellow warning about orphan skills preserved by HEAD guard.
@@ -345,18 +358,39 @@ def _warn_about_orphans(orphans: list[str]) -> None:
 # PULL COMMAND
 # =============================================================================
 
+
 @main.command()
 @click.option("--force", is_flag=True, help="Apply all remote (no confirmation)")
 @click.option("--dry-run", is_flag=True, help="Show what would change")
-@click.option("--interactive/--no-interactive", "interactive", default=True, help="Interactive conflict resolution")
+@click.option(
+    "--interactive/--no-interactive",
+    "interactive",
+    default=True,
+    help="Interactive conflict resolution",
+)
 @click.option("--skills-only", is_flag=True, help="Only pull skills")
 @click.option("--configs-only", is_flag=True, help="Only pull configs")
 @click.option("--skill", "-s", multiple=True, help="Specific skill to pull (can repeat)")
 @click.option("--agent", "-a", multiple=True, help="Specific agent config to pull (can repeat)")
 @click.option("--exclude-skill", multiple=True, help="Skill to exclude (can repeat)")
 @click.option("--exclude-agent", multiple=True, help="Agent to exclude (can repeat)")
-@click.option("--prune", is_flag=True, help="Remove local skills that are missing from the private repo (mirror-pull). Default: preview only.")
-def pull(force: bool, dry_run: bool, interactive: bool, skills_only: bool, configs_only: bool, skill: tuple, agent: tuple, exclude_skill: tuple, exclude_agent: tuple, prune: bool):
+@click.option(
+    "--prune",
+    is_flag=True,
+    help="Remove local skills that are missing from the private repo (mirror-pull). Default: preview only.",
+)
+def pull(
+    force: bool,
+    dry_run: bool,
+    interactive: bool,
+    skills_only: bool,
+    configs_only: bool,
+    skill: tuple,
+    agent: tuple,
+    exclude_skill: tuple,
+    exclude_agent: tuple,
+    prune: bool,
+):
     """Pull changes from the remote repository.
 
     Default behavior is additive (no local skill is deleted). Local skills
@@ -398,13 +432,13 @@ def pull(force: bool, dry_run: bool, interactive: bool, skills_only: bool, confi
             agents_exclude=list(exclude_agent) if exclude_agent else None,
             prune=prune,
         )
-        
+
         if dry_run:
             return  # Preview already shown
-        
+
         if summary.has_conflicts:
             console.print("\n[yellow]⚠️  Some conflicts kept local.[/yellow]")
-        
+
         if changes:
             console.print(f"\n[green]✓ Pulled {len(changes)} file(s)![/green]")
         else:
@@ -418,25 +452,27 @@ def pull(force: bool, dry_run: bool, interactive: bool, skills_only: bool, confi
 # EXPORT COMMAND
 # =============================================================================
 
+
 @main.command("export")
 @click.option("--output", type=click.Path(), default=None, help="Output path")
-def export_config(output: Optional[str]):
+def export_config(output: str | None):
     """Export agent config to JSON format."""
     config = Config()
-    
+
     output_path = Path(output) if output else Path.home() / ".agents" / "config.json"
-    
+
     config_data = config.to_dict()
-    
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(yaml.dump(config_data, default_flow_style=False))
-    
+
     console.print(f"[green]✓ Exported to {output_path}[/green]")
 
 
 # =============================================================================
 # AGENTS COMMAND
 # =============================================================================
+
 
 @main.group()
 def agents():
@@ -449,26 +485,27 @@ def agents():
 def list_agents(json_output: bool):
     """List all configured agents."""
     registry = load_registry()
-    
+
     if json_output:
         import json
+
         console.print(json.dumps(registry, indent=2))
         return
-    
+
     table = Table(title="Configured Agents")
     table.add_column("Name", style="cyan")
     table.add_column("Type", style="green")
     table.add_column("Location", style="dim")
-    
+
     for agent_name, agent_data in registry.items():
         if agent_name == "global-skills":
             continue
-        
+
         agent_type = agent_data.get("type", "unknown")
         location = agent_data.get("config_dir", "N/A")
-        
+
         table.add_row(agent_name, agent_type, location)
-    
+
     console.print(table)
 
 
@@ -481,9 +518,9 @@ def list_agents(json_output: bool):
 # def setup(agent: tuple[str, ...]):
 #     """Setup agent configurations interactively."""
 #     console.print("\n[bold cyan]Agent Setup[/bold cyan]\n")
-#     
+#
 #     agents_to_setup = list(agent) if agent else []
-#     
+#
 #     if not agents_to_setup:
 #         console.print("Available agents: opencode, claude-code, gemini-cli, pi.dev, qwen-code")
 #         choice = Prompt.ask("\nWhich agents to setup?", default="all")
@@ -491,11 +528,11 @@ def list_agents(json_output: bool):
 #             agents_to_setup = ["opencode", "claude-code", "gemini-cli", "pi.dev", "qwen-code"]
 #         else:
 #             agents_to_setup = [a.strip() for a in choice.split(",")]
-#     
+#
 #     for agent_name in agents_to_setup:
 #         console.print(f"\n[cyan]Setting up {agent_name}...[/cyan]")
 #         handler = AgentHandler(agent_name)
-#         
+#
 #         if handler.exists():
 #             console.print(f"  [dim]Already configured[/dim]")
 #         else:
@@ -510,17 +547,18 @@ def list_agents(json_output: bool):
 # GENERATE COMMAND
 # =============================================================================
 
+
 @main.command("generate-config")
 @click.option("--agent", "-a", multiple=True, required=True, help="Agents to generate config for")
 def generate_config(agent: tuple[str, ...]):
     """Generate configuration files for agents."""
     from . import config
-    
+
     target_agents = list(agent)
     console.print(f"\n[cyan]Generating config for: {', '.join(target_agents)}[/cyan]\n")
-    
+
     config_path = config.generate_default(target_agents)
-    
+
     console.print(f"[green]✓ Config generated: {config_path}[/green]")
 
 
@@ -528,19 +566,20 @@ def generate_config(agent: tuple[str, ...]):
 # ENABLE/DISABLE COMMANDS
 # =============================================================================
 
+
 @main.command()
 @click.argument("agent_name")
 def enable(agent_name: str):
     """Enable an agent for syncing."""
     config = Config()
-    
+
     if agent_name in config.agents:
         console.print(f"[yellow]⚠ {agent_name} already enabled.[/yellow]")
         return
-    
+
     config.agents.append(agent_name)
     config.save()
-    
+
     console.print(f"[green]✓ Enabled {agent_name}[/green]")
 
 
@@ -549,20 +588,21 @@ def enable(agent_name: str):
 def disable(agent_name: str):
     """Disable an agent from syncing."""
     config = Config()
-    
+
     if agent_name not in config.agents:
         console.print(f"[yellow]⚠ {agent_name} not enabled.[/yellow]")
         return
-    
+
     config.agents.remove(agent_name)
     config.save()
-    
+
     console.print(f"[green]✓ Disabled {agent_name}[/green]")
 
 
 # =============================================================================
 # SKILLS MANAGEMENT
 # =============================================================================
+
 
 @main.group("skills")
 def skills_group():
@@ -574,15 +614,16 @@ def skills_group():
 # REPOS COMMAND
 # =============================================================================
 
+
 @main.group("repos")
 def repos_group():
     """Manage repositories (sync, publish, and sources).
-    
+
     Subcommands:
       list     Show all target repositories (sync + publish)
       target   Configure sync and publish targets
       source   Manage skill sources (external repos to import from)
-    
+
     Examples:
       agent-sync repos list
       agent-sync repos target private https://github.com/user/private.git
@@ -594,21 +635,22 @@ def repos_group():
 @repos_group.command("list")
 def repos_list():
     """Show all configured target repositories.
-    
+
     Shows sync repository and publish destination.
     For skill sources, use 'agent-sync repos source list'.
     """
-    from .publish.config import get_published_repo
-    from rich.table import Table
     from rich.box import ROUNDED
-    
+    from rich.table import Table
+
+    from .publish.config import get_published_repo
+
     console.print("\n[bold]Repositories[/]\n")
-    
+
     table = Table(box=ROUNDED, show_header=True, header_style="bold dim")
     table.add_column("Purpose", width=20)
     table.add_column("Repository", width=45)
     table.add_column("Status", width=12)
-    
+
     # Sync Repo
     config = Config()
     sync_repo = config.repo_url
@@ -617,7 +659,7 @@ def repos_list():
         table.add_row("sync / push", sync_name, "[green]active[/green]")
     else:
         table.add_row("sync / push", "[dim]not configured[/dim]", "[yellow]missing[/yellow]")
-    
+
     # Publish Repo
     published_repo = get_published_repo()
     if published_repo:
@@ -625,7 +667,7 @@ def repos_list():
         table.add_row("share", pub_name, "[green]active[/green]")
     else:
         table.add_row("share", "[dim]not configured[/dim]", "[yellow]missing[/yellow]")
-    
+
     console.print(table)
     console.print()
     console.print("[bold]Change repositories:[/]")
@@ -638,10 +680,11 @@ def repos_list():
 # REPOS TARGET COMMAND
 # =============================================================================
 
+
 @repos_group.group("target")
 def repos_target_group():
     """Show or remove target repositories.
-    
+
     Repos are auto-detected from gh auth + defaults (agent-sync-private, agent-sync-public).
     """
     pass
@@ -650,16 +693,17 @@ def repos_target_group():
 @repos_target_group.command("list")
 def repos_target_list():
     """Show configured target repositories."""
-    from .publish.config import get_published_repo
-    from rich.table import Table
     from rich.box import ROUNDED
-    
+    from rich.table import Table
+
+    from .publish.config import get_published_repo
+
     console.print("\n[bold]Target Repositories[/]\n")
-    
+
     table = Table(box=ROUNDED, show_header=True, header_style="bold dim")
     table.add_column("Type", width=15)
     table.add_column("Repository", width=50)
-    
+
     config = Config()
     sync_repo = config.repo_url
     if sync_repo:
@@ -667,45 +711,48 @@ def repos_target_list():
         table.add_row("[cyan]private[/cyan]", sync_name)
     else:
         table.add_row("[cyan]private[/cyan]", "[dim]not configured[/dim]")
-    
+
     published_repo = get_published_repo()
     if published_repo:
         pub_name = published_repo.replace("https://github.com/", "").replace(".git", "")
         table.add_row("[cyan]public[/cyan]", pub_name)
     else:
         table.add_row("[cyan]public[/cyan]", "[dim]not configured[/dim]")
-    
+
     console.print(table)
     console.print()
-    console.print("[dim]Repos are auto-detected from gh auth + agent-sync-private/agent-sync-public[/dim]\n")
+    console.print(
+        "[dim]Repos are auto-detected from gh auth + agent-sync-private/agent-sync-public[/dim]\n"
+    )
 
 
 @repos_target_group.command("remove")
 def repos_target_remove():
     """Remove all configured target repositories."""
     from rich.prompt import Confirm
+
     from .publish.config import get_published_repo, load_config, save_config
-    
+
     config = Config()
     sync_repo = config.repo_url
     published_repo = get_published_repo()
-    
+
     if not sync_repo and not published_repo:
         console.print("[yellow]No targets configured.[/yellow]\n")
         return
-    
+
     if not Confirm.ask("[bold]Remove all targets?[/]", default=False):
         console.print("[dim]Cancelled.[/dim]\n")
         return
-    
+
     if sync_repo:
         config.set_repo_url("")
-    
+
     if published_repo:
         pub_config = load_config()
         pub_config.published_repo = ""
         save_config(pub_config)
-    
+
     console.print("[green]All targets removed.[/green]\n")
 
 
@@ -713,40 +760,40 @@ def repos_target_remove():
 # REPOS SOURCE COMMAND
 # =============================================================================
 
+
 @repos_group.group("source")
 def repos_source_group():
-    """Manage skill sources (external repositories to import from).
-    
-    """
+    """Manage skill sources (external repositories to import from)."""
     pass
 
 
 @repos_source_group.command("list")
 def repos_source_list():
     """List configured skill sources."""
-    from .publish.config import load_config
-    from rich.table import Table
     from rich.box import ROUNDED
-    
+    from rich.table import Table
+
+    from .publish.config import load_config
+
     config_data = load_config()
     sources = config_data.skill_sources
-    
+
     if not sources:
         console.print("\n[yellow]No skill sources configured.[/yellow]")
         console.print("\n[dim]Add: agent-sync repos source add <url>[/dim]\n")
         return
-    
+
     table = Table(box=ROUNDED, show_header=True, header_style="bold dim")
     table.add_column("#", width=3, justify="right")
     table.add_column("Repository", width=55)
     table.add_column("Status", width=10)
-    
+
     for i, src in enumerate(sources, 1):
-        status = src.status.value if hasattr(src, 'status') else "unknown"
+        status = src.status.value if hasattr(src, "status") else "unknown"
         status_color = "green" if status == "active" else "yellow"
         name = src.url.replace("https://github.com/", "")
         table.add_row(f"[dim]{i}[/dim]", name, f"[{status_color}]{status}[/{status_color}]")
-    
+
     console.print(f"\n[bold]Skill Sources ({len(sources)})[/]\n")
     console.print(table)
     console.print("\n[dim]Add/remove: agent-sync repos source add|remove <url>[/dim]\n")
@@ -758,15 +805,15 @@ def repos_source_add(url: str):
     """Add a skill source repository."""
     from .publish.config import add_source
     from .validators import validate_github_url
-    
+
     if not validate_github_url(url):
         console.print(f"[red]Invalid URL: {url}[/red]")
         return
-    
+
     try:
         add_source(url)
         console.print(f"\n[green]Added skill source: {url}[/green]")
-        console.print(f"\n[dim]List: agent-sync repos source list[/dim]\n")
+        console.print("\n[dim]List: agent-sync repos source list[/dim]\n")
     except Exception as e:
         console.print(f"[red]Failed: {e}[/red]")
 
@@ -776,7 +823,7 @@ def repos_source_add(url: str):
 def repos_source_remove(url: str):
     """Remove a skill source repository."""
     from .publish.config import remove_source
-    
+
     success = remove_source(url)
     if success:
         console.print(f"\n[green]Removed: {url}[/green]\n")
@@ -791,26 +838,30 @@ def repos_source_remove(url: str):
 # PUB-REPOS COMMAND
 # =============================================================================
 
+
 def _publish_repos_add(url: str) -> None:
     """Add a publish repository."""
+    import subprocess
+
+    from rich.prompt import Confirm
+
     from .publish.config import get_published_repo, set_published_repo
     from .validators import validate_github_url
-    import subprocess
-    from rich.prompt import Confirm
 
     if not validate_github_url(url):
         console.print(f"[red]✗ Invalid URL: {url}[/red]")
         return
-    
+
     if get_published_repo() == url:
         console.print(f"[yellow]⚠ Already current: {url}[/yellow]")
         return
-    
+
     console.print(f"\n[dim]🔍 Checking {url}...[/dim]")
     try:
         result = subprocess.run(
             ["gh", "api", "repos", url.replace("https://github.com/", "")],
-            capture_output=True, timeout=30
+            capture_output=True,
+            timeout=30,
         )
         if result.returncode != 0:
             console.print(f"[red]✗ Cannot access: {url}[/red]")
@@ -818,14 +869,14 @@ def _publish_repos_add(url: str) -> None:
     except Exception as e:
         console.print(f"[red]✗ Error: {e}[/red]")
         return
-    
+
     if not Confirm.ask(f"\n[bold]Set as publish target?[/]\n  {url}", default=True):
         console.print("[dim]Cancelled.[/dim]")
         return
-    
+
     set_published_repo(url)
     console.print(f"\n[green]✓ Added: {url}[/green]")
-    console.print(f"\n[dim]Run 'agent-sync repos list' to see all repos.\n[/dim]")
+    console.print("\n[dim]Run 'agent-sync repos list' to see all repos.\n[/dim]")
 
 
 def _publish_repos_list() -> None:
@@ -835,19 +886,19 @@ def _publish_repos_list() -> None:
     config = load_config()
     published_repo = get_published_repo()
     sources = config.skill_sources
-    
+
     repos = []
     if published_repo:
         repos.append({"url": published_repo, "type": "published"})
     for src in sources:
         if src.url != published_repo:
             repos.append({"url": src.url, "type": "source"})
-    
+
     if not repos:
         console.print("\n[yellow]No share repositories configured.[/yellow]")
         console.print("\n[dim]Add: agent-sync share add <url>[/dim]\n")
         return
-    
+
     console.print(f"\n[bold]📦 Share Repos ({len(repos)} repos)[/]\n")
     for i, repo in enumerate(repos, 1):
         t = "published" if repo["type"] == "published" else "source"
@@ -859,19 +910,19 @@ def _publish_repos_list() -> None:
 @main.group("share")
 def share_group():
     """Publish skills and agents to a public repository.
-    
+
     Commands:
       add <url>     Add a public repository
       list          List all configured repositories
       remove <url>  Remove a repository
       run           Run interactive publish flow (TUI)
-    
+
     Examples:
       agent-sync share add https://github.com/user/repo
       agent-sync share list
       agent-sync share remove https://github.com/user/repo
       agent-sync share run
-    
+
     """
     pass
 
@@ -880,7 +931,7 @@ def share_group():
 @click.argument("url")
 def share_add(url: str):
     """Add a publish repository.
-    
+
     Examples:
       agent-sync publish add https://github.com/user/repo
     """
@@ -897,17 +948,17 @@ def share_list():
 @click.argument("url")
 def share_remove(url: str):
     """Remove a publish repository.
-    
+
     Examples:
       agent-sync publish remove https://github.com/user/repo
     """
     from .publish.config import remove_source
+
     success = remove_source(url)
     if success:
         console.print(f"\n[green]✓ Removed: {url}[/green]\n")
     else:
         console.print(f"[yellow]⚠ Not found: {url}[/yellow]\n")
-
 
 
 # =============================================================================
@@ -922,16 +973,16 @@ def share_remove(url: str):
 def list_skills():
     """List and manage skills interactively."""
     from rich.box import ROUNDED
+
     skills_dir = HUB_DIR
 
     if not skills_dir.exists():
         console.print("[yellow]No skills directory found.[/yellow]")
         return
 
-    skills = sorted([
-        d.name for d in skills_dir.iterdir()
-        if d.is_dir() and not d.name.startswith(".")
-    ])
+    skills = sorted(
+        [d.name for d in skills_dir.iterdir() if d.is_dir() and not d.name.startswith(".")]
+    )
 
     if not skills:
         console.print("[yellow]No skills in hub.[/yellow]")
@@ -945,7 +996,7 @@ def list_skills():
     while True:
         # ─── Clear screen for clean display ───────────────────────────────────
         console.clear()
-        
+
         # ─── Header ───────────────────────────────────────────────────────────
         n = len(skills)
         s = len(selected)
@@ -1106,7 +1157,9 @@ def list_skills():
     console.print(f"\n[green]✓ Deleted {stats['deleted_from_hub']} skill(s)[/green]")
     console.print(f"  [dim]└─ {stats['hub_files']} files from hub[/dim]")
     if stats["deleted_from_agents"]:
-        console.print(f"  [dim]└─ {stats['deleted_from_agents']} from agents ({stats['agent_files']} files)[/dim]")
+        console.print(
+            f"  [dim]└─ {stats['deleted_from_agents']} from agents ({stats['agent_files']} files)[/dim]"
+        )
     if stats["not_found"]:
         console.print(f"  [yellow]⚠ {stats['not_found']} not found[/yellow]")
     if stats["errors"]:
@@ -1114,63 +1167,67 @@ def list_skills():
     console.print()
 
 
-def _build_skill_preview_panel(skill_name: str | None, skills_dir: Path, selected: set[str]) -> Panel | None:
+def _build_skill_preview_panel(
+    skill_name: str | None, skills_dir: Path, selected: set[str]
+) -> Panel | None:
     from rich.box import ROUNDED
-    
+
     """Build a rich preview panel for a skill showing full description."""
     if not skill_name:
         return None
-    
+
     skill_path = skills_dir / skill_name
     s_list = sorted(selected) if selected else []
-    
+
     if s_list:
         pos_idx = s_list.index(skill_name) + 1 if skill_name in s_list else 1
         total = len(s_list)
-        pos_str = f' ({pos_idx}/{total})' if total > 1 else ''
+        pos_str = f" ({pos_idx}/{total})" if total > 1 else ""
     else:
-        pos_str = ''
-    
+        pos_str = ""
+
     lines = []
-    skill_md = skill_path / 'SKILL.md'
+    skill_md = skill_path / "SKILL.md"
     if skill_md.exists():
         try:
             md_content = skill_md.read_text()
-            if md_content.startswith('---'):
-                parts = md_content.split('---', 2)
+            if md_content.startswith("---"):
+                parts = md_content.split("---", 2)
                 if len(parts) >= 3:
                     fm = yaml.safe_load(parts[1])
                     if fm:
-                        name = fm.get('name', skill_name)
-                        lines.append(f'[bold cyan]{name}[/bold cyan]')
-                        desc = fm.get('description', '')
+                        name = fm.get("name", skill_name)
+                        lines.append(f"[bold cyan]{name}[/bold cyan]")
+                        desc = fm.get("description", "")
                         if desc:
                             lines.append(desc)
-                        tools = fm.get('allowed-tools', '')
+                        tools = fm.get("allowed-tools", "")
                         if tools:
-                            lines.append(f'[dim]tools:[/dim] [yellow]{tools}[/yellow]')
+                            lines.append(f"[dim]tools:[/dim] [yellow]{tools}[/yellow]")
         except:
             pass
-    
+
     try:
-        files = sorted([f.name for f in skill_path.iterdir() if f.is_file() and f.name != 'SKILL.md'])
+        files = sorted(
+            [f.name for f in skill_path.iterdir() if f.is_file() and f.name != "SKILL.md"]
+        )
         if files:
-            lines.append('')
-            lines.append(f'[dim]files ({len(files)}):[/dim]')
+            lines.append("")
+            lines.append(f"[dim]files ({len(files)}):[/dim]")
             for f in files[:5]:
-                lines.append(f'  [dim]  • {f}[/dim]')
+                lines.append(f"  [dim]  • {f}[/dim]")
             if len(files) > 5:
-                lines.append(f'  [dim]  ... (+{len(files)-5} more)[/dim]')
+                lines.append(f"  [dim]  ... (+{len(files)-5} more)[/dim]")
     except:
         pass
-    
+
     return Panel(
-        '\n'.join(lines) if lines else '[dim]No preview available[/dim]',
+        "\n".join(lines) if lines else "[dim]No preview available[/dim]",
         box=ROUNDED,
         padding=(0, 1, 0, 1),
-        title=f'[cyan]{skill_name}[/cyan]{pos_str}',
-        title_align='left',
-        border_style='dim',
+        title=f"[cyan]{skill_name}[/cyan]{pos_str}",
+        title_align="left",
+        border_style="dim",
     )
 
 
@@ -1178,7 +1235,7 @@ def _skill_description_lines(skill_path: Path) -> list[str]:
     """Extract description lines from SKILL.md."""
     skill_md = skill_path / "SKILL.md"
     if not skill_md.exists():
-        return [f"[dim]No SKILL.md[/dim]"]
+        return ["[dim]No SKILL.md[/dim]"]
 
     try:
         lines = skill_md.read_text().splitlines()
@@ -1195,15 +1252,27 @@ def _skill_description_lines(skill_path: Path) -> list[str]:
                 desc.append(stripped[:80])
             elif capturing and desc:
                 break
-        return desc if desc else [f"[dim]Empty SKILL.md[/dim]"]
+        return desc if desc else ["[dim]Empty SKILL.md[/dim]"]
     except Exception:
-        return [f"[dim]Could not read SKILL.md[/dim]"]
+        return ["[dim]Could not read SKILL.md[/dim]"]
 
 
 @skills_group.command("audit")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON (machine-readable)")
-@click.option("--limit", "-l", type=int, default=None, help="Maximum number of rows to show (for large outputs).")
-@click.option("--filter", "-f", type=str, default=None, help="Only show skills whose name contains this substring.")
+@click.option(
+    "--limit",
+    "-l",
+    type=int,
+    default=None,
+    help="Maximum number of rows to show (for large outputs).",
+)
+@click.option(
+    "--filter",
+    "-f",
+    type=str,
+    default=None,
+    help="Only show skills whose name contains this substring.",
+)
 def audit_skills(as_json: bool, limit: int | None, filter: str | None):
     """Show every skill's status across the hub and the private repo.
 
@@ -1222,21 +1291,27 @@ def audit_skills(as_json: bool, limit: int | None, filter: str | None):
 
     if as_json:
         import json as _json
-        console.print(_json.dumps({
-            "hub_count": report.hub_count,
-            "repo_count": report.repo_count,
-            "summary": report.summary_counts(),
-            "rows": [
+
+        console.print(
+            _json.dumps(
                 {
-                    "name": r.name,
-                    "in_hub": r.in_hub,
-                    "in_repo": r.in_repo,
-                    "status": r.status,
-                }
-                for r in report.rows
-                if not filter or filter.lower() in r.name.lower()
-            ][:limit],
-        }, indent=2))
+                    "hub_count": report.hub_count,
+                    "repo_count": report.repo_count,
+                    "summary": report.summary_counts(),
+                    "rows": [
+                        {
+                            "name": r.name,
+                            "in_hub": r.in_hub,
+                            "in_repo": r.in_repo,
+                            "status": r.status,
+                        }
+                        for r in report.rows
+                        if not filter or filter.lower() in r.name.lower()
+                    ][:limit],
+                },
+                indent=2,
+            )
+        )
         return
 
     summary = report.summary_counts()
@@ -1254,6 +1329,7 @@ def audit_skills(as_json: bool, limit: int | None, filter: str | None):
         filtered_rows = filtered_rows[:limit]
 
     from rich.table import Table
+
     table = Table(box=None, show_header=True, header_style="bold dim", pad_edge=False)
     table.add_column("Skill", style="cyan", no_wrap=True)
     table.add_column("Hub", justify="center", width=3)
@@ -1317,6 +1393,7 @@ def explain_skill_cmd(name: str):
     console.print(f"\n[bold]Skill: [cyan]{name}[/cyan][/bold]\n")
 
     from rich.table import Table
+
     state_table = Table(box=None, show_header=False, pad_edge=False)
     state_table.add_column("Source", style="bold", width=14)
     state_table.add_column("Status")
@@ -1344,8 +1421,7 @@ def explain_skill_cmd(name: str):
         console.print(f"  Total commits: {expl.commit_count}")
     else:
         console.print(
-            "[dim]No git history for this skill "
-            "(it may only exist in the local hub).[/dim]"
+            "[dim]No git history for this skill " "(it may only exist in the local hub).[/dim]"
         )
     console.print()
 
@@ -1400,13 +1476,16 @@ def prune_skills(dry_run: bool, yes: bool):
         return
 
     if not yes:
-        console.print("[yellow]These skills will be removed from the remote repo in the next commit.[/yellow]")
+        console.print(
+            "[yellow]These skills will be removed from the remote repo in the next commit.[/yellow]"
+        )
         if not click.confirm("Proceed?", default=False):
             console.print("[yellow]Cancelled — no changes made.[/yellow]\n")
             return
 
-    # Commit + push the prune
+    # Stage deletions (git rm --cached), then commit + push
     try:
+        sync_manager._prune_orphan_skills(orphans)
         sync_manager._run_git("add", ".")
         sync_manager._run_git("commit", "-m", "chore: prune orphan skills from local hub")
         console.print(f"  [dim]🚀 Pushing to {config.repo_url.split('/')[-1]}...[/dim]")
@@ -1415,6 +1494,7 @@ def prune_skills(dry_run: bool, yes: bool):
         console.print(f"\n[green]✓ Pruned {len(orphans)} orphan skill(s).[/green]\n")
     except subprocess.CalledProcessError as e:
         from .sync import _sanitize_git_output
+
         console.print(f"\n[red]✗ Prune failed:[/red] {_sanitize_git_output(e.stderr) or e}")
 
 
@@ -1448,17 +1528,19 @@ def centralize_skills(copy: bool, push: bool, dry_run: bool):
         return
 
     if push or Confirm.ask("\n[bold]Push to GitHub?[/]", default=False):
-        from .sync import SyncManager
         from .config import Config
+        from .sync import SyncManager
 
         cfg = Config()
         sync_mgr = SyncManager(cfg)
         changed = sync_mgr.push(skills_only=True)
         if changed:
             console.print(f"\n[green]✓ Pushed {len(changed)} file(s) to {cfg.repo_url}[/green]")
-            console.print(f"\n[dim]Manage repos: agent-sync repos list[/dim]\n")
+            console.print("\n[dim]Manage repos: agent-sync repos list[/dim]\n")
         else:
             console.print(f"\n[dim]Nothing to push to {cfg.repo_url}[/dim]\n")
+
+
 @share_group.command("run")
 @click.option("--dry-run", is_flag=True, help="Show what would be published")
 @click.option("--repo", "repo_url", help="Set GitHub repository URL")
@@ -1467,12 +1549,16 @@ def centralize_skills(copy: bool, push: bool, dry_run: bool):
 @click.option("--list-sources", "list_sources_flag", is_flag=True, help="List skill sources")
 @click.option("--clear-cache", is_flag=True, help="Clear skill cache")
 @click.option("--reset-selection", is_flag=True, help="Reset saved selection")
-@click.option("--no-private", is_flag=True, help="Skip auto-sync to the private repo after publishing to public")
+@click.option(
+    "--no-private",
+    is_flag=True,
+    help="Skip auto-sync to the private repo after publishing to public",
+)
 def share_run(
     dry_run: bool,
-    repo_url: Optional[str],
-    add_source_url: Optional[str],
-    remove_source_url: Optional[str],
+    repo_url: str | None,
+    add_source_url: str | None,
+    remove_source_url: str | None,
     list_sources_flag: bool,
     clear_cache: bool,
     reset_selection: bool,
@@ -1493,13 +1579,13 @@ def share_run(
 
 def _internal_share_flow(
     dry_run: bool = False,
-    repo_url = None,
-    add_source_url = None,
-    remove_source_url = None,
-    list_sources_flag = False,
-    clear_cache = False,
-    reset_selection = False,
-    no_private = False,
+    repo_url=None,
+    add_source_url=None,
+    remove_source_url=None,
+    list_sources_flag=False,
+    clear_cache=False,
+    reset_selection=False,
+    no_private=False,
 ):
     """Internal: execute share flow. Used by share_run and deprecated publish_run."""
     # Handle repo URL
@@ -1510,7 +1596,7 @@ def _internal_share_flow(
         set_published_repo(repo_url)
         console.print(f"[green]✓ Repository set to {repo_url}[/]")
         return
-    
+
     # Handle source management
     if add_source_url:
         if not validate_github_url(add_source_url):
@@ -1519,23 +1605,26 @@ def _internal_share_flow(
         add_source(add_source_url)
         console.print(f"[green]✓ Added source: {add_source_url}[/]")
         return
-    
+
     if remove_source_url:
         if remove_source(remove_source_url):
             console.print(f"[green]✓ Removed source: {remove_source_url}[/]")
         else:
             console.print(f"[yellow]⚠ Source not found: {remove_source_url}[/]")
         return
-    
+
     # Handle list sources
     if list_sources_flag:
         # Trigger discovery to update last_success and ensure cache is valid
         from agent_sync.publish import load_config
+
         config = load_config()
         from agent_sync.publish.discovery import discover_skills_sources
+
         discover_skills_sources(config)
-        
+
         from agent_sync.publish.config import list_sources as get_sources
+
         sources = get_sources()
         if sources:
             console.print("\n[bold]📚 External Skill Sources[/]\n")
@@ -1545,22 +1634,23 @@ def _internal_share_flow(
         else:
             console.print("\n[dim]No external sources configured.[/dim]")
         from agent_sync.publish.config import get_published_repo
+
         console.print(f"\n[dim]Published repo: {get_published_repo() or 'Not set'}[/dim]\n")
         return
-    
+
     # Handle clear cache
     if clear_cache:
         config = load_publish_config()
         count = clear_publish_cache(config.cache_dir)
         console.print(f"[green]✓ Cleared {count} cached repositories[/]")
         return
-    
+
     # Handle reset selection
     if reset_selection:
         save_selected_skills({})
         console.print("[green]✓ Selection reset[/]")
         return
-    
+
     # =============================================================================
     # Publish Flow
     # =============================================================================
@@ -1588,16 +1678,13 @@ def _internal_share_flow(
     if not no_private:
         try:
             from .config import Config
-            from .sync import SyncManager
             from .publish.config import load_config as _load_pub_config
-            from .sync import _sanitize_git_output
+            from .sync import SyncManager, _sanitize_git_output
 
             cfg = Config()
             pub_cfg = _load_pub_config()
             if cfg.repo_url and getattr(pub_cfg, "auto_push_private", True):
-                console.print(
-                    f"\n[bold]📥 Syncing to private: [cyan]{cfg.repo_url}[/cyan]...[/]"
-                )
+                console.print(f"\n[bold]📥 Syncing to private: [cyan]{cfg.repo_url}[/cyan]...[/]")
                 sync_manager = SyncManager(cfg)
                 try:
                     changed = sync_manager.push(message="chore: sync private after publish")
@@ -1631,9 +1718,7 @@ def _internal_share_flow(
                 )
         except Exception as e:
             # Defensive: never let private sync failure break the publish success message
-            console.print(
-                f"\n[yellow]⚠ Auto-sync to private failed: {e}[/yellow]"
-            )
+            console.print(f"\n[yellow]⚠ Auto-sync to private failed: {e}[/yellow]")
 
 
 # =============================================================================
@@ -1648,18 +1733,18 @@ def diff(skills: bool, configs: bool):
     """Show differences between local and remote."""
     config = Config()
     sync_manager = SyncManager(config)
-    
+
     if not config.repo_url:
         console.print("[red]✗ Not initialized.[/red]")
         return
-    
+
     do_skills = skills or (not configs)
     do_configs = configs or (not skills)
-    
+
     if do_skills:
         console.print("\n[cyan]Skills Diff:[/cyan]")
         # Show skills diff
-    
+
     if do_configs:
         console.print("\n[cyan]Configs Diff:[/cyan]")
         # Show configs diff
@@ -1669,27 +1754,30 @@ def diff(skills: bool, configs: bool):
 # STATUS COMMAND
 # =============================================================================
 
+
 @main.command()
 def status():
     """Show sync status."""
     config = Config()
-    
+
     console.print("\n[bold cyan]agent-sync Status[/bold cyan]\n")
-    
+
     if config.repo_url:
         console.print("[green]✓ Initialized[/green]")
         console.print(f"  Repository: {config.repo_url}")
     else:
         console.print("[yellow]⚠ Not initialized[/yellow]")
         console.print("  Run 'agent-sync init' to setup")
-    
+
     console.print(f"\n[cyan]Enabled agents ({len(config.agents)}):[/cyan]")
     for agent in config.agents:
         console.print(f"  • {agent}")
-    
+
     skills_dir = HUB_DIR
     if skills_dir.exists():
-        skill_count = len([d for d in skills_dir.iterdir() if d.is_dir() and not d.name.startswith(".")])
+        skill_count = len(
+            [d for d in skills_dir.iterdir() if d.is_dir() and not d.name.startswith(".")]
+        )
         console.print(f"\n[cyan]Skills: {skill_count}[/cyan]")
 
 
@@ -1697,22 +1785,24 @@ def status():
 # UPDATE COMMAND
 # =============================================================================
 
+
 @main.command()
 @click.option("--check", is_flag=True, help="Check for updates only")
 def update(check: bool):
     """Update agent-sync to the latest version.
-    
+
     Shows before/after version to confirm the upgrade worked.
     """
     from . import __version__ as current_version
+
     console.print(f"\n[cyan]Current version: {current_version}[/cyan]")
-    
+
     if check:
         console.print("[yellow]Check mode - use without --check to upgrade[/yellow]\n")
         return
-    
+
     console.print("[cyan]Upgrading...[/cyan]\n")
-    
+
     try:
         result = subprocess.run(
             ["pipx", "upgrade", "agent-sync"],
@@ -1720,13 +1810,16 @@ def update(check: bool):
             text=True,
             timeout=300,
         )
-        
+
         if result.returncode == 0:
             # Get new version after upgrade
             try:
                 from importlib.metadata import version
+
                 new_version = version("agent-sync")
-                console.print(f"\n[green]✓ Updated from {current_version} → {new_version}[/green]\n")
+                console.print(
+                    f"\n[green]✓ Updated from {current_version} → {new_version}[/green]\n"
+                )
             except Exception:
                 console.print("\n[green]✓ Updated![/green]\n")
         else:
@@ -1743,6 +1836,7 @@ def update(check: bool):
 # VERSION COMMAND
 # =============================================================================
 
+
 @main.command()
 def version():
     """Show version information."""
@@ -1752,10 +1846,10 @@ def version():
     console.print("  Cache: ~/.cache/agent-sync/")
 
 
-
 # =============================================================================
 # CONFIG GROUP
 # =============================================================================
+
 
 @main.group("config")
 def config_group():
@@ -1771,7 +1865,7 @@ def config_show():
         console.print("\n[yellow]⚠ Not configured yet. Run 'agent-sync setup'[/yellow]\n")
         return
 
-    console.print(f"\n[bold]📋 Current Configuration[/]\n")
+    console.print("\n[bold]📋 Current Configuration[/]\n")
     console.print(f"Repository: {config.repo_url}")
     console.print(f"Enabled agents: {', '.join(config.agents)}")
     console.print(f"Config file: {config.config_path}\n")
@@ -1812,7 +1906,9 @@ def config_repo(repo_url: str | None, remove: bool):
 @config_group.command("edit")
 def config_edit():
     """Open configuration file in editor."""
-    import os, subprocess
+    import os
+    import subprocess
+
     config = Config()
     if not config.config_path.exists():
         config.generate_default()
@@ -1826,7 +1922,6 @@ def config_edit():
         console.print(f"\n[red]Error: {e}[/red]\n")
 
 
-
 @config_group.command()
 @click.confirmation_option(prompt="Are you sure you want to reset?")
 def reset():
@@ -1836,10 +1931,10 @@ def reset():
     console.print(f"\n[green]✓ Reset to defaults: {path}[/green]\n")
 
 
-
 # =============================================================================
 # SECRETS GROUP
 # =============================================================================
+
 
 @main.group("secrets")
 def secrets_group():
@@ -1871,7 +1966,9 @@ def secrets_list():
 @secrets_group.command("edit")
 def secrets_edit():
     """Edit secrets in your $EDITOR."""
-    import os, subprocess
+    import os
+    import subprocess
+
     secrets_mgr = SecretsManager()
     if not secrets_mgr.env_file.exists():
         secrets_mgr.env_file.parent.mkdir(parents=True, exist_ok=True)
@@ -1886,7 +1983,6 @@ def secrets_edit():
         console.print(f"\n[red]Error: {e}[/red]\n")
 
 
-
 @secrets_group.command("enable")
 def secrets_enable():
     """Enable secrets synchronization."""
@@ -1897,7 +1993,6 @@ def secrets_enable():
     console.print("[yellow]⚠️  IMPORTANT: Only use with a PRIVATE repository![/yellow]\n")
 
 
-
 @secrets_group.command("disable")
 def secrets_disable():
     """Disable secrets synchronization."""
@@ -1906,16 +2001,22 @@ def secrets_disable():
     console.print("\n[green]✓ Secrets synchronization disabled[/green]\n")
 
 
-
 # =============================================================================
 # MCP COMMAND
 # =============================================================================
+
 
 @main.command("mcp")
 @click.option("--dry-run", is_flag=True, help="Show merge preview without creating file")
 @click.option("--force", is_flag=True, help="Overwrite existing ~/.agents/mcp.json")
 @click.option("--conflicts", is_flag=True, help="Show only conflict report")
-@click.option("--source", "-s", multiple=True, type=click.Path(exists=True), help="Additional MCP config sources")
+@click.option(
+    "--source",
+    "-s",
+    multiple=True,
+    type=click.Path(exists=True),
+    help="Additional MCP config sources",
+)
 @click.option("--output", type=click.Path(), default=None, help="Output path")
 def mcp(dry_run: bool, force: bool, conflicts: bool, source: tuple[str, ...], output: str | None):
     """Export unified MCP configuration.
@@ -1938,7 +2039,7 @@ def mcp(dry_run: bool, force: bool, conflicts: bool, source: tuple[str, ...], ou
         return
 
     console.print("\n[bold]📋 MCP Config Sources[/]\n")
-    for src in (found + sources):
+    for src in found + sources:
         console.print(f"  • {src}")
     console.print()
 
@@ -1961,7 +2062,9 @@ def mcp(dry_run: bool, force: bool, conflicts: bool, source: tuple[str, ...], ou
     else:
         merger.save(output_path)
         console.print(f"[green]✓[/green] Unified MCP config exported to {output_path}")
-        console.print(f"[dim]Servers: {len(merger.servers)}, Conflicts: {len(merger.conflicts)}[/dim]\n")
+        console.print(
+            f"[dim]Servers: {len(merger.servers)}, Conflicts: {len(merger.conflicts)}[/dim]\n"
+        )
 
 
 if __name__ == "__main__":
@@ -1972,6 +2075,7 @@ if __name__ == "__main__":
 # BACKUP COMMAND
 # =============================================================================
 
+
 @main.command()
 @click.option("--dry-run", is_flag=True, help="Show what would be backed up without backing up")
 @click.option("--message", "-m", default=None, help="Commit message")
@@ -1981,8 +2085,16 @@ if __name__ == "__main__":
 @click.option("--agent", "-a", multiple=True, help="Specific agent config to back up (can repeat)")
 @click.option("--exclude-skill", multiple=True, help="Skill to exclude (can repeat)")
 @click.option("--exclude-agent", multiple=True, help="Agent to exclude (can repeat)")
-@click.option("--prune", is_flag=True, help="Remove orphan skills from the remote repo (in HEAD but not in local hub). Default: kept additively.")
-@click.option("--strict", is_flag=True, help="Exit with code 2 if orphan skills were detected (for CI/scripts).")
+@click.option(
+    "--prune",
+    is_flag=True,
+    help="Remove orphan skills from the remote repo (in HEAD but not in local hub). Default: kept additively.",
+)
+@click.option(
+    "--strict",
+    is_flag=True,
+    help="Exit with code 2 if orphan skills were detected (for CI/scripts).",
+)
 def backup(
     dry_run,
     message,
@@ -1996,13 +2108,13 @@ def backup(
     strict,
 ):
     """Backup all configs, skills, and agents to the private repository.
-    
+
     This sends everything (configs, skills, agents) to the private GitHub repo
     as a full backup. Configs may contain API keys and secrets, so this is
     NOT published to public repos.
-    
+
     For sharing individual skills to public repos, use 'agent-sync share'.
-    
+
     Examples:
       agent-sync backup                     # Full backup (default)
       agent-sync backup --skill dogfood     # Specific skill

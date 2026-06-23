@@ -6,8 +6,8 @@ not just that they appear in --help. This catches typos, missing options, etc.
 Each test invokes the command with the flag and checks for NoSuchOption errors.
 """
 
-import pytest
 from click.testing import CliRunner
+
 from agent_sync.cli import main
 
 runner = CliRunner()
@@ -16,6 +16,7 @@ runner = CliRunner()
 # =============================================================================
 # PUSH command flags - EVERY flag must work
 # =============================================================================
+
 
 class TestPushFlags:
     """Every push flag must be recognized by click."""
@@ -91,7 +92,9 @@ class TestPushFlags:
 
     def test_push_multiple_skills(self):
         """Multiple --skill flags must work without errors."""
-        result = runner.invoke(main, ["push", "--skill", "dogfood", "--skill", "cali-product-workflow"])
+        result = runner.invoke(
+            main, ["push", "--skill", "dogfood", "--skill", "cali-product-workflow"]
+        )
         assert "No such option: --skill" not in result.output
         assert "TypeError" not in result.output
 
@@ -99,6 +102,7 @@ class TestPushFlags:
 # =============================================================================
 # PULL command flags - EVERY flag must work
 # =============================================================================
+
 
 class TestPullFlags:
     """Every pull flag must be recognized by click."""
@@ -168,6 +172,7 @@ class TestPullFlags:
 # SYNC command flags
 # =============================================================================
 
+
 class TestSyncFlags:
     """Every sync flag must be recognized by click."""
 
@@ -195,6 +200,7 @@ class TestSyncFlags:
 # =============================================================================
 # MCP command flags
 # =============================================================================
+
 
 class TestMCPFlags:
     """Every mcp flag must be recognized by click."""
@@ -229,6 +235,7 @@ class TestMCPFlags:
 # SKILLS CENTRALIZE flags
 # =============================================================================
 
+
 class TestSkillsCentralizeFlags:
     """Every skills centralize flag must be recognized by click."""
 
@@ -246,3 +253,26 @@ class TestSkillsCentralizeFlags:
         """--dry-run must be accepted."""
         result = runner.invoke(main, ["skills", "centralize", "--dry-run"])
         assert "No such option: --dry-run" not in result.output
+
+
+# =============================================================================
+# SKILLS PRUNE flags
+# =============================================================================
+
+
+class TestSkillsPruneFlags:
+    """Every skills prune flag must be recognized by click."""
+
+    def test_prune_dry_run(self):
+        """--dry-run must be accepted without errors."""
+        result = runner.invoke(main, ["skills", "prune", "--dry-run"])
+        assert "No such option: --dry-run" not in result.output
+        assert "TypeError" not in result.output
+        assert "Traceback" not in result.output or result.exit_code == 0
+
+    def test_prune_yes(self):
+        """--yes/-y must be accepted without errors."""
+        result = runner.invoke(main, ["skills", "prune", "--yes"])
+        assert "No such option: --yes" not in result.output
+        assert "No such option: -y" not in result.output
+        assert "TypeError" not in result.output
