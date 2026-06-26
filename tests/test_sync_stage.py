@@ -24,19 +24,23 @@ def _make_pi_agent(tmp_path: Path) -> Mock:
     prompts_src = tmp_path / "prompts_src"
     themes_src = tmp_path / "themes_src"
     extensions_src = tmp_path / "extensions_src"
+    hooks_src = tmp_path / "hooks_src"
     prompts_src.mkdir()
     themes_src.mkdir()
     extensions_src.mkdir()
+    hooks_src.mkdir()
 
     (prompts_src / "foo.md").write_text("prompt content")
     (themes_src / "opencode.json").write_text('{"name":"opencode"}')
     (extensions_src / "ext1.ts").write_text("// ext")
+    (hooks_src / "hooks.yaml").write_text("tool.after.bash: go build")
 
     agent = Mock()
     agent.name = "pi.dev"
     agent.prompts_paths = [prompts_src]
     agent.themes_paths = [themes_src]
     agent.extensions_paths = [extensions_src]
+    agent.hooks_paths = [hooks_src]
     agent.bin_paths = []
     agent.git_paths = []
     agent.global_extensions_paths = []
@@ -70,6 +74,15 @@ class TestStagePiExtraPaths:
         dest = sm.repo_dir / "configs" / "pi.dev" / "themes"
         assert dest.exists(), f"themes/ not staged at {dest}"
         assert (dest / "opencode.json").read_text() == '{"name":"opencode"}'
+
+    def test_hooks_dir_staged(self, tmp_path: Path) -> None:
+        """hooks/ must be written to configs/pi.dev/hooks/."""
+        sm = _make_sm(tmp_path / "repo")
+        sm._stage_pi_extra_paths(_make_pi_agent(tmp_path))
+
+        dest = sm.repo_dir / "configs" / "pi.dev" / "hooks"
+        assert dest.exists(), f"hooks/ not staged at {dest}"
+        assert (dest / "hooks.yaml").read_text() == "tool.after.bash: go build"
 
     def test_extensions_dir_still_staged(self, tmp_path: Path) -> None:
         """Existing extensions/ coverage must not regress."""
