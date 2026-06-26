@@ -94,6 +94,7 @@ pi.dev:
     extensions: ["~/.pi/agent/extensions"]
     prompts: ["~/.pi/agent/prompts"]
     themes: ["~/.pi/agent/themes"]
+    hooks: ["~/.pi/agent/hooks"]
     # Outros diretivos e arquivos importantes
     bin: ["~/.pi/agent/bin"]
     git: ["~/.pi/agent/git"]

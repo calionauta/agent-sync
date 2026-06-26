@@ -24,7 +24,11 @@ class BaseAgent:
 
         # Custom agents support (optional)
         self.agents_dir_name = data.get("agents_dir_name")
-        self.agents_dir_global = self._expand_path(data.get("agents_dir_global", "")) if data.get("agents_dir_global") else None
+        self.agents_dir_global = (
+            self._expand_path(data.get("agents_dir_global", ""))
+            if data.get("agents_dir_global")
+            else None
+        )
 
     def _expand_path(self, path_str: str) -> Path:
         """Expand ~ in path strings."""
@@ -142,6 +146,10 @@ class BaseAgent:
         return self._get_extra_paths("themes")
 
     @property
+    def hooks_paths(self) -> list[Path]:
+        return self._get_extra_paths("hooks")
+
+    @property
     def bin_paths(self) -> list[Path]:
         return self._get_extra_paths("bin")
 
@@ -200,7 +208,9 @@ class BaseAgent:
                         packages.append(resolved)
             elif isinstance(package, dict):
                 source = package.get("source", "")
-                if isinstance(source, str) and (source.startswith("./") or source.startswith("../")):
+                if isinstance(source, str) and (
+                    source.startswith("./") or source.startswith("../")
+                ):
                     resolved = (self.config_path.parent / source).resolve()
                     if resolved.exists():
                         packages.append(resolved)
