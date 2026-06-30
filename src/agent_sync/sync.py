@@ -1825,9 +1825,8 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
     def _stage_pi_extra_paths(self, agent) -> None:
         """Backup pi.dev extra paths to the repo directory.
 
-        Handles directory copies (extensions, prompts, themes, bin, global_*)
-        and single-file copies (lsp-settings.json, models.json, pyrightconfig.json).
-        Git worktrees are skipped (200MB+ of cache data).
+        Copies directory-based paths (extensions, prompts, themes, hooks)
+        and single-file paths (lsp-settings.json, models.json, pyrightconfig.json).
         """
         pi_dir = self.repo_dir / "configs" / agent.name
         category_map = {
@@ -1835,11 +1834,6 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             "prompts": "prompts",
             "themes": "themes",
             "hooks": "hooks",
-            "bin": "bin",
-            "global_extensions": "global_extensions",
-            "global_prompts": "global_prompts",
-            "global_skills_local": "global_skills",
-            "global_themes": "global_themes",
         }
         single_file_map = {
             "lsp_paths": ("lsp-settings.json", "lsp"),
@@ -1879,19 +1873,6 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                     dest_file.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(src_path, dest_file)
 
-        # Git worktrees - skip (cache, not config)
-        if hasattr(agent, "git_paths"):
-            for git_path in agent.git_paths:
-                if git_path.exists():
-                    total_mb = (
-                        sum(f.stat().st_size for f in git_path.rglob("*") if f.is_file())
-                        // 1024
-                        // 1024
-                    )
-                    console.print(
-                        f"  [dim]Skipping git clones backup ({total_mb}MB) - these are cache, not config[/dim]"
-                    )
-
         # Packages (special: copies each package by name)
         if hasattr(agent, "packages_paths"):
             for package_path in agent.packages_paths:
@@ -1905,20 +1886,15 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
     def _restore_pi_extra_paths(self, agent, synced_config_dir: Path, changes: list[str]) -> None:
         """Restore pi.dev extra paths from repo to their original locations.
 
-        Handles directory copies (extensions, prompts, themes, bin, global_*),
+        Handles directory copies (extensions, prompts, themes, hooks),
         single-file copies (lsp-settings.json, models.json, pyrightconfig.json),
-        git worktrees (skip), and packages.
+        and packages.
         """
         dir_categories = {
             "extensions": "extensions_paths",
             "prompts": "prompts_paths",
             "themes": "themes_paths",
             "hooks": "hooks_paths",
-            "bin": "bin_paths",
-            "global_extensions": "global_extensions_paths",
-            "global_prompts": "global_prompts_paths",
-            "global_skills": "global_skills_local_paths",
-            "global_themes": "global_themes_paths",
         }
         single_files = {
             "lsp-settings.json": "lsp_paths",
@@ -1964,18 +1940,6 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                 if not dest.exists() or self._same_content(dest, synced_file):
                     shutil.copy2(synced_file, dest)
                     changes.append(f"{agent.name}: {filename}")
-
-        # Git worktrees - skip (cache, not config)
-        synced_git_dir = synced_config_dir / "git"
-        if synced_git_dir.exists():
-            total_mb = (
-                sum(f.stat().st_size for f in synced_git_dir.rglob("*") if f.is_file())
-                // 1024
-                // 1024
-            )
-            console.print(
-                f"  [dim]Skipping git clones restore ({total_mb}MB) - these are cache, not config[/dim]"
-            )
 
         # Packages - special: copies each package by name with rmtree
         synced_packages_dir = synced_config_dir / "packages"

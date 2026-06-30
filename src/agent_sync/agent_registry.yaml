@@ -85,25 +85,17 @@ pi.dev:
   check:
     path: "~/.pi/agent/settings.json"
   extra_paths:
-    # NOTE: pi.dev migrated from flat ~/.pi/ to ~/.pi/agent/ (commit 4faa0f9).
-    # On this machine, ~/.pi/extensions and ~/.pi/themes are symlinks to
-    # ~/.pi/agent/{extensions,themes} — single source of truth, no drift.
-    # All keys below are wired to code via Agent._get_extra_paths() — do not
-    # remove.
-    # Configurações principais em ~/.pi/agent/
+    # NOTE: pi.dev config dirs backed up per extra_paths key below.
+    # Each key is read by Agent._get_extra_paths() in agents/base.py.
+    # Skills have a dedicated sync mechanism (~/.agents/skills/ hub).
     extensions: ["~/.pi/agent/extensions"]
     prompts: ["~/.pi/agent/prompts"]
     themes: ["~/.pi/agent/themes"]
-    hooks: ["~/.pi/agent/hooks"]
-    # Outros diretivos e arquivos importantes
-    bin: ["~/.pi/agent/bin"]
-    git: ["~/.pi/agent/git"]
+    # pi-yaml-hooks extension config (in ~/.pi/agent/hook/hooks.yaml)
+    hooks: ["~/.pi/agent/hook"]
     lsp: ["~/.pi/agent/lsp-settings.json"]
     models: ["~/.pi/agent/models.json"]
-    # Diretórios globais em ~/.pi/ (fora de ~/.pi/agent/) — compat layer
-    global_skills_local: ["~/.pi/skills"]  # legacy: hub moved to ~/.agents/skills/ per DotAgents
-    # Arquivos na raiz de ~/.pi/
-    pyrightconfig: ["~/.pi/pyrightconfig.json"]  # legacy root file: still has content
+    pyrightconfig: ["~/.pi/pyrightconfig.json"]
 
 qwen-code:
   type: cli

@@ -150,36 +150,12 @@ class BaseAgent:
         return self._get_extra_paths("hooks")
 
     @property
-    def bin_paths(self) -> list[Path]:
-        return self._get_extra_paths("bin")
-
-    @property
-    def git_paths(self) -> list[Path]:
-        return self._get_extra_paths("git")
-
-    @property
     def lsp_paths(self) -> list[Path]:
         return self._get_extra_paths("lsp")
 
     @property
     def models_paths(self) -> list[Path]:
         return self._get_extra_paths("models")
-
-    @property
-    def global_extensions_paths(self) -> list[Path]:
-        return self._get_extra_paths("global_extensions")
-
-    @property
-    def global_prompts_paths(self) -> list[Path]:
-        return self._get_extra_paths("global_prompts")
-
-    @property
-    def global_skills_local_paths(self) -> list[Path]:
-        return self._get_extra_paths("global_skills_local")
-
-    @property
-    def global_themes_paths(self) -> list[Path]:
-        return self._get_extra_paths("global_themes")
 
     @property
     def pyrightconfig_paths(self) -> list[Path]:
