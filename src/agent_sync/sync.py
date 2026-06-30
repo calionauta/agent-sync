@@ -1850,6 +1850,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                 if src_path.exists():
                     dest = pi_dir / subdir
                     dest.mkdir(parents=True, exist_ok=True)
+                    count = 0
                     for item in src_path.iterdir():
                         item_dest = dest / item.name
                         if item.is_dir():
@@ -1861,6 +1862,9 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                             )
                         else:
                             shutil.copy2(item, item_dest)
+                        count += 1
+                    if count:
+                        console.print(f"  [dim]{agent.name}/{subdir}: {count} file(s)[/dim]")
 
         # Copy single-file paths
         for attr_name, (filename, subdir) in single_file_map.items():
@@ -1872,6 +1876,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                     dest_file = pi_dir / subdir / filename
                     dest_file.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(src_path, dest_file)
+                    console.print(f"  [dim]{agent.name}/{subdir}: {filename}[/dim]")
 
         # Packages (special: copies each package by name)
         if hasattr(agent, "packages_paths"):
@@ -1882,6 +1887,13 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                     if pkg_dest.exists():
                         shutil.rmtree(pkg_dest)
                     shutil.copytree(package_path, pkg_dest, ignore=shutil.ignore_patterns(".git"))
+
+        # Prune orphaned directories in pi_dir no longer in category_map
+        valid_dirs = set(category_map.values()) | {subdir for _, subdir in single_file_map.values()} | {"packages"}
+        for child in list(pi_dir.iterdir()):
+            if child.is_dir() and child.name not in valid_dirs:
+                shutil.rmtree(child)
+                console.print(f"  [yellow]Pruned orphaned backup: {agent.name}/{child.name}[/yellow]")
 
     def _restore_pi_extra_paths(self, agent, synced_config_dir: Path, changes: list[str]) -> None:
         """Restore pi.dev extra paths from repo to their original locations.

@@ -1,9 +1,8 @@
-"""Tests for _stage_pi_extra_paths directory coverage.
+"""Tests for _stage_pi_extra_paths directory coverage and orphan pruning.
 
-Regression test for the bug where `prompts` and `themes` keys in
-extra_paths were present in the registry and read by restore, but
-silently absent from the stage category_map. Result: themes with content
-on disk never made it to the private backup repo.
+Covers: category_map directories, single-file copies, and pruning of
+orphaned subdirs in pi.dev's backup that are no longer in category_map
+(e.g. legacy `hooks/` after rename to `hook/`).
 """
 
 from pathlib import Path
@@ -70,13 +69,36 @@ class TestStagePiExtraPaths:
         assert (dest / "opencode.json").read_text() == '{"name":"opencode"}'
 
     def test_hooks_dir_staged(self, tmp_path: Path) -> None:
-        """hooks/ must be written to configs/pi.dev/hooks/."""
+        """hook/ must be written to configs/pi.dev/hook/."""
         sm = _make_sm(tmp_path / "repo")
         sm._stage_pi_extra_paths(_make_pi_agent(tmp_path))
 
         dest = sm.repo_dir / "configs" / "pi.dev" / "hook"
         assert dest.exists(), f"hook/ not staged at {dest}"
         assert (dest / "hooks.yaml").read_text() == "tool.after.bash: go build"
+
+    def test_orphan_dirs_pruned(self, tmp_path: Path) -> None:
+        """Orphaned subdirs in configs/pi.dev/ are removed after stage.
+
+        Simulates the case where a previous push wrote to `hooks/` but the
+        code now writes to `hook/`. The old `hooks/` must be cleaned up.
+        """
+        sm = _make_sm(tmp_path / "repo")
+        agent = _make_pi_agent(tmp_path)
+        sm._stage_pi_extra_paths(agent)
+
+        # Plant an orphan from a previous push
+        orphan = sm.repo_dir / "configs" / "pi.dev" / "hooks"
+        orphan.mkdir()
+        (orphan / "stale.yaml").write_text("stale")
+        assert orphan.exists()
+
+        # Re-run stage — orphan must be removed
+        sm._stage_pi_extra_paths(agent)
+
+        assert not orphan.exists(), f"orphan not pruned at {orphan}"
+        # And the current hook/ should still be there
+        assert (sm.repo_dir / "configs" / "pi.dev" / "hook" / "hooks.yaml").exists()
 
     def test_extensions_dir_still_staged(self, tmp_path: Path) -> None:
         """Existing extensions/ coverage must not regress."""
