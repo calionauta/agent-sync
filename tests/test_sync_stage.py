@@ -74,8 +74,8 @@ class TestStagePiExtraPaths:
         sm = _make_sm(tmp_path / "repo")
         sm._stage_pi_extra_paths(_make_pi_agent(tmp_path))
 
-        dest = sm.repo_dir / "configs" / "pi.dev" / "hooks"
-        assert dest.exists(), f"hooks/ not staged at {dest}"
+        dest = sm.repo_dir / "configs" / "pi.dev" / "hook"
+        assert dest.exists(), f"hook/ not staged at {dest}"
         assert (dest / "hooks.yaml").read_text() == "tool.after.bash: go build"
 
     def test_extensions_dir_still_staged(self, tmp_path: Path) -> None:

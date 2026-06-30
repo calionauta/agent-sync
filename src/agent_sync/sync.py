@@ -1833,7 +1833,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             "extensions": "extensions",
             "prompts": "prompts",
             "themes": "themes",
-            "hooks": "hooks",
+            "hooks": "hook",
         }
         single_file_map = {
             "lsp_paths": ("lsp-settings.json", "lsp"),
@@ -1894,7 +1894,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             "extensions": "extensions_paths",
             "prompts": "prompts_paths",
             "themes": "themes_paths",
-            "hooks": "hooks_paths",
+            "hook": "hooks_paths",
         }
         single_files = {
             "lsp-settings.json": "lsp_paths",
