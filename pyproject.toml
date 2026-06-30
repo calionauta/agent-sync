@@ -64,6 +64,7 @@ target-version = ["py310", "py311", "py312", "py313", "py314"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 addopts = "-v"
 markers = [
     "integration: integration tests that use real git and filesystem (slower)",
