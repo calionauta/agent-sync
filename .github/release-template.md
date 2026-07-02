@@ -15,7 +15,7 @@ pipx upgrade agent-sync
 # or
 pip install --upgrade agent-sync
 # or
-npx skills update renatocaliari/agent-sync -g
+npx skills update calionauta/agent-sync -g
 ```
 
 ### Changelog

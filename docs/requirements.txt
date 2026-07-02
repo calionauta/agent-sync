@@ -1,5 +1,5 @@
 # Documentation dependencies
-# By cali (Renato Caliari)
+# By cali
 
 mkdocs>=1.5,<2
 mkdocs-material>=9.5,<10

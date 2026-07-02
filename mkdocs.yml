@@ -1,14 +1,14 @@
 # MkDocs configuration for agent-sync documentation
 # https://www.mkdocs.org
-# By cali (Renato Caliari)
+# By cali
 
 site_name: agent-sync
 site_description: Sync, Centralize, and Share AI Agent configurations and skills
-site_author: Cali (Renato Caliari)
-site_url: https://renatocaliari.github.io/agent-sync
+site_author: Cali
+site_url: https://calionauta.github.io/agent-sync
 
-repo_name: renatocaliari/agent-sync
-repo_url: https://github.com/renatocaliari/agent-sync
+repo_name: calionauta/agent-sync
+repo_url: https://github.com/calionauta/agent-sync
 
 # Theme - Material for MkDocs (beautiful, modern)
 theme:
@@ -85,7 +85,7 @@ extra:
   generator: false
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/renatocaliari/agent-sync
+      link: https://github.com/calionauta/agent-sync
 
 # GitHub edit link
 edit_uri: edit/main/docs/

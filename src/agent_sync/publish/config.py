@@ -1,39 +1,37 @@
 from __future__ import annotations
 
-
 """Config file management for publish feature."""
 
 
 import os
 import shutil
 import tempfile
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from dataclasses import dataclass, field
 
 import yaml
 
 from .base import PublishConfig, SourceConfig, SourceStatus
-
 
 CONFIG_PATH = Path.home() / ".config" / "agent-sync" / "publish.yaml"
 
 
 def load_config() -> PublishConfig:
     """Load publish configuration from YAML file.
-    
+
     Returns:
         PublishConfig with defaults if file doesn't exist.
     """
     if not CONFIG_PATH.exists():
         return PublishConfig(published_repo="")
-    
+
     try:
         data = yaml.safe_load(CONFIG_PATH.read_text())
         if not data:
             return PublishConfig(published_repo="")
         return PublishConfig.from_dict(data)
-    except (yaml.YAMLError, KeyError, ValueError) as e:
+    except (yaml.YAMLError, KeyError, ValueError):
         # If config is corrupted, backup and return default
         backup_path = CONFIG_PATH.with_suffix(".yaml.bak")
         shutil.copy2(CONFIG_PATH, backup_path)
@@ -42,20 +40,20 @@ def load_config() -> PublishConfig:
 
 def save_config(config: PublishConfig) -> None:
     """Save publish configuration to YAML file atomically.
-    
+
     Writes to temp file first, then renames for atomic update.
-    
+
     Args:
         config: PublishConfig to save
     """
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Write to temp file first
     fd, tmp_path = tempfile.mkstemp(suffix=".yaml", prefix="publish-")
     try:
         with os.fdopen(fd, "w") as f:
             yaml.dump(config.to_dict(), f, default_flow_style=False, sort_keys=False)
-        
+
         # Atomic rename
         shutil.move(tmp_path, CONFIG_PATH)
     except Exception:
@@ -66,7 +64,7 @@ def save_config(config: PublishConfig) -> None:
 
 def add_source(url: str) -> None:
     """Add a new external source to config.
-    
+
     Args:
         url: GitHub repository URL
     """
@@ -77,10 +75,10 @@ def add_source(url: str) -> None:
 
 def remove_source(url: str) -> bool:
     """Remove an external source from config.
-    
+
     Args:
         url: GitHub repository URL
-        
+
     Returns:
         True if source was removed, False if not found.
     """
@@ -93,7 +91,7 @@ def remove_source(url: str) -> bool:
 
 def list_sources() -> list[SourceConfig]:
     """List all configured external sources.
-    
+
     Returns:
         List of SourceConfig objects.
     """
@@ -103,7 +101,7 @@ def list_sources() -> list[SourceConfig]:
 
 def update_source_status(url: str, status: SourceStatus, last_success: str | None = None) -> None:
     """Update status for a source.
-    
+
     Args:
         url: GitHub repository URL
         status: New status
@@ -124,7 +122,7 @@ def update_source_status(url: str, status: SourceStatus, last_success: str | Non
 
 def get_selected_skills() -> dict[str, list[str]]:
     """Get saved selected skills.
-    
+
     Returns:
         Dict mapping source_id to list of skill names.
     """
@@ -134,7 +132,7 @@ def get_selected_skills() -> dict[str, list[str]]:
 
 def save_selected_skills(selected: dict[str, list[str]]) -> None:
     """Save selected skills configuration.
-    
+
     Args:
         selected: Dict mapping source_id to list of skill names
     """
@@ -145,7 +143,7 @@ def save_selected_skills(selected: dict[str, list[str]]) -> None:
 
 def get_published_repo() -> str:
     """Get the target repo for publishing.
-    
+
     Returns:
         GitHub URL of published repo.
     """
@@ -155,7 +153,7 @@ def get_published_repo() -> str:
 
 def set_published_repo(url: str) -> None:
     """Set the target repo for publishing.
-    
+
     Args:
         url: GitHub repository URL
     """
@@ -168,38 +166,40 @@ def set_published_repo(url: str) -> None:
 # Publish State Manager (session state, saved after successful publish)
 # =============================================================================
 
+
 @dataclass
 class PublishState:
     """State of a publish session.
-    
+
     Tracks what was selected in the last publish operation.
     """
+
     timestamp: Optional[str] = None
     skills: dict[str, list[str]] = field(default_factory=dict)
     agents: dict[str, list[str]] = field(default_factory=dict)
-    
+
     def get_skills_count(self) -> int:
         """Total skills selected."""
         return sum(len(v) for v in self.skills.values())
-    
+
     def get_agents_count(self) -> int:
         """Total agents selected."""
         return sum(len(v) for v in self.agents.values())
-    
+
     def get_total_count(self) -> int:
         """Total items selected."""
         return self.get_skills_count() + self.get_agents_count()
-    
+
     def is_empty(self) -> bool:
         """Check if nothing is selected."""
         return self.get_total_count() == 0
-    
+
     def get_all_source_ids(self) -> set[str]:
         """Get all source IDs with selections."""
         result = set(self.skills.keys())
         result.update(self.agents.keys())
         return result
-    
+
     def to_dict(self) -> dict:
         """Convert to dict for serialization."""
         return {
@@ -207,9 +207,9 @@ class PublishState:
             "skills": self.skills,
             "agents": self.agents,
         }
-    
+
     @classmethod
-    def from_dict(cls, data: Optional[dict]) -> "PublishState":
+    def from_dict(cls, data: Optional[dict]) -> PublishState:
         """Create from dict."""
         if not data:
             return cls()
@@ -222,58 +222,58 @@ class PublishState:
 
 class PublishStateManager:
     """Manages publish state in config.toml.
-    
+
     State is loaded on startup and saved ONLY after successful publish.
     """
-    
+
     @staticmethod
     def load() -> PublishState:
         """Load publish state from config.
-        
+
         Returns:
             PublishState with selections from last successful publish,
             or empty PublishState if none exists.
         """
         config = load_config()
         return PublishState.from_dict(config.selected_skills.get("_last_publish"))
-    
+
     @staticmethod
     def save(skills: dict[str, list[str]], agents: dict[str, list[str]]) -> None:
         """Save publish state to config.
-        
+
         Called ONLY after successful publish operation.
-        
+
         Args:
             skills: Dict of source_id → selected skill names
             agents: Dict of source_id → selected agent names
         """
         config = load_config()
-        
+
         state = PublishState(
             timestamp=datetime.now().isoformat(),
             skills=skills,
             agents=agents,
         )
-        
+
         # Store under _last_publish key (reserved, not a real source)
         config.selected_skills["_last_publish"] = state.to_dict()
         save_config(config)
-    
+
     @staticmethod
     def clear() -> None:
         """Clear publish state from config."""
         config = load_config()
         config.selected_skills.pop("_last_publish", None)
         save_config(config)
-    
+
     @staticmethod
     def get_source_state(state: PublishState, source_id: str) -> set[str]:
         """Get selected items for a specific source.
-        
+
         Args:
             state: The publish state
-            source_id: e.g., "local", "renatocaliari/pi-product-workflow", "agents"
-        
+            source_id: e.g., "local", "calionauta/pi-product-workflow", "agents"
+
         Returns:
             Set of selected item names, empty set if none.
         """

@@ -18,7 +18,7 @@ pipx install agent-sync
 pip install agent-sync
 
 # Then install this skill (for AI agents)
-npx skills add renatocaliari/agent-sync -g
+npx skills add calionauta/agent-sync -g
 ```
 
 ## When to Use
@@ -96,7 +96,7 @@ agent-sync pull
 
 ### Recommended (Global)
 ```bash
-npx skills add renatocaliari/agent-sync -g
+npx skills add calionauta/agent-sync -g
 ```
 
 ### Alternative
@@ -210,5 +210,5 @@ agent-sync setup
 
 ## Learn More
 
-- GitHub: https://github.com/renatocaliari/agent-sync
+- GitHub: https://github.com/calionauta/agent-sync
 - Docs: `docs/` folder in repository

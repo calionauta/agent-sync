@@ -1,11 +1,11 @@
-"""
+r"""
 Security scanner for agent instruction files.
 
 Detects potentially sensitive content before public publishing:
 - Absolute paths (/Users/, /home/, /root/, C:\)
 - API tokens and keys (sk-, ghp_, api_, secret)
 - Internal commands (/skill:, /ctx-, ctx_batch_execute)
-- Server paths (server., .renatocaliari.com)
+- Server paths (server., .calionauta.com)
 
 Smart false-positive reduction:
 - Ignores code blocks (``` ``` ```) - they're documentation, not real values
@@ -24,6 +24,7 @@ from .paths import HUB_DIR
 
 class Issue(TypedDict):
     """Represents a detected security issue."""
+
     rule: str  # e.g., "ABS_PATH_UNIX", "TOKEN_OPENAI"
     severity: str  # "critical" | "high" | "medium" | "low"
     snippet: str  # The matched text (truncated for display)
@@ -34,6 +35,7 @@ class Issue(TypedDict):
 @dataclass
 class ScanResult:
     """Result of scanning a file for sensitive content."""
+
     safe: bool  # True if no critical hardcoded issues found
     issues: list[Issue] = field(default_factory=list)
     summary: str = ""  # Error message if file couldn't be read
@@ -41,18 +43,23 @@ class ScanResult:
 
 # Context patterns to reduce false positives
 # These are applied BEFORE pattern matching to mask false positives
-CODE_BLOCK_PATTERN = re.compile(r'```[\s\S]*?```')
-INLINE_CODE_PATTERN = re.compile(r'`[^`]+`')
-PROCESS_ENV_PATTERN = re.compile(r'process\.env\.\w+', re.IGNORECASE)
-VARIABLE_REF_PATTERN = re.compile(r'\$[A-Z_][A-Z0-9_]*\b|\$\{[^}]+\}')
-PLACEHOLDER_PATTERN = re.compile(r'<(code|value|placeholder|your-[a-z-]+|example)[^>]*>', re.IGNORECASE)
-SECRET_EXAMPLE_PATTERN = re.compile(r'(?i)(secret|password)[-_]?(abc|example|test|123|xxx|demo|sample)', re.IGNORECASE)
+CODE_BLOCK_PATTERN = re.compile(r"```[\s\S]*?```")
+INLINE_CODE_PATTERN = re.compile(r"`[^`]+`")
+PROCESS_ENV_PATTERN = re.compile(r"process\.env\.\w+", re.IGNORECASE)
+VARIABLE_REF_PATTERN = re.compile(r"\$[A-Z_][A-Z0-9_]*\b|\$\{[^}]+\}")
+PLACEHOLDER_PATTERN = re.compile(
+    r"<(code|value|placeholder|your-[a-z-]+|example)[^>]*>", re.IGNORECASE
+)
+SECRET_EXAMPLE_PATTERN = re.compile(
+    r"(?i)(secret|password)[-_]?(abc|example|test|123|xxx|demo|sample)", re.IGNORECASE
+)
 
 
 def _is_valid_skill(skill_name: str) -> bool:
     """Check if a skill exists in the skills directory."""
     skill_path = HUB_DIR / skill_name
     return skill_path.exists()
+
 
 # DEPRECATED: /skill: commands are now treated as legitimate agent commands
 # Kept as noop for backward compatibility
@@ -75,23 +82,23 @@ def _mask_false_positives(content: str) -> tuple[str, dict]:
 
     # Count and mask code blocks
     mask_info["code_blocks"] = len(CODE_BLOCK_PATTERN.findall(content))
-    content = CODE_BLOCK_PATTERN.sub('[CODE_BLOCK_REDACTED]', content)
+    content = CODE_BLOCK_PATTERN.sub("[CODE_BLOCK_REDACTED]", content)
 
     # Count and mask inline code (less aggressive)
     mask_info["env_refs"] = len(PROCESS_ENV_PATTERN.findall(content))
-    content = PROCESS_ENV_PATTERN.sub('[ENV_REF_REDACTED]', content)
+    content = PROCESS_ENV_PATTERN.sub("[ENV_REF_REDACTED]", content)
 
     # Mask variable references like $VAR, ${VAR}
     mask_info["variables"] = len(VARIABLE_REF_PATTERN.findall(content))
-    content = VARIABLE_REF_PATTERN.sub('[VAR_REDACTED]', content)
+    content = VARIABLE_REF_PATTERN.sub("[VAR_REDACTED]", content)
 
     # Mask <placeholder> patterns
     mask_info["placeholders"] = len(PLACEHOLDER_PATTERN.findall(content))
-    content = PLACEHOLDER_PATTERN.sub('[PLACEHOLDER]', content)
+    content = PLACEHOLDER_PATTERN.sub("[PLACEHOLDER]", content)
 
     # Mask example secrets like "secret_abc123", "password_example"
     mask_info["examples"] = len(SECRET_EXAMPLE_PATTERN.findall(content))
-    content = SECRET_EXAMPLE_PATTERN.sub('[EXAMPLE_SECRET]', content)
+    content = SECRET_EXAMPLE_PATTERN.sub("[EXAMPLE_SECRET]", content)
 
     return content, mask_info
 
@@ -100,9 +107,16 @@ def _is_in_masked_region(content: str, match_start: int) -> bool:
     """Check if a match is in a masked region."""
     # Simple check - if nearby there's a redacted marker, skip
     lookback = content[:match_start][-50:] if match_start > 50 else content[:match_start]
-    return any(marker in lookback for marker in [
-        '[CODE_BLOCK', '[ENV_REF', '[VAR_REDACTED]', '[PLACEHOLDER]', '[EXAMPLE_SECRET]'
-    ])
+    return any(
+        marker in lookback
+        for marker in [
+            "[CODE_BLOCK",
+            "[ENV_REF",
+            "[VAR_REDACTED]",
+            "[PLACEHOLDER]",
+            "[EXAMPLE_SECRET]",
+        ]
+    )
 
 
 # Regex patterns for detection
@@ -110,87 +124,153 @@ def _is_in_masked_region(content: str, match_start: int) -> bool:
 # STRICT patterns catch REAL secrets - they run AFTER masking false positives
 PATTERNS: list[tuple[str, str, re.Pattern, str]] = [
     # Absolute paths - always suspicious
-    ("ABS_PATH_UNIX", "high", re.compile(r"/Users/\w+/"),
-     "Contains absolute path that may reveal your home directory"),
-    ("ABS_PATH_HOME", "medium", re.compile(r"/home/\w+/"),
-     "Contains home directory path"),
-    ("ABS_PATH_ROOT", "high", re.compile(r"/root/"),
-     "Contains root directory reference"),
-    ("ABS_PATH_WINDOWS", "high", re.compile(r"[A-Z]:\\[\w\\]+"),
-     "Contains Windows absolute path"),
-
+    (
+        "ABS_PATH_UNIX",
+        "high",
+        re.compile(r"/Users/\w+/"),
+        "Contains absolute path that may reveal your home directory",
+    ),
+    ("ABS_PATH_HOME", "medium", re.compile(r"/home/\w+/"), "Contains home directory path"),
+    ("ABS_PATH_ROOT", "high", re.compile(r"/root/"), "Contains root directory reference"),
+    ("ABS_PATH_WINDOWS", "high", re.compile(r"[A-Z]:\\[\w\\]+"), "Contains Windows absolute path"),
     # REAL tokens - these are NEVER false positives (real key format)
     # OpenAI
-    ("TOKEN_OPENAI", "critical", re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"),
-     "OpenAI API key detected - NEVER publish this!"),
-
+    (
+        "TOKEN_OPENAI",
+        "critical",
+        re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"),
+        "OpenAI API key detected - NEVER publish this!",
+    ),
     # OpenRouter (sk-or- prefix)
-    ("TOKEN_OPENROUTER", "critical", re.compile(r"\bsk-or-[A-Za-z0-9_-]{20,}\b"),
-     "OpenRouter API key detected - NEVER publish this!"),
-    ("TOKEN_OPENROUTER_BEARER", "critical", re.compile(r"Bearer\s+sk-or-[A-Za-z0-9_-]{20,}\b", re.IGNORECASE),
-     "OpenRouter Bearer token detected - NEVER publish this!"),
-
+    (
+        "TOKEN_OPENROUTER",
+        "critical",
+        re.compile(r"\bsk-or-[A-Za-z0-9_-]{20,}\b"),
+        "OpenRouter API key detected - NEVER publish this!",
+    ),
+    (
+        "TOKEN_OPENROUTER_BEARER",
+        "critical",
+        re.compile(r"Bearer\s+sk-or-[A-Za-z0-9_-]{20,}\b", re.IGNORECASE),
+        "OpenRouter Bearer token detected - NEVER publish this!",
+    ),
     # Google AI (Gemini)
-    ("TOKEN_GOOGLE_AI", "critical", re.compile(r"\bAIza[A-Za-z0-9_-]{35}\b"),
-     "Google AI API key detected - NEVER publish this!"),
-
+    (
+        "TOKEN_GOOGLE_AI",
+        "critical",
+        re.compile(r"\bAIza[A-Za-z0-9_-]{35}\b"),
+        "Google AI API key detected - NEVER publish this!",
+    ),
     # Anthropic (Claude)
-    ("TOKEN_ANTHROPIC", "critical", re.compile(r"\bsk-ant-[A-Za-z0-9_-]{20,}\b"),
-     "Anthropic API key detected - NEVER publish this!"),
-
+    (
+        "TOKEN_ANTHROPIC",
+        "critical",
+        re.compile(r"\bsk-ant-[A-Za-z0-9_-]{20,}\b"),
+        "Anthropic API key detected - NEVER publish this!",
+    ),
     # Cohere
-    ("TOKEN_COHERE", "critical", re.compile(r"\bcohere-[A-Za-z0-9_-]{20,}\b"),
-     "Cohere API key detected - NEVER publish this!"),
-
+    (
+        "TOKEN_COHERE",
+        "critical",
+        re.compile(r"\bcohere-[A-Za-z0-9_-]{20,}\b"),
+        "Cohere API key detected - NEVER publish this!",
+    ),
     # Groq
-    ("TOKEN_GROQ", "critical", re.compile(r"\bgsk_[A-Za-z0-9_-]{20,}\b"),
-     "Groq API key detected - NEVER publish this!"),
-
+    (
+        "TOKEN_GROQ",
+        "critical",
+        re.compile(r"\bgsk_[A-Za-z0-9_-]{20,}\b"),
+        "Groq API key detected - NEVER publish this!",
+    ),
     # Hugging Face
-    ("TOKEN_HUGGINGFACE", "critical", re.compile(r"\bhf_[A-Za-z0-9_-]{20,}\b"),
-     "HuggingFace token detected - NEVER publish this!"),
-
+    (
+        "TOKEN_HUGGINGFACE",
+        "critical",
+        re.compile(r"\bhf_[A-Za-z0-9_-]{20,}\b"),
+        "HuggingFace token detected - NEVER publish this!",
+    ),
     # Perplexity
-    ("TOKEN_PERPLEXITY", "critical", re.compile(r"\bpplx-[A-Za-z0-9_-]{20,}\b"),
-     "Perplexity API key detected - NEVER publish this!"),
-
+    (
+        "TOKEN_PERPLEXITY",
+        "critical",
+        re.compile(r"\bpplx-[A-Za-z0-9_-]{20,}\b"),
+        "Perplexity API key detected - NEVER publish this!",
+    ),
     # AWS
-    ("TOKEN_AWS", "critical", re.compile(r"\bAKIA[A-Z0-9]{16}\b"),
-     "AWS Access Key detected - NEVER publish this!"),
-    ("TOKEN_AWS_STS", "critical", re.compile(r"\bASIA[A-Z0-9]{16}\b"),
-     "AWS STS temporary key detected - NEVER publish this!"),
-
+    (
+        "TOKEN_AWS",
+        "critical",
+        re.compile(r"\bAKIA[A-Z0-9]{16}\b"),
+        "AWS Access Key detected - NEVER publish this!",
+    ),
+    (
+        "TOKEN_AWS_STS",
+        "critical",
+        re.compile(r"\bASIA[A-Z0-9]{16}\b"),
+        "AWS STS temporary key detected - NEVER publish this!",
+    ),
     # Stripe
-    ("TOKEN_STRIPE_LIVE", "critical", re.compile(r"\bsk_live_[A-Za-z0-9]{20,}\b"),
-     "Stripe live API key detected - NEVER publish this!"),
-    ("TOKEN_STRIPE_TEST", "high", re.compile(r"\bsk_test_[A-Za-z0-9]{20,}\b"),
-     "Stripe test API key detected - review before publish!"),
-
+    (
+        "TOKEN_STRIPE_LIVE",
+        "critical",
+        re.compile(r"\bsk_live_[A-Za-z0-9]{20,}\b"),
+        "Stripe live API key detected - NEVER publish this!",
+    ),
+    (
+        "TOKEN_STRIPE_TEST",
+        "high",
+        re.compile(r"\bsk_test_[A-Za-z0-9]{20,}\b"),
+        "Stripe test API key detected - review before publish!",
+    ),
     # GitHub
-    ("TOKEN_GITHUB_PAT", "critical", re.compile(r"\bgithub_pat_[A-Za-z0-9_]{82}\b"),
-     "GitHub fine-grained PAT detected - NEVER publish this!"),
-    ("TOKEN_GITHUB", "critical", re.compile(r"\bghp_[A-Za-z0-9]{36}\b"),
-     "GitHub personal access token - NEVER publish this!"),
-    ("TOKEN_GITHUB_ALT", "critical", re.compile(r"\bgho_[A-Za-z0-9]{36}\b"),
-     "GitHub OAuth token detected - NEVER publish this!"),
-
+    (
+        "TOKEN_GITHUB_PAT",
+        "critical",
+        re.compile(r"\bgithub_pat_[A-Za-z0-9_]{82}\b"),
+        "GitHub fine-grained PAT detected - NEVER publish this!",
+    ),
+    (
+        "TOKEN_GITHUB",
+        "critical",
+        re.compile(r"\bghp_[A-Za-z0-9]{36}\b"),
+        "GitHub personal access token - NEVER publish this!",
+    ),
+    (
+        "TOKEN_GITHUB_ALT",
+        "critical",
+        re.compile(r"\bgho_[A-Za-z0-9]{36}\b"),
+        "GitHub OAuth token detected - NEVER publish this!",
+    ),
     # Telegram
-    ("TOKEN_TELEGRAM", "critical", re.compile(r"\b\d{8,10}:[A-Za-z0-9_-]{35}\b"),
-     "Telegram Bot Token detected - NEVER publish this!"),
-
+    (
+        "TOKEN_TELEGRAM",
+        "critical",
+        re.compile(r"\b\d{8,10}:[A-Za-z0-9_-]{35}\b"),
+        "Telegram Bot Token detected - NEVER publish this!",
+    ),
     # Internal commands - these reveal private tooling (NOT /skill: which are public agent commands)
     # /skill: commands are legitimate - they are how agents call skills
-    ("INTERNAL_CMD_CTX", "high", re.compile(r"ctx_(batch_execute|ctx_execute|ctx_search)\s*\("),
-     "Internal ctx command - reveals private tooling"),
-
+    (
+        "INTERNAL_CMD_CTX",
+        "high",
+        re.compile(r"ctx_(batch_execute|ctx_execute|ctx_search)\s*\("),
+        "Internal ctx command - reveals private tooling",
+    ),
     # Server paths - specific private infrastructure
     # Only flag personal domains and clear path patterns
-    ("SERVER_PATH", "medium", re.compile(r"(?i)(renatocaliari\.com|\.internal|\.local|~\.ssh)"),
-     "Private domain or path detected"),
-
+    (
+        "SERVER_PATH",
+        "medium",
+        re.compile(r"(?i)(calionauta\.com|\.internal|\.local|~\.ssh)"),
+        "Private domain or path detected",
+    ),
     # SSH keys - real key format
-    ("SSH_KEY", "critical", re.compile(r"-----BEGIN (RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----"),
-     "SSH private key detected - NEVER publish this!"),
+    (
+        "SSH_KEY",
+        "critical",
+        re.compile(r"-----BEGIN (RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----"),
+        "SSH private key detected - NEVER publish this!",
+    ),
 ]
 
 
@@ -215,10 +295,33 @@ def scan_file(path: Path) -> ScanResult:
         ScanResult with safe status, list of issues found, and any error summary.
     """
     # Skip binary/non-text files
-    if path.suffix in (".pyc", ".pyo", ".pyd", ".so", ".dll", ".dylib", ".exe", ".bin",
-                       ".whl", ".zip", ".tar", ".gz", ".bz2", ".xz",
-                       ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico",
-                       ".pdf", ".doc", ".docx", ".xls", ".xlsx"):
+    if path.suffix in (
+        ".pyc",
+        ".pyo",
+        ".pyd",
+        ".so",
+        ".dll",
+        ".dylib",
+        ".exe",
+        ".bin",
+        ".whl",
+        ".zip",
+        ".tar",
+        ".gz",
+        ".bz2",
+        ".xz",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".bmp",
+        ".ico",
+        ".pdf",
+        ".doc",
+        ".docx",
+        ".xls",
+        ".xlsx",
+    ):
         return ScanResult(safe=True, issues=[], summary="Binary file skipped")
 
     try:
@@ -231,8 +334,13 @@ def scan_file(path: Path) -> ScanResult:
 
     # Track which issues are in masked regions
     masked_regions: list[tuple[int, int]] = []
-    for pattern in [CODE_BLOCK_PATTERN, PROCESS_ENV_PATTERN, VARIABLE_REF_PATTERN,
-                    PLACEHOLDER_PATTERN, SECRET_EXAMPLE_PATTERN]:
+    for pattern in [
+        CODE_BLOCK_PATTERN,
+        PROCESS_ENV_PATTERN,
+        VARIABLE_REF_PATTERN,
+        PLACEHOLDER_PATTERN,
+        SECRET_EXAMPLE_PATTERN,
+    ]:
         for m in pattern.finditer(content):
             masked_regions.append((m.start(), m.end()))
 
@@ -253,14 +361,14 @@ def scan_file(path: Path) -> ScanResult:
             for orig_start, orig_end in masked_regions:
                 if abs(match_pos - orig_start) < 10:  # Close to masked region
                     # Determine context type
-                    lookback = content[max(0, match_pos-30):match_pos].lower()
-                    if 'process.env' in lookback:
+                    lookback = content[max(0, match_pos - 30) : match_pos].lower()
+                    if "process.env" in lookback:
                         context = "variable"
-                    elif '$' in lookback or '${' in lookback:
+                    elif "$" in lookback or "${" in lookback:
                         context = "variable"
-                    elif 'example' in lookback or 'demo' in lookback:
+                    elif "example" in lookback or "demo" in lookback:
                         context = "example"
-                    elif 'code' in lookback or '```' in lookback:
+                    elif "code" in lookback or "```" in lookback:
                         context = "code"
                     break
 
@@ -270,17 +378,21 @@ def scan_file(path: Path) -> ScanResult:
                 # Downgrade variable references and deprecated stuff
                 priority = {"critical": 4, "high": 3, "medium": 2, "low": 1}
                 current_level = priority.get(severity, 2)
-                effective_severity = next((k for k, v in priority.items() if v == current_level - 1), severity)
+                effective_severity = next(
+                    (k for k, v in priority.items() if v == current_level - 1), severity
+                )
                 if current_level <= 2:
                     effective_severity = "low"
-            
-            issues.append(Issue(
-                rule=rule,
-                severity=effective_severity,
-                snippet=snippet,
-                context=context,
-                explanation=explanation
-            ))
+
+            issues.append(
+                Issue(
+                    rule=rule,
+                    severity=effective_severity,
+                    snippet=snippet,
+                    context=context,
+                    explanation=explanation,
+                )
+            )
 
     # Deduplicate by rule+snippet
     seen: set[tuple] = set()
@@ -293,8 +405,7 @@ def scan_file(path: Path) -> ScanResult:
 
     # File is safe if no critical hardcoded issues
     has_critical_hardcoded = any(
-        i["severity"] == "critical" and i.get("context") != "variable"
-        for i in unique
+        i["severity"] == "critical" and i.get("context") != "variable" for i in unique
     )
     safe = len(unique) == 0 or not has_critical_hardcoded
 
@@ -351,9 +462,9 @@ def get_context_icon(context: str) -> str:
     """Get icon for context type."""
     icons = {
         "hardcoded": "🔴",  # Red - real danger
-        "variable": "🟡",   # Yellow - environment variable (safe)
-        "example": "🟠",    # Orange - example value (probably safe)
-        "code": "🟣",       # Purple - in code block (safe)
+        "variable": "🟡",  # Yellow - environment variable (safe)
+        "example": "🟠",  # Orange - example value (probably safe)
+        "code": "🟣",  # Purple - in code block (safe)
     }
     return icons.get(context, "⚪")
 
@@ -373,13 +484,19 @@ def format_issues_for_display(issues: list[Issue]) -> str:
 
         # Format based on context
         if context == "variable":
-            lines.append(f"  • [{color}]{issue['severity']}[/{color}] [{color}]{issue['rule']}[/{color}]: `{snippet}`")
+            lines.append(
+                f"  • [{color}]{issue['severity']}[/{color}] [{color}]{issue['rule']}[/{color}]: `{snippet}`"
+            )
             lines.append(f"    {context_icon} Environment variable reference (safe to publish)")
         elif context == "example":
-            lines.append(f"  • [{color}]{issue['severity']}[/{color}] [{color}]{issue['rule']}[/{color}]: `{snippet}`")
+            lines.append(
+                f"  • [{color}]{issue['severity']}[/{color}] [{color}]{issue['rule']}[/{color}]: `{snippet}`"
+            )
             lines.append(f"    {context_icon} Example/placeholder value (review before publish)")
         else:
-            lines.append(f"  • [{color}]{issue['severity']}[/{color}] [{color}]{issue['rule']}[/{color}]: `{snippet}`")
+            lines.append(
+                f"  • [{color}]{issue['severity']}[/{color}] [{color}]{issue['rule']}[/{color}]: `{snippet}`"
+            )
             if explanation:
                 lines.append(f"    ⚠️  {explanation}")
 
