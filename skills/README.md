@@ -6,14 +6,14 @@ These skills enable `agent-sync` to be used **inside** AI agent CLIs.
 
 ```bash
 # Install the skill (documentation for AI agents)
-npx skills add renatocaliari/agent-sync -g
+npx skills add calionauta/agent-sync -g
 ```
 
 **Note:** This installs the skill documentation only. You still need to install the CLI separately:
 
 ```bash
 # Install CLI tool (required)
-pipx install git+https://github.com/renatocaliari/agent-sync.git
+pipx install git+https://github.com/calionauta/agent-sync.git
 ```
 
 ## What It Does
@@ -53,5 +53,5 @@ agent-sync pull
 
 ## Learn More
 
-- Main repository: https://github.com/renatocaliari/agent-sync
+- Main repository: https://github.com/calionauta/agent-sync
 - Documentation: See `/docs/` folder in repository

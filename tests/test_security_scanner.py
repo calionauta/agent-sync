@@ -1,19 +1,17 @@
 """Tests for security_scanner module."""
 
-import pytest
-from pathlib import Path
-import tempfile
 import os
+import tempfile
+from pathlib import Path
 
 from agent_sync.security_scanner import (
-    ScanResult,
+    PATTERNS,
     Issue,
+    ScanResult,
+    format_issues_for_display,
+    get_severity_color,
     scan_file,
     scan_multiple,
-    scan_and_report,
-    get_severity_color,
-    format_issues_for_display,
-    PATTERNS,
 )
 
 
@@ -41,7 +39,7 @@ class TestScanFile:
 
     def test_safe_file(self):
         """Test scanning a file with no sensitive content."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
             f.write("# Safe content\nJust some regular markdown.")
             temp_path = f.name
 
@@ -55,7 +53,7 @@ class TestScanFile:
 
     def test_detects_unix_path(self):
         """Test detection of Unix absolute paths."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
             f.write("My home directory is /Users/testuser/Projects")
             temp_path = f.name
 
@@ -70,7 +68,7 @@ class TestScanFile:
 
     def test_detects_root_path(self):
         """Test detection of /root/ paths."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
             f.write("Server config at /root/server.yml")
             temp_path = f.name
 
@@ -82,7 +80,7 @@ class TestScanFile:
 
     def test_detects_openai_token(self):
         """Test detection of OpenAI API tokens."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
             f.write("API key: sk-1234567890abcdefghijklmnopqrstuvwxyzAB")
             temp_path = f.name
 
@@ -95,7 +93,7 @@ class TestScanFile:
 
     def test_detects_github_token(self):
         """Test detection of GitHub tokens."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
             f.write("GitHub token: ghp_abcdefghijklmnopqrstuvwxyz1234567890")
             temp_path = f.name
 
@@ -107,7 +105,7 @@ class TestScanFile:
 
     def test_detects_ctx_commands(self):
         """Test detection of ctx_* function calls."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
             f.write("Use ctx_batch_execute() for parallel queries")
             temp_path = f.name
 
@@ -119,8 +117,8 @@ class TestScanFile:
 
     def test_detects_server_path(self):
         """Test detection of server paths."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
-            f.write("Check server.renatocaliari.com for status")
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+            f.write("Check server.calionauta.com for status")
             temp_path = f.name
 
         try:
@@ -131,7 +129,7 @@ class TestScanFile:
 
     def test_deduplication(self):
         """Test that duplicate issues are removed."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
             # Same pattern twice
             f.write("/Users/test/ /Users/test/ /Users/test/")
             temp_path = f.name
@@ -152,7 +150,7 @@ class TestScanFile:
 
     def test_snippet_truncation(self):
         """Test that long snippets are truncated."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
             # Create a very long path
             long_path = "/Users/testuser/" + "a" * 100
             f.write(f"Path: {long_path}")
@@ -176,7 +174,7 @@ class TestScanMultiple:
 
     def test_single_file(self):
         """Test scanning a single file."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
             f.write("Safe content")
             temp_path = f.name
 
@@ -191,7 +189,7 @@ class TestScanMultiple:
         """Test scanning multiple files."""
         paths = []
         for i in range(3):
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
                 f.write(f"Content {i}")
                 paths.append(Path(f.name))
 

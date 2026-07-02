@@ -270,7 +270,7 @@ agent-sync publish --agents    # Publish only agent instructions (NEW!)
   - Absolute paths: `/Users/`, `/home/`, `/root/`, `C:\`
   - API tokens: OpenAI `sk-`, GitHub `ghp_`, `gho_`
   - Internal commands: `/skill:`, `ctx_batch_execute()`, `ctx_search()`
-  - Server paths: `server.`, `.renatocaliari.com`
+  - Server paths: `server.`, `.calionauta.com`
 - **TUI** with security indicators (⚠️ / ✓) per file
 - **Security panel** with options: edit, skip, continue, cancel
 - **Config persistence** for selection

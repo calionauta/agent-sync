@@ -45,10 +45,10 @@ src/agent_sync/
 
 # Repos que contêm skills (fontes)
 skill_sources:
-  - url: https://github.com/renatocaliari/pi-product-workflow
+  - url: https://github.com/calionauta/pi-product-workflow
     status: active              # active | failed | skipped
     last_success: "2026-05-19"
-  - url: https://github.com/renatocaliari/outro-projeto
+  - url: https://github.com/calionauta/outro-projeto
     status: active
     last_success: "2026-05-19"
 
@@ -57,10 +57,10 @@ selected_skills:
   local:
     - cali-product-workflow
     - plannotator-review
-  renatocaliari/pi-product-workflow:
+  calionauta/pi-product-workflow:
     - cali-shape-up
     - cali-short-cycle
-  renatocaliari/outro-projeto:
+  calionauta/outro-projeto:
     - alguma-coisa
 
 # Configurações de cache
@@ -151,12 +151,12 @@ else:
 │    [✓] cali-product-workflow                            │
 │    [✓] plannotator-review                               │
 │                                                         │
-│  🔹 github.com/renatocaliari/pi-product-workflow  ⚠️   │
+│  🔹 github.com/calionauta/pi-product-workflow  ⚠️   │
 │    [✓] cali-shape-up                                    │
 │    [✓] cali-short-cycle                                 │
 │    [ ] cali-opportunity-mapping  (cache de 2026-05-18) │
 │                                                         │
-│  🔹 github.com/renatocaliari/outro-projeto  ✓          │
+│  🔹 github.com/calionauta/outro-projeto  ✓          │
 │    [✓] alguma-coisa                                     │
 │                                                         │
 ├─────────────────────────────────────────────────────────┤

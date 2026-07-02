@@ -1,6 +1,6 @@
 # 🔄 agent-sync
 
-![Tests](https://github.com/renatocaliari/agent-sync/actions/workflows/tests.yml/badge.svg)
+![Tests](https://github.com/calionauta/agent-sync/actions/workflows/tests.yml/badge.svg)
 
 **One tool to rule them all: Sync, Centralize, and Share AI Agent configurations and skills.**
 
@@ -79,9 +79,9 @@ Use these standard names for consistency:
 
 | Purpose | Repository Name | Example |
 |---------|----------------|---------|
-| **CLI Tool** | `agent-sync` | `renatocaliari/agent-sync` |
-| **Private Configs** | `agent-sync-configs` | `renatocaliari/agent-sync-configs` |
-| **Public Skills** | `agent-sync-public` | `renatocaliari/agent-sync-public` |
+| **CLI Tool** | `agent-sync` | `calionauta/agent-sync` |
+| **Private Configs** | `agent-sync-configs` | `calionauta/agent-sync-configs` |
+| **Public Skills** | `agent-sync-public` | `calionauta/agent-sync-public` |
 
 **Why these names?**
 - ✅ **Consistent** - All start with `agent-sync-`
@@ -101,7 +101,7 @@ agent-sync link https://github.com/YOUR_USERNAME/agent-sync-configs.git
 # Note: agent-sync share is for CREATING a public repo, not installing from one.
 # To install skills from a public repo, use npx skills:
 #
-#   npx skills add renatocaliari/agent-sync-public
+#   npx skills add calionauta/agent-sync-public
 #   npx skills add https://github.com/user/skill-repo
 
 agent-sync share add https://github.com/YOUR_USERNAME/agent-sync-public.git
@@ -153,7 +153,7 @@ agent-sync share add https://github.com/YOUR_USERNAME/agent-sync-public.git
 - `share list` - List configured public repositories
 - `share remove <url>` - Remove a public repository
 
-> 💡 **Install skills from public repos**: Use `npx skills add <source>` from [vercel-labs/skills](https://github.com/vercel-labs/skills). Example: `npx skills add renatocaliari/agent-sync-public`
+> 💡 **Install skills from public repos**: Use `npx skills add <source>` from [vercel-labs/skills](https://github.com/vercel-labs/skills). Example: `npx skills add calionauta/agent-sync-public`
 
 #### 📦 Repositories
 - `repos list` - Show ALL repositories (sync + publish) with status
