@@ -21,6 +21,13 @@ from .validators import validate_github_url
 console = Console()
 
 
+def _excluded(name: str, patterns: list[str] | None) -> bool:
+    """True if `name` matches any fnmatch exclusion pattern (e.g. 'stelow*')."""
+    if not patterns:
+        return False
+    return any(fnmatch.fnmatch(name, p) for p in patterns)
+
+
 # ---------------------------------------------------------------------------
 # Token sanitization
 # ---------------------------------------------------------------------------
@@ -202,6 +209,15 @@ class SyncManager:
         # Verify directory was created
         if not self.repo_dir.exists():
             raise RuntimeError(f"Failed to create directory {self.repo_dir}")
+
+    def _exclude_patterns(self, skills_exclude: list[str] | None = None) -> list[str]:
+        """Config-level skill exclusions (skills owned by other tools/repos,
+        e.g. stelow-* from calionauta/stelow) merged with CLI --exclude-skill
+        flags. Always applied so agent-sync never backs up, pulls, or prunes
+        skills whose authoritative source lives elsewhere."""
+        cfg = getattr(self.config, "skills_exclude", None)
+        cfg = cfg if isinstance(cfg, list) else []
+        return list(skills_exclude or []) + cfg
 
     def _run_git(self, *args, cwd: Path | None = None, timeout: int | None = 60) -> str:
         """Run a git command and return output.
@@ -543,7 +559,7 @@ class SyncManager:
 
         # Dry run: show what would change
         if dry_run:
-            self._show_pull_preview(summary)
+            self._show_pull_preview(summary, skills_exclude=skills_exclude)
             return ([], summary)
 
         # Handle skill drifts (before git pull, so we know user intent)
@@ -620,7 +636,7 @@ class SyncManager:
         # This is the inverse of mirror-push. Default off (safety) — user
         # must opt in with --prune to actually delete local skills.
         if prune and not configs_only and not agents_only:
-            local_pruned = self._prune_local_orphan_skills()
+            local_pruned = self._prune_local_orphan_skills(skills_exclude=skills_exclude)
             changes.extend(local_pruned)
             if local_pruned:
                 console.print(
@@ -631,7 +647,9 @@ class SyncManager:
 
         return (changes, summary)
 
-    def _prune_local_orphan_skills(self) -> list[dict]:
+    def _prune_local_orphan_skills(
+        self, skills_exclude: list[str] | None = None
+    ) -> list[dict]:
         """Remove skills from ~/.agents/skills/ that are not in privado.
 
         Inverse of `_prune_orphan_skills` (which cleans privado). Called by
@@ -662,7 +680,10 @@ class SyncManager:
             d.name for d in local_hub.iterdir() if d.is_dir() and not d.name.startswith(".")
         }
 
-        orphan_locals = sorted(local_skill_names - privado_skill_names)
+        patterns = self._exclude_patterns(skills_exclude)
+        orphan_locals = sorted(
+            n for n in (local_skill_names - privado_skill_names) if not _excluded(n, patterns)
+        )
         if not orphan_locals:
             return []
 
@@ -936,7 +957,7 @@ class SyncManager:
             # Apply filter/exclude
             if skills_filter and skill_item.name not in skills_filter:
                 continue
-            if skills_exclude and skill_item.name in skills_exclude:
+            if _excluded(skill_item.name, self._exclude_patterns(skills_exclude)):
                 continue
 
             local_skill = global_skills_dir / skill_item.name
@@ -1071,7 +1092,9 @@ class SyncManager:
                 console.print("[dim]Keeping local skill versions.[/dim]")
                 return False
 
-    def _show_pull_preview(self, summary: PullSummary) -> None:
+    def _show_pull_preview(
+        self, summary: PullSummary, skills_exclude: list[str] | None = None
+    ) -> None:
         """Show a preview of what would be pulled."""
         from rich.console import Console
 
@@ -1096,7 +1119,7 @@ class SyncManager:
         # Local-orphan prune candidates (skills in ~/.agents/skills/ but not in privado).
         # Shown always (independent of --prune) so the user sees the cleanup
         # opportunity even on default pull.
-        local_orphans = self._detect_local_orphan_skills()
+        local_orphans = self._detect_local_orphan_skills(skills_exclude=skills_exclude)
         if local_orphans:
             console.print(
                 f"[yellow]⚠️  {len(local_orphans)} local skill(s) NOT in private repo (use --prune to remove):[/yellow]"
@@ -1122,7 +1145,9 @@ class SyncManager:
             "\n[dim]Run without --dry-run to apply changes. Add --prune to remove local orphans.[/dim]"
         )
 
-    def _detect_local_orphan_skills(self) -> list[str]:
+    def _detect_local_orphan_skills(
+        self, skills_exclude: list[str] | None = None
+    ) -> list[str]:
         """Return the list of skill names in local hub that are missing from privado.
 
         Pure read-only detection — does not touch the filesystem. Used by the
@@ -1140,7 +1165,10 @@ class SyncManager:
         privado_skill_names = {
             d.name for d in synced_skills_dir.iterdir() if d.is_dir() and not d.name.startswith(".")
         }
-        return sorted(local_skill_names - privado_skill_names)
+        patterns = self._exclude_patterns(skills_exclude)
+        return sorted(
+            n for n in (local_skill_names - privado_skill_names) if not _excluded(n, patterns)
+        )
 
     def _handle_conflicts_interactive(self, conflicts: list[PullConflict]) -> None:
         """Handle conflicts interactively with user prompts."""
@@ -1284,7 +1312,7 @@ class SyncManager:
 
         if skills_only and not configs_only:
             console.print(f"  [dim]📦 Syncing {skills_count} skills...[/dim]")
-            self._stage_skills()
+            self._stage_skills(skills_exclude=skills_exclude)
         elif configs_only and not skills_only:
             console.print(f"  [dim]⚙️  Syncing {agents_count} agent configurations...[/dim]")
             self._stage_all_agent_files()
@@ -1293,7 +1321,7 @@ class SyncManager:
             console.print(f"  [dim]⚙️  Syncing {agents_count} agents...[/dim]")
             self._stage_all_agent_files()
             console.print("  [dim]📦 Syncing skills...[/dim]")
-            self._stage_skills()
+            self._stage_skills(skills_exclude=skills_exclude)
             console.print("  [dim]🤖 Syncing custom agent definitions...[/dim]")
             self._stage_agents()
 
@@ -1367,14 +1395,20 @@ class SyncManager:
         # Detect orphan skills (in HEAD but missing from local hub) so the
         # caller can warn the user. We ALWAYS detect (cheap read-only git
         # query); we only actually prune if the user explicitly asked.
-        orphans = self._detect_orphan_skills() if not configs_only and not agents_only else []
+        orphans = (
+            self._detect_orphan_skills(skills_exclude=skills_exclude)
+            if not configs_only and not agents_only
+            else []
+        )
 
         if prune and orphans and not configs_only and not agents_only:
             changed_files.extend(self._prune_orphan_skills(orphans))
 
         return changed_files, orphans
 
-    def _detect_orphan_skills(self) -> list[str]:
+    def _detect_orphan_skills(
+        self, skills_exclude: list[str] | None = None
+    ) -> list[str]:
         """Read-only: return skill names in HEAD but missing from local hub.
 
         Cheaper than `_prune_orphan_skills` because it does not touch the
@@ -1405,9 +1439,14 @@ class SyncManager:
             if bare and not bare.startswith("."):
                 head_skill_names.add(bare)
 
-        return sorted(head_skill_names - local_skill_names)
+        patterns = self._exclude_patterns(skills_exclude)
+        return sorted(
+            n for n in (head_skill_names - local_skill_names) if not _excluded(n, patterns)
+        )
 
-    def _prune_orphan_skills(self, orphans: list[str] | None = None) -> list[dict]:
+    def _prune_orphan_skills(
+        self, orphans: list[str] | None = None, skills_exclude: list[str] | None = None
+    ) -> list[dict]:
         """Stage `git rm --cached` for each orphan skill and return change dicts.
 
         For each orphan skill, `git rm --cached` it (stages the deletion in
@@ -1424,7 +1463,7 @@ class SyncManager:
             label='deleted'.
         """
         if orphans is None:
-            orphans = self._detect_orphan_skills()
+            orphans = self._detect_orphan_skills(skills_exclude=skills_exclude)
         if not orphans:
             return []
 
@@ -2214,7 +2253,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                         dest.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copy2(agent_file, dest)
 
-    def _stage_skills(self) -> None:
+    def _stage_skills(self, skills_exclude: list[str] | None = None) -> None:
         """
         Stage skills for commit, including extension skills.
 
@@ -2266,6 +2305,8 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             for repo_skill in repo_skills_dir.iterdir():
                 if repo_skill.name.startswith("."):
                     continue
+                if _excluded(repo_skill.name, self._exclude_patterns(skills_exclude)):
+                    continue
 
                 # Check if it's a global skill
                 is_global = (global_skills_dir / repo_skill.name).exists()
@@ -2287,6 +2328,8 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
         if global_skills_dir.exists():
             for skill_item in global_skills_dir.iterdir():
                 if skill_item.name.startswith("."):
+                    continue
+                if _excluded(skill_item.name, self._exclude_patterns(skills_exclude)):
                     continue
 
                 dest = repo_skills_dir / skill_item.name
@@ -2872,7 +2915,7 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                 # Apply filter/exclude logic
                 if skills_filter and skill_item.name not in skills_filter:
                     continue
-                if skills_exclude and skill_item.name in skills_exclude:
+                if _excluded(skill_item.name, self._exclude_patterns(skills_exclude)):
                     continue
 
                 dest = global_skills_dir / skill_item.name

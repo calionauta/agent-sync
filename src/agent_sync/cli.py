@@ -1286,8 +1286,17 @@ def audit_skills(as_json: bool, limit: int | None, filter: str | None):
     - in_repo_only: orphan in the repo (run `push --prune` or `skills prune`)
     """
     from .skills_audit import audit_skills as build_audit
+    from .config import Config
+    import fnmatch as _fnmatch
 
     report = build_audit()
+
+    # Skills owned by other tools/repos (config skills_exclude) are never
+    # part of the agent-sync domain, so they are hidden from the audit.
+    _excl = Config().skills_exclude
+
+    def _skip(name: str) -> bool:
+        return any(_fnmatch.fnmatch(name, p) for p in _excl)
 
     if as_json:
         import json as _json
@@ -1306,7 +1315,8 @@ def audit_skills(as_json: bool, limit: int | None, filter: str | None):
                             "status": r.status,
                         }
                         for r in report.rows
-                        if not filter or filter.lower() in r.name.lower()
+                        if not _skip(r.name)
+                        and (not filter or filter.lower() in r.name.lower())
                     ][:limit],
                 },
                 indent=2,
@@ -1322,7 +1332,7 @@ def audit_skills(as_json: bool, limit: int | None, filter: str | None):
     )
 
     # Apply `--filter` (substring match) and `--limit` before rendering
-    filtered_rows = list(report.rows)
+    filtered_rows = [r for r in report.rows if not _skip(r.name)]
     if filter:
         filtered_rows = [r for r in filtered_rows if filter.lower() in r.name.lower()]
     if limit is not None:

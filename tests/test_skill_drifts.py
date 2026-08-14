@@ -330,6 +330,39 @@ class TestDetectSkillDrifts:
             assert len(drifts) == 1
             assert drifts[0].name == "skill-b"
 
+    def test_config_exclude_patterns_skip_matching_skills(self, tmp_path):
+        """Config-level fnmatch patterns (e.g. 'stelow*') are always applied,
+        even without CLI flags, and merge with CLI exclusions."""
+        repo_skills = tmp_path / "repo" / "skills"
+        local_skills = tmp_path / "local" / ".agents" / "skills"
+        repo_skills.mkdir(parents=True)
+        local_skills.mkdir(parents=True)
+
+        for name in ["stelow-product-ads", "stelow-entry", "cali-degustia-x", "skill-b"]:
+            (repo_skills / name).mkdir()
+            (repo_skills / name / "SKILL.md").write_text("remote")
+            (local_skills / name).mkdir()
+            (local_skills / name / "SKILL.md").write_text("local edit")
+
+        mock_config = Mock(spec=Config)
+        mock_config.repo_url = "https://github.com/test/repo"
+        mock_config.app_dir = tmp_path
+        mock_config.state_file = tmp_path / "state.json"
+        mock_config.skills_exclude = ["stelow*", "cali-degustia*"]
+
+        mgr = SyncManager(mock_config)
+        mgr.repo_dir = tmp_path / "repo"
+
+        with patch("agent_sync.paths.HUB_DIR", tmp_path / "local" / ".agents" / "skills"):
+            # No CLI flags: config patterns alone skip stelow*/cali-degustia*
+            drifts = mgr._detect_skill_drifts()
+            assert len(drifts) == 1
+            assert drifts[0].name == "skill-b"
+
+            # CLI flags merge with config patterns
+            drifts = mgr._detect_skill_drifts(skills_exclude=["skill-b"])
+            assert drifts == []
+
 
 class TestApplySyncedSkillsWithDrifts:
     """Tests for _apply_synced_skills with drift-related params."""

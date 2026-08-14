@@ -246,6 +246,15 @@ class Config:
         self.set_agent_config(agent_name, agent_config)
 
     @property
+    def skills_exclude(self) -> list[str]:
+        """Top-level fnmatch patterns of skills agent-sync must never manage
+        (backup / pull / prune). Used for skills whose authoritative source
+        lives in another tool or repo — e.g. `stelow*` (calionauta/stelow),
+        `cali-degustia*` (calionauta/degustia), `kata*` (server-blueprint).
+        Applied on every operation regardless of CLI flags."""
+        return self._config.get("skills_exclude", [])
+
+    @property
     def include_secrets(self) -> bool:
         """Check if secrets sync is enabled."""
         return self._config.get("include_secrets", False)
