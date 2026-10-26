@@ -4,11 +4,13 @@
 
 repos:
   # Check for merge conflicts
+  # NOTE: no `--always-fail` — that flag does not exist in pre-commit-hooks
+  # v5.0.0 (only `--assume-in-merge`), so passing it made the hook abort
+  # with a usage error on every run instead of checking anything.
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
       - id: check-merge-conflict
-        args: ['--always-fail']
 
   # Detect large files
   - repo: https://github.com/pre-commit/pre-commit-hooks

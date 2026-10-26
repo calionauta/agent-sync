@@ -24,7 +24,6 @@ from agent_sync.config import Config
 from agent_sync.skills import SkillsManager
 from agent_sync.sync import SyncManager
 
-
 # ---------------------------------------------------------------------------
 # Test infrastructure
 # ---------------------------------------------------------------------------
@@ -33,12 +32,11 @@ from agent_sync.sync import SyncManager
 def _git(cwd: Path, *args: str) -> str:
     result = subprocess.run(
         ["git", "-C", str(cwd)] + list(args),
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if result.returncode != 0:
-        raise RuntimeError(
-            f"git {' '.join(args)} failed in {cwd}: {result.stderr}"
-        )
+        raise RuntimeError(f"git {' '.join(args)} failed in {cwd}: {result.stderr}")
     return result.stdout
 
 
@@ -135,8 +133,7 @@ def test_01_re_added_skill_survives_loop(tmp_path):
     """
     hub, repo, bare = _build_test_env(tmp_path, seed_skills=["cali-coding-go-stack"])
 
-    with patch("agent_sync.paths.HUB_DIR", hub), \
-         patch("agent_sync.paths.REPO_DIR", repo):
+    with patch("agent_sync.paths.HUB_DIR", hub), patch("agent_sync.paths.REPO_DIR", repo):
         sm = _make_sync_manager(hub, repo, bare)
 
         # 1. Sanity: skill is in the repo, hub is empty
@@ -173,8 +170,7 @@ def test_02_hub_new_skill_pushed_cleanly(tmp_path):
     (hub / "cali-new-skill").mkdir(parents=True)
     (hub / "cali-new-skill" / "SKILL.md").write_text("# cali-new-skill\n")
 
-    with patch("agent_sync.paths.HUB_DIR", hub), \
-         patch("agent_sync.paths.REPO_DIR", repo):
+    with patch("agent_sync.paths.HUB_DIR", hub), patch("agent_sync.paths.REPO_DIR", repo):
         sm = _make_sync_manager(hub, repo, bare)
 
         # Centralize (only sync_from_repo matters here; agents are not configured)
@@ -188,8 +184,9 @@ def test_02_hub_new_skill_pushed_cleanly(tmp_path):
         # method reports whole directories (`skills/`) as untracked `??`
         # rather than individual files. Verify the skill is in the
         # discovered set.
-        skills_changed = [f for f in changed_files
-                          if f["path"] == "skills" or f["path"].startswith("skills/")]
+        skills_changed = [
+            f for f in changed_files if f["path"] == "skills" or f["path"].startswith("skills/")
+        ]
         assert skills_changed, f"Expected skills/ in changes, got: {changed_files}"
 
         # No orphans (hub and repo in sync after push)
@@ -207,16 +204,13 @@ def test_04_detect_orphan_skills(tmp_path):
     """Skill in repo but missing from hub IS an orphan. No manifest
     needed — git history and hub content are the only sources.
     """
-    hub, repo, bare = _build_test_env(
-        tmp_path, seed_skills=["cali-orphan-1", "cali-orphan-2"]
-    )
+    hub, repo, bare = _build_test_env(tmp_path, seed_skills=["cali-orphan-1", "cali-orphan-2"])
 
     # Hub has only one of them
     (hub / "cali-orphan-1").mkdir(parents=True)
     (hub / "cali-orphan-1" / "SKILL.md").write_text("# orphan-1\n")
 
-    with patch("agent_sync.paths.HUB_DIR", hub), \
-         patch("agent_sync.paths.REPO_DIR", repo):
+    with patch("agent_sync.paths.HUB_DIR", hub), patch("agent_sync.paths.REPO_DIR", repo):
         sm = _make_sync_manager(hub, repo, bare)
         orphans = sm._detect_orphan_skills()
 
@@ -233,25 +227,21 @@ def test_05_explicit_prune_removes_orphan(tmp_path):
     """With `prune=True`, an orphan skill IS removed from the repo
     in the same commit. Explicit destructive intent acknowledged.
     """
-    hub, repo, bare = _build_test_env(
-        tmp_path, seed_skills=["cali-ghost"]
-    )
+    hub, repo, bare = _build_test_env(tmp_path, seed_skills=["cali-ghost"])
     # Hub is empty — cali-ghost is orphan from repo's perspective
     assert not (hub / "cali-ghost").exists()
 
-    with patch("agent_sync.paths.HUB_DIR", hub), \
-         patch("agent_sync.paths.REPO_DIR", repo):
+    with patch("agent_sync.paths.HUB_DIR", hub), patch("agent_sync.paths.REPO_DIR", repo):
         sm = _make_sync_manager(hub, repo, bare)
 
-        changed_files, orphans = sm._push_stage_and_get_changes(
-            "prune orphan", prune=True
-        )
+        changed_files, orphans = sm._push_stage_and_get_changes("prune orphan", prune=True)
 
         # The orphan should have been staged for deletion
         assert orphans == ["cali-ghost"] or orphans == []  # empty after prune
         deletes = [f for f in changed_files if f.get("status") == "D"]
-        assert any("cali-ghost" in f["path"] for f in deletes), \
-            f"Expected cali-ghost in deletes, got: {deletes}"
+        assert any(
+            "cali-ghost" in f["path"] for f in deletes
+        ), f"Expected cali-ghost in deletes, got: {deletes}"
 
 
 # ---------------------------------------------------------------------------
@@ -267,13 +257,10 @@ def test_06_full_centralize_then_pull_round_trip(tmp_path):
 
     This is the full circle: source -> hub -> repo -> fresh clone.
     """
-    hub, repo, bare = _build_test_env(
-        tmp_path, seed_skills=["cali-round-trip"]
-    )
+    hub, repo, bare = _build_test_env(tmp_path, seed_skills=["cali-round-trip"])
     assert (repo / "skills" / "cali-round-trip" / "SKILL.md").exists()
 
-    with patch("agent_sync.paths.HUB_DIR", hub), \
-         patch("agent_sync.paths.REPO_DIR", repo):
+    with patch("agent_sync.paths.HUB_DIR", hub), patch("agent_sync.paths.REPO_DIR", repo):
         sm = _make_sync_manager(hub, repo, bare)
         skills_mgr = _make_skills_manager(hub)
 
@@ -309,13 +296,13 @@ def test_07_file_in_skills_dir_not_phantom_orphan(tmp_path):
     _git(repo, "commit", "-m", "add retired manifest file")
     _git(repo, "push", "origin", "main")
 
-    with patch("agent_sync.paths.HUB_DIR", hub), \
-         patch("agent_sync.paths.REPO_DIR", repo):
+    with patch("agent_sync.paths.HUB_DIR", hub), patch("agent_sync.paths.REPO_DIR", repo):
         sm = _make_sync_manager(hub, repo, bare)
         orphans = sm._detect_orphan_skills()
 
-    assert "RETIRED.md" not in orphans, \
-        f"RETIRED.md (a file) should not appear as orphan, got: {orphans}"
+    assert (
+        "RETIRED.md" not in orphans
+    ), f"RETIRED.md (a file) should not appear as orphan, got: {orphans}"
 
 
 # ---------------------------------------------------------------------------
@@ -333,21 +320,16 @@ def test_05_hub_modification_overrides_repo(tmp_path):
     that two different versions coexist before the push; the push
     resolves it by hub-override.
     """
-    hub, repo, bare = _build_test_env(
-        tmp_path, seed_skills=["cali-conflict-skill"]
-    )
+    hub, repo, bare = _build_test_env(tmp_path, seed_skills=["cali-conflict-skill"])
     # Modify the skill in the repo (original content)
     repo_skill_file = repo / "skills" / "cali-conflict-skill" / "SKILL.md"
     assert repo_skill_file.read_text() == "# stub\n"
 
     # Put a different version in the hub
     (hub / "cali-conflict-skill").mkdir(parents=True)
-    (hub / "cali-conflict-skill" / "SKILL.md").write_text(
-        "# local edit version\n"
-    )
+    (hub / "cali-conflict-skill" / "SKILL.md").write_text("# local edit version\n")
 
-    with patch("agent_sync.paths.HUB_DIR", hub), \
-         patch("agent_sync.paths.REPO_DIR", repo):
+    with patch("agent_sync.paths.HUB_DIR", hub), patch("agent_sync.paths.REPO_DIR", repo):
         sm = _make_sync_manager(hub, repo, bare)
 
         # Sanity before push: hub != repo
@@ -358,9 +340,9 @@ def test_05_hub_modification_overrides_repo(tmp_path):
 
         # The local edit should be staged (status M, M, or A depending on
         # how the stage method reports it)
-        skill_changed = [f for f in changed_files
-                         if "cali-conflict-skill" in f["path"]
-                         or f["path"] == "skills"]
+        skill_changed = [
+            f for f in changed_files if "cali-conflict-skill" in f["path"] or f["path"] == "skills"
+        ]
         assert skill_changed, f"Expected the skill to be in changes, got: {changed_files}"
 
         # No orphans (hub and repo are the only sources; both have the skill)
@@ -379,19 +361,15 @@ def test_06_remove_from_hub_then_push_removes_from_repo(tmp_path):
     the deletion to the repo. The skill is then retired (git history)
     and won't be re-imported.
     """
-    hub, repo, bare = _build_test_env(
-        tmp_path, seed_skills=["cali-to-remove"]
-    )
+    hub, repo, bare = _build_test_env(tmp_path, seed_skills=["cali-to-remove"])
     # Copy skill to hub too
-    import shutil
     shutil.copytree(repo / "skills" / "cali-to-remove", hub / "cali-to-remove")
     assert (hub / "cali-to-remove" / "SKILL.md").exists()
 
     # Remove from hub
     shutil.rmtree(hub / "cali-to-remove")
 
-    with patch("agent_sync.paths.HUB_DIR", hub), \
-         patch("agent_sync.paths.REPO_DIR", repo):
+    with patch("agent_sync.paths.HUB_DIR", hub), patch("agent_sync.paths.REPO_DIR", repo):
         sm = _make_sync_manager(hub, repo, bare)
 
         # Default push: the orphan is detected, the changed_files includes
@@ -411,15 +389,16 @@ def test_06_remove_from_hub_then_push_removes_from_repo(tmp_path):
 @pytest.mark.integration
 def test_07_push_then_pull_restores_hub(tmp_path):
     """After push, a pull on a fresh clone restores all skills."""
-    hub, repo, bare = _build_test_env(
-        tmp_path, seed_skills=["cali-backup-1", "cali-backup-2"]
-    )
+    hub, repo, bare = _build_test_env(tmp_path, seed_skills=["cali-backup-1", "cali-backup-2"])
     for s in ["cali-backup-1", "cali-backup-2"]:
         (hub / s).mkdir(parents=True)
         (hub / s / "SKILL.md").write_text(f"# {s}\n")
 
-    with patch("agent_sync.paths.HUB_DIR", hub), \
-         patch("agent_sync.paths.REPO_DIR", repo):
+    with (
+        patch("agent_sync.paths.HUB_DIR", hub),
+        patch("agent_sync.paths.REPO_DIR", repo),
+        patch("agent_sync.skills.get_all_agents", return_value=[]),
+    ):
         sm = _make_sync_manager(hub, repo, bare)
         _cf, orphans = sm._push_stage_and_get_changes("backup")
         assert isinstance(orphans, list)
@@ -446,14 +425,14 @@ def test_08_audit_reflects_test_state(tmp_path):
     """`audit_skills` reports accurate state for a known test setup."""
     from agent_sync.skills_audit import audit_skills
 
-    hub, repo, bare = _build_test_env(
-        tmp_path, seed_skills=["cali-in-sync", "cali-orphan"]
-    )
+    hub, repo, bare = _build_test_env(tmp_path, seed_skills=["cali-in-sync", "cali-orphan"])
     (hub / "cali-in-sync").mkdir(parents=True)
     (hub / "cali-in-sync" / "SKILL.md").write_text("# cali-in-sync\n")
 
-    with patch("agent_sync.skills_audit.HUB_DIR", hub), \
-         patch("agent_sync.skills_audit.REPO_DIR", repo):
+    with (
+        patch("agent_sync.skills_audit.HUB_DIR", hub),
+        patch("agent_sync.skills_audit.REPO_DIR", repo),
+    ):
         report = audit_skills(hub_skills=None, repo_skills=None)
 
     by_name = {r.name: r for r in report.rows}

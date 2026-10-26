@@ -398,7 +398,8 @@ def _print_tui_header(title: str, state: SelectionState) -> None:
     console.print(f"\n[bold cyan]{title}[/]")
     console.print("[dim]────────────────────────────────────────────────────────[/]")
     console.print(
-        f"  Total: [bold]{state.get_total_count()}[/] | Selected: [bold green]{state.get_selected_count()}[/]"
+        f"  Total: [bold]{state.get_total_count()}[/] | "
+        f"Selected: [bold green]{state.get_selected_count()}[/]"
     )
 
     selected_names = state.get_selected_names()

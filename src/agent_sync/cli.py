@@ -63,7 +63,8 @@ def print_full_help(ctx, param, value):
         for cmd in cmds:
             if cmd == "repos":
                 console.print(
-                    "  [cyan]repos[/cyan]             list | target (list | remove) | source (add | list | remove)"
+                    "  [cyan]repos[/cyan]             "
+                    "list | target (list | remove) | source (add | list | remove)"
                 )
             elif cmd == "share":
                 console.print("  [cyan]share[/cyan]              add | list | remove | run")
@@ -254,7 +255,8 @@ def _internal_backup_flow(
             groups["other"].append(f)
 
     console.print(
-        f"\n[bold]\U0001f4e4 Changes to be pushed to [cyan]{config.repo_url.split('/')[-1]}[/cyan]:[/]"
+        f"\n[bold]\U0001f4e4 Changes to be pushed to "
+        f"[cyan]{config.repo_url.split('/')[-1]}[/cyan]:[/]"
     )
 
     def status_label(f):
@@ -377,7 +379,10 @@ def _warn_about_orphans(orphans: list[str]) -> None:
 @click.option(
     "--prune",
     is_flag=True,
-    help="Remove local skills that are missing from the private repo (mirror-pull). Default: preview only.",
+    help=(
+        "Remove local skills that are missing from the private repo "
+        "(mirror-pull). Default: preview only."
+    ),
 )
 def pull(
     force: bool,
@@ -407,11 +412,12 @@ def pull(
       agent-sync pull --prune            # Mirror: also remove local orphans
     """
     config = Config()
-    sync_manager = SyncManager(config)
 
     if not config.repo_url:
         console.print("[red]✗ Not initialized.[/red]")
         return
+
+    sync_manager = SyncManager(config)
 
     # Pass the raw flags directly. With neither flag, both are False and
     # SyncManager.pull runs all three branches (configs, skills, agents).
@@ -1158,7 +1164,8 @@ def list_skills():
     console.print(f"  [dim]└─ {stats['hub_files']} files from hub[/dim]")
     if stats["deleted_from_agents"]:
         console.print(
-            f"  [dim]└─ {stats['deleted_from_agents']} from agents ({stats['agent_files']} files)[/dim]"
+            f"  [dim]└─ {stats['deleted_from_agents']} from agents "
+            f"({stats['agent_files']} files)[/dim]"
         )
     if stats["not_found"]:
         console.print(f"  [yellow]⚠ {stats['not_found']} not found[/yellow]")
@@ -1204,7 +1211,7 @@ def _build_skill_preview_panel(
                         tools = fm.get("allowed-tools", "")
                         if tools:
                             lines.append(f"[dim]tools:[/dim] [yellow]{tools}[/yellow]")
-        except:
+        except Exception:
             pass
 
     try:
@@ -1218,7 +1225,7 @@ def _build_skill_preview_panel(
                 lines.append(f"  [dim]  • {f}[/dim]")
             if len(files) > 5:
                 lines.append(f"  [dim]  ... (+{len(files)-5} more)[/dim]")
-    except:
+    except Exception:
         pass
 
     return Panel(
@@ -1324,7 +1331,7 @@ def audit_skills(as_json: bool, limit: int | None, filter: str | None):
         )
         return
 
-    summary = report.summary_counts()
+    report.summary_counts()
     console.print(
         f"\n[bold]Skills audit[/bold] — "
         f"[green]{report.hub_count}[/green] in hub, "
@@ -1346,14 +1353,14 @@ def audit_skills(as_json: bool, limit: int | None, filter: str | None):
     table.add_column("Repo", justify="center", width=4)
     table.add_column("Status")
 
-    STATUS_DISPLAY = {
+    status_display = {
         "in_sync": ("green", "in sync"),
         "in_hub_only": ("green", "new (will push)"),
         "in_repo_only": ("red", "orphan in repo"),
     }
 
     for row in filtered_rows:
-        color, label = STATUS_DISPLAY.get(row.status, ("dim", row.status))
+        color, label = status_display.get(row.status, ("dim", row.status))
         table.add_row(
             row.name,
             "[green]\u2713[/green]" if row.in_hub else "[dim]\u00b7[/dim]",
@@ -1531,7 +1538,7 @@ def centralize_skills(copy: bool, push: bool, dry_run: bool):
     handler.ensure_structure(dry_run=dry_run)
 
     skills_mgr = SkillsManager()
-    stats = skills_mgr.centralize(dry_run=dry_run, move=not copy)
+    skills_mgr.centralize(dry_run=dry_run, move=not copy)
 
     if dry_run:
         console.print("\n[dim]Dry run — no changes made.[/dim]\n")
@@ -1762,7 +1769,8 @@ def _internal_share_flow(
                 except Exception as push_err:
                     err_msg = _sanitize_git_output(str(push_err))
                     console.print(
-                        f"[yellow]⚠ Private sync failed (public publish already succeeded): {err_msg}[/yellow]"
+                        f"[yellow]⚠ Private sync failed "
+                        f"(public publish already succeeded): {err_msg}[/yellow]"
                     )
                 else:
                     if changed:
@@ -1803,7 +1811,6 @@ def _internal_share_flow(
 def diff(skills: bool, configs: bool):
     """Show differences between local and remote."""
     config = Config()
-    sync_manager = SyncManager(config)
 
     if not config.repo_url:
         console.print("[red]✗ Not initialized.[/red]")
@@ -2159,7 +2166,10 @@ if __name__ == "__main__":
 @click.option(
     "--prune",
     is_flag=True,
-    help="Remove orphan skills from the remote repo (in HEAD but not in local hub). Default: kept additively.",
+    help=(
+        "Remove orphan skills from the remote repo (in HEAD but not in local hub). "
+        "Default: kept additively."
+    ),
 )
 @click.option(
     "--strict",

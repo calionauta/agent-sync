@@ -12,6 +12,11 @@ import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
+from rich.console import Console
+
+from .base import SourceWithSkills
+from .vendored import VendorError, materialize, write_lock
+
 # Default patterns to exclude from publish (private data)
 DEFAULT_IGNORE_PATTERNS = [
     ".git",
@@ -57,11 +62,6 @@ def _ignore_func(*patterns):
 
     return _ignore
 
-
-from rich.console import Console
-
-from .base import SourceWithSkills
-from .vendored import VendorError, materialize, write_lock
 
 console = Console()
 
