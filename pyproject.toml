@@ -55,6 +55,11 @@ packages = ["src/agent_sync"]
 line-length = 100
 target-version = "py310"
 
+# Markdown files carry Python in fenced examples. ruff format would rewrite
+# those snippets (and did, in CI, where the docs are committed), producing
+# churn in prose files that no one asked it to touch.
+extend-exclude = ["*.md", "*.ipynb"]
+
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "RUF100"]
 
