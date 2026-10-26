@@ -1,7 +1,6 @@
-from __future__ import annotations
-
 """Config file management for publish feature."""
 
+from __future__ import annotations
 
 import os
 import shutil
@@ -69,7 +68,7 @@ def add_source(url: str) -> None:
         url: GitHub repository URL
     """
     config = load_config()
-    source = config.add_source(url)
+    config.add_source(url)
     save_config(config)
 
 
@@ -174,7 +173,7 @@ class PublishState:
     Tracks what was selected in the last publish operation.
     """
 
-    timestamp: Optional[str] = None
+    timestamp: str | None = None
     skills: dict[str, list[str]] = field(default_factory=dict)
     agents: dict[str, list[str]] = field(default_factory=dict)
 
@@ -209,7 +208,7 @@ class PublishState:
         }
 
     @classmethod
-    def from_dict(cls, data: Optional[dict]) -> PublishState:
+    def from_dict(cls, data: dict | None) -> PublishState:
         """Create from dict."""
         if not data:
             return cls()

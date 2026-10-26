@@ -1,6 +1,6 @@
 """Agent-specific configurations and handlers (YAML-driven)."""
 
-from typing import Any, Optional
+from typing import Any
 
 from .base import BaseAgent
 from .cline import ClineAgent
@@ -65,5 +65,3 @@ def get_agent(name: str) -> BaseAgent | None:
     if name in registry:
         return _create_agent(name, registry[name])
     return None
-
-

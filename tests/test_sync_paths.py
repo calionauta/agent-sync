@@ -64,13 +64,16 @@ agents_config:
     sync_manager.repo_dir = tmp_path / "repo"
     sync_manager.repo_dir.mkdir()
 
-    agent = BaseAgent("opencode", {
-        "method": "copy",
-        "config_dir": str(agent_home),
-        "config_filename": "opencode.jsonc",
-        "skills_dir_name": "skills",
-        "check": {"always": True}
-    })
+    agent = BaseAgent(
+        "opencode",
+        {
+            "method": "copy",
+            "config_dir": str(agent_home),
+            "config_filename": "opencode.jsonc",
+            "skills_dir_name": "skills",
+            "check": {"always": True},
+        },
+    )
 
     # Stage files
     sync_manager._stage_agent_files(agent)
@@ -110,13 +113,16 @@ agents_config:
     sync_manager.repo_dir = tmp_path / "repo"
     sync_manager.repo_dir.mkdir()
 
-    agent = BaseAgent("opencode", {
-        "method": "copy",
-        "config_dir": str(agent_home),
-        "config_filename": "opencode.jsonc",
-        "skills_dir_name": "skills",
-        "check": {"always": True}
-    })
+    agent = BaseAgent(
+        "opencode",
+        {
+            "method": "copy",
+            "config_dir": str(agent_home),
+            "config_filename": "opencode.jsonc",
+            "skills_dir_name": "skills",
+            "check": {"always": True},
+        },
+    )
 
     # Stage files
     sync_manager._stage_agent_files(agent)
@@ -157,13 +163,16 @@ agents_config:
     sync_manager.repo_dir = tmp_path / "repo"
     sync_manager.repo_dir.mkdir()
 
-    agent = BaseAgent("opencode", {
-        "method": "copy",
-        "config_dir": str(agent_home),
-        "config_filename": "opencode.jsonc",
-        "skills_dir_name": "skills",
-        "check": {"always": True}
-    })
+    agent = BaseAgent(
+        "opencode",
+        {
+            "method": "copy",
+            "config_dir": str(agent_home),
+            "config_filename": "opencode.jsonc",
+            "skills_dir_name": "skills",
+            "check": {"always": True},
+        },
+    )
 
     # Stage files
     sync_manager._stage_agent_files(agent)
@@ -205,13 +214,16 @@ agents_config:
     sync_manager.repo_dir = tmp_path / "repo"
     sync_manager.repo_dir.mkdir()
 
-    agent = BaseAgent("opencode", {
-        "method": "copy",
-        "config_dir": str(agent_home),
-        "config_filename": "opencode.jsonc",
-        "skills_dir_name": "skills",
-        "check": {"always": True}
-    })
+    agent = BaseAgent(
+        "opencode",
+        {
+            "method": "copy",
+            "config_dir": str(agent_home),
+            "config_filename": "opencode.jsonc",
+            "skills_dir_name": "skills",
+            "check": {"always": True},
+        },
+    )
 
     # Stage files
     sync_manager._stage_agent_files(agent)

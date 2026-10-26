@@ -27,7 +27,9 @@ class SetupWizard:
         self.skills_centralized = False
         self.agent_configure_results: dict = {}
 
-    def _step_title(self, step: str, title: str, description: str = "", border: str = "green") -> None:
+    def _step_title(
+        self, step: str, title: str, description: str = "", border: str = "green"
+    ) -> None:
         """Print a standardized step header."""
         body = f"[bold]{step}: {title}[/]"
         if description:
@@ -123,7 +125,9 @@ class SetupWizard:
 
     def _step_select_agents(self) -> None:
         """Step 2: Select agents to sync."""
-        self._step_title("Step 2", "Select Agents to Sync", "Choose which agents you want to synchronize.")
+        self._step_title(
+            "Step 2", "Select Agents to Sync", "Choose which agents you want to synchronize."
+        )
 
         # Show all agents with status
         table = Table(box=box.SIMPLE)
@@ -179,9 +183,12 @@ class SetupWizard:
         Asks once if user wants to sync configs from ALL agents.
         Only asks individually if user declines.
         """
-        self._step_title("Step 4", "Configure Sync Options",
+        self._step_title(
+            "Step 4",
+            "Configure Sync Options",
             "Choose what to sync for each agent.\n"
-            "[dim]Note: Skills are already synced to ~/.agents/skills/ (Step 3)[/dim]")
+            "[dim]Note: Skills are already synced to ~/.agents/skills/ (Step 3)[/dim]",
+        )
 
         # First question: sync configs from ALL agents?
         sync_all_configs = Confirm.ask(
@@ -253,9 +260,12 @@ class SetupWizard:
 
     def _step_centralize_skills(self) -> None:
         """Step 3: Centralize skills to ~/.agents/skills/ (single question)."""
-        self._step_title("Step 3", "Centralizing Skills",
+        self._step_title(
+            "Step 3",
+            "Centralizing Skills",
             "Scanning for existing skills in all agents...\n"
-            "All skills will be centralized to ~/.agents/skills/")
+            "All skills will be centralized to ~/.agents/skills/",
+        )
 
         skills_mgr = SkillsManager()
 
@@ -312,7 +322,11 @@ class SetupWizard:
 
     def _step_auto_configure_agents(self) -> None:
         """Step 5: Configure agents to use global skills (automatic)."""
-        self._step_title("Step 5", "Configuring Agents", "Automatically configuring agents to use global skills...")
+        self._step_title(
+            "Step 5",
+            "Configuring Agents",
+            "Automatically configuring agents to use global skills...",
+        )
 
         skills_mgr = SkillsManager()
         self.agent_configure_results = skills_mgr.configure_agents()
@@ -321,10 +335,13 @@ class SetupWizard:
 
     def _step_repo_settings(self) -> None:
         """Step 6: Repository settings."""
-        self._step_title("Step 6", "Repository Settings",
+        self._step_title(
+            "Step 6",
+            "Repository Settings",
             "[yellow]⚠ SECURITY: Use PRIVATE repository for configs![/yellow]\n\n"
             "Your configs may contain sensitive information.\n"
-            "Private repositories are FREE on GitHub.")
+            "Private repositories are FREE on GitHub.",
+        )
 
         # Repository name
         while True:

@@ -1,8 +1,8 @@
 """Tests for DotAgents handler."""
-import pytest
+
 from pathlib import Path
 
-from agent_sync.centralize.handlers.dot_agents_handler import DotAgentsHandler, DOTAGENTS_GLOBAL
+from agent_sync.centralize.handlers.dot_agents_handler import DOTAGENTS_GLOBAL, DotAgentsHandler
 
 
 class TestDotAgentsHandler:

@@ -1,6 +1,10 @@
 """Security regression tests for agent-sync."""
 
+import subprocess
+from unittest.mock import MagicMock, patch
+
 from agent_sync.skills_delete import SkillsDeleter
+from agent_sync.sync import _sanitize_git_output
 from agent_sync.validators import validate_github_url, validate_repo_name, validate_skill_name
 
 
@@ -103,11 +107,6 @@ def test_skills_deleter_path_traversal_blocking(tmp_path, monkeypatch):
 # Token sanitization tests
 # ---------------------------------------------------------------------------
 
-import subprocess
-from unittest.mock import patch, MagicMock
-
-from agent_sync.sync import _sanitize_git_output
-
 
 def test_sanitize_masks_url_with_token():
     """Verify tokens in remote URLs are masked."""
@@ -165,16 +164,16 @@ def test_run_git_sanitizes_stderr_on_failure(tmp_path):
     fake_result = MagicMock()
     fake_result.returncode = 128
     fake_result.stdout = ""
-    fake_result.stderr = "fatal: https://ghp_SECRET_TOKEN_XXXXXXXXXXXXXXXX@github.com/u/r.git not found"
+    fake_result.stderr = (
+        "fatal: https://ghp_SECRET_TOKEN_XXXXXXXXXXXXXXXX@github.com/u/r.git not found"
+    )
 
     with patch("agent_sync.sync.subprocess.run", return_value=fake_result):
         try:
             sm._run_git("remote", "update")
             assert False, "Should have raised CalledProcessError"
         except subprocess.CalledProcessError as e:
-            assert "ghp_SECRET_TOKEN" not in e.stderr, (
-                "Token leaked through CalledProcessError.stderr!"
-            )
-            assert "***" in e.stderr, (
-                "Sanitization marker missing — stderr was not sanitized"
-            )
+            assert (
+                "ghp_SECRET_TOKEN" not in e.stderr
+            ), "Token leaked through CalledProcessError.stderr!"
+            assert "***" in e.stderr, "Sanitization marker missing — stderr was not sanitized"

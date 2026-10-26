@@ -1,6 +1,5 @@
 """Tests for agent-sync configuration management."""
 
-
 from agent_sync.config import Config
 
 

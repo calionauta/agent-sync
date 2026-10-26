@@ -1,7 +1,5 @@
 """Tests for agents source discovery and publish."""
 
-import pytest
-
 from agent_sync.publish.agents_source import (
     AgentSource,
     AgentSourceStatus,
@@ -50,11 +48,11 @@ class TestDiscoverLocalAgents:
     def test_agent_items_have_required_fields(self):
         """Each agent has required fields."""
         agents = discover_local_agents()
-        
+
         for agent in agents:
-            assert hasattr(agent, 'name')
-            assert hasattr(agent, 'filename')
-            assert hasattr(agent, 'path')
+            assert hasattr(agent, "name")
+            assert hasattr(agent, "filename")
+            assert hasattr(agent, "path")
             assert isinstance(agent.name, str)
             assert isinstance(agent.filename, str)
             assert isinstance(agent.path, str)
@@ -62,10 +60,10 @@ class TestDiscoverLocalAgents:
     def test_agent_names_are_valid(self):
         """Agent names follow expected format."""
         agents = discover_local_agents()
-        
+
         for agent in agents:
             # Names should be lowercase with hyphens or dots
-            assert agent.name.replace('-', '').replace('.', '').isalnum() or '.' in agent.name
+            assert agent.name.replace("-", "").replace(".", "").isalnum() or "." in agent.name
 
 
 class TestGetLocalAgentStatus:

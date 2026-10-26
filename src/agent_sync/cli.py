@@ -1224,7 +1224,7 @@ def _build_skill_preview_panel(
             for f in files[:5]:
                 lines.append(f"  [dim]  • {f}[/dim]")
             if len(files) > 5:
-                lines.append(f"  [dim]  ... (+{len(files)-5} more)[/dim]")
+                lines.append(f"  [dim]  ... (+{len(files) - 5} more)[/dim]")
     except Exception:
         pass
 
@@ -1438,7 +1438,7 @@ def explain_skill_cmd(name: str):
         console.print(f"  Total commits: {expl.commit_count}")
     else:
         console.print(
-            "[dim]No git history for this skill " "(it may only exist in the local hub).[/dim]"
+            "[dim]No git history for this skill (it may only exist in the local hub).[/dim]"
         )
     console.print()
 
@@ -1686,8 +1686,7 @@ def _internal_share_flow(
                 if target is None:
                     known = ", ".join(v.name for v in cfg.vendor_sources) or "none"
                     console.print(
-                        f"[red]✗ Unknown vendored skill: {name}[/red] "
-                        f"[dim](known: {known})[/dim]"
+                        f"[red]✗ Unknown vendored skill: {name}[/red] [dim](known: {known})[/dim]"
                     )
                     raise click.Abort()
                 if target.ref != ref:
@@ -1699,7 +1698,7 @@ def _internal_share_flow(
             if not cfg.vendor_sources:
                 console.print("\n[dim]No vendored sources configured.[/dim]")
                 console.print(
-                    "[dim]Add `vendor_sources:` to publish.yaml " "(name + url + ref).[/dim]\n"
+                    "[dim]Add `vendor_sources:` to publish.yaml (name + url + ref).[/dim]\n"
                 )
             else:
                 console.print("\n[bold]📌 Vendored (pinned) skills[/]\n")

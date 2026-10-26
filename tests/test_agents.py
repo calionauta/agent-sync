@@ -1,6 +1,5 @@
 """Tests for agent-sync agent integrations based on YAML registry."""
 
-
 from agent_sync.agents import (
     BaseAgent,
     get_agent,
@@ -45,7 +44,6 @@ class TestAgentIntegrations:
 
         # Internal should NOT be in the list
         assert "global-skills" not in agent_names
-
 
     def test_get_agent_by_name(self):
         """Test getting specific agent by name."""
@@ -125,13 +123,16 @@ class TestAgentIntegrations:
 
     def test_agent_config_path_structure(self, tmp_path):
         """Test agent config path structure."""
-        agent = BaseAgent("test-agent", {
-            "method": "copy",
-            "config_dir": str(tmp_path),
-            "config_filename": "config.json",
-            "skills_dir_name": "skills",
-            "check": {"binary": "test"}
-        })
+        agent = BaseAgent(
+            "test-agent",
+            {
+                "method": "copy",
+                "config_dir": str(tmp_path),
+                "config_filename": "config.json",
+                "skills_dir_name": "skills",
+                "check": {"binary": "test"},
+            },
+        )
 
         expected_config = tmp_path / "config.json"
         expected_skills = tmp_path / "skills"

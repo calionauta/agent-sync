@@ -8,8 +8,6 @@ the private repo. Default pull (no --prune) is additive only.
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 
 def _make_hub_with(tmp_path: Path, skill_names: list[str]) -> Path:
     """Create a fake ~/.agents/skills/ with the given skill dirs."""
@@ -141,8 +139,8 @@ class TestPruneLocalOrphanSkills:
         # Verify filesystem
         hub = tmp_path / ".agents" / "skills"
         assert (hub / "cali-coding-go-stack").exists()  # kept
-        assert not (hub / "cali-go-stack").exists()      # removed
-        assert not (hub / "cali-starhtml").exists()     # removed
+        assert not (hub / "cali-go-stack").exists()  # removed
+        assert not (hub / "cali-starhtml").exists()  # removed
 
     def test_missing_hub_returns_empty(self, tmp_path):
         """Missing ~/.agents/skills/ → no-op."""
@@ -161,6 +159,7 @@ class TestPullPruneParameter:
     def test_pull_default_prune_false(self):
         """Default prune=False on pull() — safety by default."""
         import inspect
+
         from agent_sync.sync import SyncManager
 
         sig = inspect.signature(SyncManager.pull)

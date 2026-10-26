@@ -1,8 +1,6 @@
 """Tests for agent_discovery module."""
 
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 from agent_sync.agent_discovery import (
     AgentInstructionFile,
@@ -53,7 +51,7 @@ class TestDiscoverAgentInstructions:
         result = discover_agent_instructions()
         assert isinstance(result, list)
 
-    def test_all_items_are_AgentInstructionFile(self):
+    def test_all_items_are_agent_instruction_file(self):
         """Test all returned items are AgentInstructionFile instances."""
         result = discover_agent_instructions()
         for item in result:
@@ -93,7 +91,10 @@ class TestDiscoverAgentInstructions:
         for i in range(len(result) - 1):
             current = result[i]
             next_item = result[i + 1]
-            assert (current.agent_name, current.filename) <= (next_item.agent_name, next_item.filename)
+            assert (current.agent_name, current.filename) <= (
+                next_item.agent_name,
+                next_item.filename,
+            )
 
     def test_exclude_global_skills(self):
         """Test that global-skills (which has no config_dir) is excluded."""

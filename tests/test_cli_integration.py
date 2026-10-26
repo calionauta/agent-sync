@@ -4,13 +4,13 @@ from click.testing import CliRunner
 
 from agent_sync.cli import main
 
-
 runner = CliRunner()
 
 
 # =============================================================================
 # CONFIG - show, repo, edit, reset
 # =============================================================================
+
 
 def test_cli_config_show():
     result = runner.invoke(main, ["config", "show"])
@@ -32,6 +32,7 @@ def test_cli_config_reset_help():
 # SECRETS - list, edit, enable, disable
 # =============================================================================
 
+
 def test_cli_secrets_list():
     result = runner.invoke(main, ["secrets", "list"])
     assert result.exit_code == 0
@@ -52,6 +53,7 @@ def test_cli_secrets_disable():
 # =============================================================================
 # MCP command
 # =============================================================================
+
 
 def test_cli_mcp_help():
     result = runner.invoke(main, ["mcp", "--help"])
@@ -77,6 +79,7 @@ def test_cli_mcp_conflicts():
 # =============================================================================
 # PUSH / PULL - flag presence and basic execution
 # =============================================================================
+
 
 def test_cli_backup_help():
     result = runner.invoke(main, ["backup", "--help"])
@@ -128,6 +131,7 @@ def test_cli_sync_help():
 # SKILLS CENTRALIZE
 # =============================================================================
 
+
 def test_cli_skills_centralize_help():
     result = runner.invoke(main, ["skills", "centralize", "--help"])
     assert result.exit_code == 0
@@ -149,15 +153,16 @@ def test_cli_skills_list_help():
     assert result.exit_code == 0
     assert "skill" in result.output.lower()
 
+
 def test_cli_skills_list_no_crash():
     """skills list should not crash on empty or populated hub."""
     result = runner.invoke(main, ["skills", "list"])
     assert "Traceback" not in result.output
 
 
-
 # All commands visible in --help
 # =============================================================================
+
 
 def test_all_restored_commands_in_help():
     result = runner.invoke(main, ["--help"])
@@ -178,9 +183,12 @@ def test_all_restored_commands_in_help():
 # Empty list truthy fix (backup/pull returning [] should be success)
 # =============================================================================
 
+
 def test_empty_list_is_truthy_for_success():
     """Verify [] != False in Python (this is the root cause of the bug)."""
-    assert [] is not False, "[] is not False - empty list should be truthy for success"
-    assert [] != False
+    empty = []
+    false_value = False
+    assert empty != false_value, "[] is not False - empty list should be truthy for success"
+    assert empty != false_value
     # The correct pattern: if result is not False:
     assert (lambda: [])() is not False

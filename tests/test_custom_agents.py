@@ -116,7 +116,9 @@ class TestCustomAgentsBackup:
             sync_mgr._stage_agents()
 
             # Verify agent is removed from repo
-            assert not (temp_repo / "agents" / "claude-code" / "project" / "test-reviewer.md").exists()
+            assert not (
+                temp_repo / "agents" / "claude-code" / "project" / "test-reviewer.md"
+            ).exists()
 
     def test_sync_mode_installed_cleans_repo_when_not_installed(self, temp_dirs):
         """Test that sync_mode='installed' cleans repo when agent is not installed."""
@@ -259,7 +261,9 @@ class TestCustomAgentsRestore:
 
         shutil.rmtree(temp_home)
 
-    def test_apply_synced_agents_restores_project_agents(self, temp_repo_with_agents, temp_home_dir):
+    def test_apply_synced_agents_restores_project_agents(
+        self, temp_repo_with_agents, temp_home_dir
+    ):
         """Test that _apply_synced_agents restores project-level agents."""
         with patch.dict("os.environ", {"HOME": str(temp_home_dir)}):
             config = Config()
@@ -295,7 +299,9 @@ class TestCustomAgentsRestore:
             # Check changes reported
             assert any("opencode/global" in c for c in changes)
 
-    def test_apply_synced_agents_preserves_directory_structure(self, temp_repo_with_agents, temp_home_dir):
+    def test_apply_synced_agents_preserves_directory_structure(
+        self, temp_repo_with_agents, temp_home_dir
+    ):
         """Test that _apply_synced_agents preserves subdirectory structure."""
         # Create nested agent in repo
         nested_dir = temp_repo_with_agents / "agents" / "claude-code" / "project" / "subdir"
@@ -314,8 +320,10 @@ class TestCustomAgentsRestore:
             nested_file = temp_home_dir / ".claude" / "agents" / "subdir" / "nested-agent.md"
             assert nested_file.exists()
 
-    def test_apply_synced_agents_skips_when_not_installed_and_sync_mode_installed(self, temp_repo_with_agents, temp_home_dir):
-        """Test that _apply_synced_agents skips when agent not installed and sync_mode='installed'."""
+    def test_apply_synced_agents_skips_when_not_installed_and_sync_mode_installed(
+        self, temp_repo_with_agents, temp_home_dir
+    ):
+        """_apply_synced_agents skips when agent not installed and sync_mode='installed'."""
         with patch.dict("os.environ", {"HOME": str(temp_home_dir)}):
             config = Config()
             sync_mgr = SyncManager(config)
@@ -324,7 +332,7 @@ class TestCustomAgentsRestore:
             # sync_mode='installed' (default) - should skip agents without binary
             sync_mgr.config.get_sync_mode = lambda agent_name: "installed"
 
-            changes = sync_mgr._apply_synced_agents()
+            _ = sync_mgr._apply_synced_agents()
 
             # No agents should be restored
             restored_file = temp_home_dir / ".claude" / "agents" / "restored-agent.md"

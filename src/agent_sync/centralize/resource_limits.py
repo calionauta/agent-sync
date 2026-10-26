@@ -15,11 +15,11 @@ from rich.console import Console
 console = Console()
 
 # Limites default
-MAX_SKILLS_PER_BATCH = 100        # Máximo de skills por operação
-MAX_SKILL_SIZE_MB = 500           # Tamanho máximo de uma skill individual (MB)
-MAX_TOTAL_SIZE_MB = 2000          # Tamanho total máximo de um batch (MB)
-MAX_DIR_DEPTH = 10                # Profundidade máxima de diretório
-MIN_DISK_SPACE_MB = 100           # Espaço mínimo em disco para operar (MB)
+MAX_SKILLS_PER_BATCH = 100  # Máximo de skills por operação
+MAX_SKILL_SIZE_MB = 500  # Tamanho máximo de uma skill individual (MB)
+MAX_TOTAL_SIZE_MB = 2000  # Tamanho total máximo de um batch (MB)
+MAX_DIR_DEPTH = 10  # Profundidade máxima de diretório
+MIN_DISK_SPACE_MB = 100  # Espaço mínimo em disco para operar (MB)
 
 
 class ResourceLimitError(Exception):
@@ -88,8 +88,7 @@ def check_skill_limits(
     size_mb = get_skill_size_mb(skill_path)
     if size_mb > max_size_mb:
         warnings.append(
-            f"Skill '{skill_name}' muito grande: {size_mb:.1f}MB "
-            f"(limite: {max_size_mb}MB)"
+            f"Skill '{skill_name}' muito grande: {size_mb:.1f}MB (limite: {max_size_mb}MB)"
         )
 
     # Profundidade
@@ -132,17 +131,13 @@ def check_batch_limits(
     # Tamanho total
     total_mb = sum(get_skill_size_mb(path) for _, path in skills_to_process)
     if total_mb > max_total_mb:
-        warnings.append(
-            f"Tamanho total de {total_mb:.1f}MB excede limite "
-            f"de {max_total_mb}MB"
-        )
+        warnings.append(f"Tamanho total de {total_mb:.1f}MB excede limite de {max_total_mb}MB")
 
     # Espaço em disco
     free_mb = get_free_disk_space_mb(dest_path)
     if free_mb < min_disk_mb:
         warnings.append(
-            f"Espaço em disco insuficiente: {free_mb:.1f}MB livre "
-            f"(mínimo: {min_disk_mb}MB)"
+            f"Espaço em disco insuficiente: {free_mb:.1f}MB livre (mínimo: {min_disk_mb}MB)"
         )
 
     return warnings

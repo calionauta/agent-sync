@@ -1,4 +1,5 @@
 """Export agent-sync config to DotAgents JSON format."""
+
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +22,7 @@ class ConfigExporter:
     def load(self) -> None:
         """Load registry and agents data."""
         from agent_sync.agents.registry_loader import load_registry
+
         self.registry = load_registry()
         self._agents = get_agents()
 

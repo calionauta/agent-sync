@@ -1,4 +1,5 @@
 """MCP config merger for DotAgents compatibility."""
+
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -19,6 +20,7 @@ KNOWN_MCP_LOCATIONS: dict[str, Path] = {
 @dataclass
 class MCPServer:
     """Represents an MCP server definition."""
+
     name: str
     config: dict[str, Any]
     source: Path
@@ -27,6 +29,7 @@ class MCPServer:
 @dataclass
 class MCPConflict:
     """Represents a server name conflict."""
+
     server_name: str
     sources: list[Path] = field(default_factory=list)
     resolution: str = "first"  # first | manual
@@ -68,11 +71,13 @@ class MCPMerger:
                     if name in self.servers:
                         existing = self.conflicts_by_name(name)
                         if not existing:
-                            self.conflicts.append(MCPConflict(
-                                server_name=name,
-                                sources=[self.servers[name].source, source],
-                                resolution=conflict_strategy,
-                            ))
+                            self.conflicts.append(
+                                MCPConflict(
+                                    server_name=name,
+                                    sources=[self.servers[name].source, source],
+                                    resolution=conflict_strategy,
+                                )
+                            )
                         if conflict_strategy == "first":
                             continue  # Keep first, skip duplicates
                     self.servers[name] = MCPServer(

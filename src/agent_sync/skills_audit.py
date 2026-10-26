@@ -19,10 +19,8 @@ from __future__ import annotations
 
 import subprocess
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from .paths import GIT_TIMEOUT, HUB_DIR, REPO_DIR
-
 
 # ---------------------------------------------------------------------------
 # Audit
@@ -37,6 +35,7 @@ class SkillAuditRow:
     A retired suffix is added when the skill is in the git-history
     retired set (deleted in past, not re-added).
     """
+
     name: str
     in_hub: bool
     in_repo: bool
@@ -56,6 +55,7 @@ class SkillAuditRow:
 @dataclass
 class AuditReport:
     """Full audit report with a summary header and per-skill rows."""
+
     rows: list[SkillAuditRow] = field(default_factory=list)
     hub_count: int = 0
     repo_count: int = 0
@@ -70,10 +70,7 @@ class AuditReport:
 def _list_hub_skills() -> set[str]:
     if not HUB_DIR.exists():
         return set()
-    return {
-        d.name for d in HUB_DIR.iterdir()
-        if d.is_dir() and not d.name.startswith(".")
-    }
+    return {d.name for d in HUB_DIR.iterdir() if d.is_dir() and not d.name.startswith(".")}
 
 
 def _list_repo_skills() -> set[str]:
@@ -83,7 +80,9 @@ def _list_repo_skills() -> set[str]:
         result = subprocess.run(
             ["git", "ls-tree", "-d", "--name-only", "HEAD", "skills/"],
             cwd=REPO_DIR,
-            capture_output=True, text=True, timeout=GIT_TIMEOUT,
+            capture_output=True,
+            text=True,
+            timeout=GIT_TIMEOUT,
         )
         if result.returncode != 0:
             return set()
@@ -93,7 +92,7 @@ def _list_repo_skills() -> set[str]:
     for line in result.stdout.splitlines():
         line = line.strip()
         if line.startswith("skills/"):
-            bare = line[len("skills/"):].rstrip("/")
+            bare = line[len("skills/") :].rstrip("/")
             if bare and "/" not in bare and not bare.startswith("."):
                 out.add(bare)
     return out
@@ -141,6 +140,7 @@ def audit_skills(
 @dataclass
 class SkillExplanation:
     """Lifecycle and current-state info for one skill."""
+
     name: str
     in_hub: bool
     in_repo: bool
@@ -158,14 +158,20 @@ def _git_log_for_skill(name: str) -> list[dict]:
         return []
     try:
         result = subprocess.run(
-            ["git", "log",
-             "--follow",
-             "--name-status",
-             "--format=%H|%ad|%s",
-             "--date=iso",
-             "--", f"skills/{name}/"],
+            [
+                "git",
+                "log",
+                "--follow",
+                "--name-status",
+                "--format=%H|%ad|%s",
+                "--date=iso",
+                "--",
+                f"skills/{name}/",
+            ],
             cwd=REPO_DIR,
-            capture_output=True, text=True, timeout=GIT_TIMEOUT,
+            capture_output=True,
+            text=True,
+            timeout=GIT_TIMEOUT,
         )
         if result.returncode != 0:
             return []

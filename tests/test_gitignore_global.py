@@ -1,13 +1,9 @@
 """Tests for .gitignore_global sync (push backup + pull apply)."""
 
-import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, patch, mock_open
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from agent_sync.sync import SyncManager
-
 
 # ---------------------------------------------------------------------------
 # _get_global_gitignore_path
@@ -196,7 +192,7 @@ class TestApplyGitignoreGlobal:
         with patch.object(sm, "_get_global_gitignore_path", return_value=None):
             with patch.object(sm, "_run_git") as mock_git:
                 with patch.object(Path, "home", classmethod(lambda cls: tmp_path)):
-                    changes = sm._apply_gitignore_global(force=True)
+                    _ = sm._apply_gitignore_global(force=True)
 
         assert local.exists()
         assert local.read_text() == remote
@@ -274,7 +270,9 @@ class TestGitignoreGlobalConflictDetection:
 
         with patch.object(sm, "_get_global_gitignore_path", return_value=local):
             with patch.object(sm, "_run_git", return_value="M configs/gitignore_global"):
-                with patch.object(sm, "_get_file_diff_stats", return_value={"added": 1, "removed": 1}):
+                with patch.object(
+                    sm, "_get_file_diff_stats", return_value={"added": 1, "removed": 1}
+                ):
                     conflicts = sm._detect_conflicts()
 
         gitignore_conflicts = [c for c in conflicts if c.filename == "gitignore_global"]

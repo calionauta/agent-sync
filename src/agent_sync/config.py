@@ -1,6 +1,5 @@
 """Configuration management for agent-sync."""
 
-
 from pathlib import Path
 
 import yaml
@@ -11,6 +10,7 @@ def _get_app_name() -> str:
     """Get app name from package metadata (or fallback)."""
     try:
         from importlib.metadata import version
+
         return version("agent-sync").split(".")[0]
     except Exception:
         return "agent-sync"
@@ -118,7 +118,7 @@ class Config:
     @property
     def published_agents(self) -> list[str]:
         """Get list of agent instruction files whitelisted for public publishing.
-        
+
         Format: ["agent:filename", ...]
         e.g., ["pi.dev:AGENTS.md", "gemini-cli:GEMINI.md"]
         """
@@ -226,18 +226,13 @@ class Config:
         agent_config = self.get_agent_config(agent_name)
         return agent_config.get("sync_mode", "installed")
 
-
     def set_sync_mode(self, agent_name: str, mode: str) -> None:
-        """"Set sync mode for a specific agent."""
+        """ "Set sync mode for a specific agent."""
         if mode not in ("installed", "always"):
             raise ValueError("sync_mode must be 'installed' or 'always'")
         agent_config = self.get_agent_config(agent_name)
         agent_config["sync_mode"] = mode
         self.set_agent_config(agent_name, agent_config)
-    def get_skills_method(self, agent_name: str) -> str | None:
-        """Get skills sync method for a specific agent."""
-        agent_config = self.get_agent_config(agent_name)
-        return agent_config.get("skills_method")
 
     def set_skills_method(self, agent_name: str, method: str) -> None:
         """Set skills sync method for a specific agent."""
@@ -311,7 +306,7 @@ class Config:
                     "sync": {
                         "configs": True,
                         # skills: sempre true (global skills)
-                    }
+                    },
                 }
                 for agent in default_agents
             },
@@ -319,7 +314,7 @@ class Config:
             "include_mcp_secrets": False,
             # global_skills: sempre true (implícito)
             # Protocol support (opt-in)
-            "protocols": self._init_protocols_default()
+            "protocols": self._init_protocols_default(),
         }
 
         self._config = default_config
@@ -329,18 +324,24 @@ class Config:
     def _init_protocols_default(self) -> dict:
         """Get default protocols configuration."""
         return {
-            "dotagents": {
-                "enabled": True,
-                "skills_hub": "~/.agents/skills/"
-            },
+            "dotagents": {"enabled": True, "skills_hub": "~/.agents/skills/"},
             "gitagent": {
                 "enabled": False,
                 "patterns": [
-                    "agent.yaml", "SOUL.md", "RULES.md", "DUTIES.md",
-                    "AGENTS.md", "skills/", "knowledge/", "memory/",
-                    "hooks/", "workflows/", "tools/", "compliance/"
-                ]
-            }
+                    "agent.yaml",
+                    "SOUL.md",
+                    "RULES.md",
+                    "DUTIES.md",
+                    "AGENTS.md",
+                    "skills/",
+                    "knowledge/",
+                    "memory/",
+                    "hooks/",
+                    "workflows/",
+                    "tools/",
+                    "compliance/",
+                ],
+            },
         }
 
     def get_protocol_settings(self, protocol: str) -> dict:
@@ -393,5 +394,3 @@ class Config:
             protocol_settings["enabled"] = False
             self._config["protocols"][protocol] = protocol_settings
             self.save()
-
-

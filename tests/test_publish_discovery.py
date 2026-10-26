@@ -1,21 +1,17 @@
 """Tests for discovery module."""
 
-from unittest.mock import MagicMock, patch
 from pathlib import Path
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from agent_sync.publish.discovery import (
-    discover_skills_sources,
-    skills_to_source_infos,
-    build_initial_selection,
+    _truncate_url,
     discover_agents_sources,
     discover_all_sources,
-    load_saved_selection,
-    _truncate_url,
+    discover_skills_sources,
     get_source_label,
+    load_saved_selection,
+    skills_to_source_infos,
 )
-from agent_sync.publish.models import SourceInfo
 
 
 class TestTruncateUrl:
@@ -73,10 +69,10 @@ class TestDiscoverSkillsSources:
         mock_config = MagicMock()
         mock_config.skill_sources = []
         mock_config.cache_dir = Path("/tmp")
-        
+
         with patch("agent_sync.publish.discovery.discover_local_skills", return_value=[]):
             sources = discover_skills_sources(mock_config)
-        
+
         assert any(s.source_id == "local" for s in sources)
 
     def test_local_skills_added(self):
@@ -84,13 +80,13 @@ class TestDiscoverSkillsSources:
         mock_config = MagicMock()
         mock_config.skill_sources = []
         mock_config.cache_dir = Path("/tmp")
-        
+
         mock_skill = MagicMock()
         mock_skill.name = "test-skill"
-        
+
         with patch("agent_sync.publish.discovery.discover_local_skills", return_value=[mock_skill]):
             sources = discover_skills_sources(mock_config)
-        
+
         local_source = next(s for s in sources if s.source_id == "local")
         assert len(local_source.skills) == 1
 
@@ -100,11 +96,11 @@ class TestSkillsToSourceInfos:
 
     def test_converts_local_source(self):
         """Converts local source correctly."""
-        from agent_sync.publish.base import SourceWithSkills, SourceStatus
-        
+        from agent_sync.publish.base import SourceStatus, SourceWithSkills
+
         mock_skill = MagicMock()
         mock_skill.name = "test-skill"
-        
+
         mock_source = SourceWithSkills(
             source_id="local",
             source_url="local",
@@ -112,9 +108,9 @@ class TestSkillsToSourceInfos:
             skills=[mock_skill],
             is_local=True,
         )
-        
+
         infos = skills_to_source_infos([mock_source])
-        
+
         assert len(infos) == 1
         assert infos[0].source_id == "local"
         assert infos[0].label == "LOCAL"
@@ -122,11 +118,11 @@ class TestSkillsToSourceInfos:
 
     def test_converts_external_source(self):
         """Converts external source correctly."""
-        from agent_sync.publish.base import SourceWithSkills, SourceStatus
-        
+        from agent_sync.publish.base import SourceStatus, SourceWithSkills
+
         mock_skill = MagicMock()
         mock_skill.name = "ext-skill"
-        
+
         mock_source = SourceWithSkills(
             source_id="owner/repo",
             source_url="https://github.com/owner/repo",
@@ -135,9 +131,9 @@ class TestSkillsToSourceInfos:
             is_local=False,
             staleness="2 days",
         )
-        
+
         infos = skills_to_source_infos([mock_source])
-        
+
         assert len(infos) == 1
         assert infos[0].source_id == "owner/repo"
         assert "github.com" in infos[0].subtitle
@@ -151,17 +147,17 @@ class TestDiscoverAgentsSources:
         """Returns empty list when no agents."""
         with patch("agent_sync.publish.discovery.discover_local_agents", return_value=[]):
             result = discover_agents_sources()
-        
+
         assert result == []
 
     def test_returns_agents_source(self):
         """Returns agents source when agents exist."""
         mock_agent = MagicMock()
         mock_agent.name = "test-agent"
-        
+
         with patch("agent_sync.publish.discovery.discover_local_agents", return_value=[mock_agent]):
             result = discover_agents_sources()
-        
+
         assert len(result) == 1
         assert result[0].source_id == "agents"
         assert "test-agent" in result[0].items
@@ -175,12 +171,12 @@ class TestDiscoverAllSources:
         mock_config = MagicMock()
         mock_config.skill_sources = []
         mock_config.cache_dir = Path("/tmp")
-        
+
         with patch("agent_sync.publish.discovery.load_config", return_value=mock_config):
             with patch("agent_sync.publish.discovery.discover_local_skills", return_value=[]):
                 with patch("agent_sync.publish.discovery.discover_local_agents", return_value=[]):
                     result = discover_all_sources()
-        
+
         assert isinstance(result, tuple)
         assert len(result) == 3
 
@@ -193,11 +189,13 @@ class TestLoadSavedSelection:
         mock_state = MagicMock()
         mock_state.skills = {}
         mock_state.agents = {}
-        
-        with patch("agent_sync.publish.discovery.PublishStateManager.load", return_value=mock_state):
+
+        with patch(
+            "agent_sync.publish.discovery.PublishStateManager.load", return_value=mock_state
+        ):
             sources = [MagicMock(source_id="local")]
             result = load_saved_selection(sources)
-        
+
         assert result == {"local": set()}
 
     def test_restores_saved_selection(self):
@@ -205,13 +203,15 @@ class TestLoadSavedSelection:
         mock_state = MagicMock()
         mock_state.skills = {"local": ["a", "b"]}
         mock_state.agents = {"agents": ["test-agent"]}
-        
-        with patch("agent_sync.publish.discovery.PublishStateManager.load", return_value=mock_state):
+
+        with patch(
+            "agent_sync.publish.discovery.PublishStateManager.load", return_value=mock_state
+        ):
             sources = [
                 MagicMock(source_id="local"),
                 MagicMock(source_id="agents"),
             ]
             result = load_saved_selection(sources)
-        
+
         assert result["local"] == {"a", "b"}
         assert result["agents"] == {"test-agent"}

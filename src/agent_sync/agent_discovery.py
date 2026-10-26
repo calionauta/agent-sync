@@ -14,6 +14,7 @@ import yaml
 @dataclass
 class AgentInstructionFile:
     """Represents a discovered agent instruction file."""
+
     agent_name: str  # e.g., "pi.dev", "gemini-cli"
     filename: str  # e.g., "AGENTS.md", "GEMINI.md"
     full_path: Path  # e.g., Path.home() / ".pi/agent/AGENTS.md"
@@ -92,12 +93,14 @@ def discover_agent_instructions(
             try:
                 for match in config_dir.glob(pattern):
                     if match.is_file() and not match.name.startswith("."):
-                        results.append(AgentInstructionFile(
-                            agent_name=agent_name,
-                            filename=match.name,
-                            full_path=match,
-                            exists=True,
-                        ))
+                        results.append(
+                            AgentInstructionFile(
+                                agent_name=agent_name,
+                                filename=match.name,
+                                full_path=match,
+                                exists=True,
+                            )
+                        )
             except OSError:
                 # Permission denied or other OS error, skip this pattern
                 continue
@@ -124,12 +127,14 @@ def discover_agent_instructions(
                         # Include agent name in the agent_name for disambiguation
                         # e.g., "claude-code/agents/test-reviewer.md"
                         display_name = f"{agent_name}/{rel_path}"
-                        results.append(AgentInstructionFile(
-                            agent_name=display_name,
-                            filename=str(rel_path),
-                            full_path=md_file,
-                            exists=True,
-                        ))
+                        results.append(
+                            AgentInstructionFile(
+                                agent_name=display_name,
+                                filename=str(rel_path),
+                                full_path=md_file,
+                                exists=True,
+                            )
+                        )
             except OSError:
                 continue
 

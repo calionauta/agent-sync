@@ -36,9 +36,7 @@ def validate_hub_directory(hub_path: Path) -> list[str]:
         return warnings
 
     if not hub_path.is_dir():
-        raise ValidationError(
-            f"Caminho do hub não é um diretório: {hub_path}"
-        )
+        raise ValidationError(f"Caminho do hub não é um diretório: {hub_path}")
 
     # Verificar permissão de escrita
     try:
@@ -46,9 +44,7 @@ def validate_hub_directory(hub_path: Path) -> list[str]:
         test_file.touch()
         test_file.unlink()
     except (OSError, PermissionError) as e:
-        raise ValidationError(
-            f"Sem permissão de escrita no hub: {hub_path} — {e}"
-        )
+        raise ValidationError(f"Sem permissão de escrita no hub: {hub_path} — {e}")
 
     # Verificar espaço em disco (mínimo 10MB)
     try:
@@ -57,8 +53,7 @@ def validate_hub_directory(hub_path: Path) -> list[str]:
         free_mb = free_bytes / (1024 * 1024)
         if free_mb < 10:
             raise ValidationError(
-                f"Espaço em disco insuficiente no hub: {free_mb:.1f}MB livre "
-                f"(mínimo 10MB)"
+                f"Espaço em disco insuficiente no hub: {free_mb:.1f}MB livre (mínimo 10MB)"
             )
     except AttributeError:
         # statvfs não disponível no Windows — ignorar
@@ -82,13 +77,13 @@ def validate_skill_name(name: str) -> str | None:
         return f"Nome de skill muito longo ({len(name)} chars, max 128)"
 
     # Verificar caracteres proibidos
-    forbidden = ['/', '\\', ':', '*', '?', '"', '<', '>', '|', '\x00']
+    forbidden = ["/", "\\", ":", "*", "?", '"', "<", ">", "|", "\x00"]
     for char in forbidden:
         if char in name:
             return f"Nome de skill contém caractere proibido: '{char}'"
 
     # Não pode começar com ponto (arquivo oculto)
-    if name.startswith('.'):
+    if name.startswith("."):
         return "Nome de skill não pode começar com '.'"
 
     return None

@@ -24,13 +24,14 @@ class SkillsDeleter:
     def list_skills(self) -> list[str]:
         """List all skills in the global hub."""
         from .skills_diff import scan_skills_dir
+
         return sorted(scan_skills_dir(self.global_skills_dir))
 
     def count_skill_files(self, skill_path: Path) -> int:
         """Count files in a skill directory."""
         if not skill_path.exists() or not skill_path.is_dir():
             return 0
-        return sum(1 for f in skill_path.rglob('*') if f.is_file())
+        return sum(1 for f in skill_path.rglob("*") if f.is_file())
 
     def _is_safe_path(self, path: Path, base_dir: Path) -> bool:
         """Check if a path is safely contained within a base directory."""
@@ -69,7 +70,9 @@ class SkillsDeleter:
             # Defense-in-depth: validate skill name again
             if not validate_skill_name(skill_name):
                 stats["errors"] += 1
-                console.print(f"[red]✗ Security Alert: Invalid skill name blocked: {skill_name}[/red]")
+                console.print(
+                    f"[red]✗ Security Alert: Invalid skill name blocked: {skill_name}[/red]"
+                )
                 continue
 
             # Delete from hub
@@ -78,7 +81,9 @@ class SkillsDeleter:
             # Path containment check
             if not self._is_safe_path(hub_skill_path, self.global_skills_dir):
                 stats["errors"] += 1
-                console.print(f"[red]✗ Security Alert: Path traversal attempt blocked for {skill_name}[/red]")
+                console.print(
+                    f"[red]✗ Security Alert: Path traversal attempt blocked for {skill_name}[/red]"
+                )
                 continue
 
             if not hub_skill_path.exists():
@@ -94,7 +99,9 @@ class SkillsDeleter:
                     shutil.rmtree(hub_skill_path)
                     stats["deleted_from_hub"] += 1
                     stats["hub_files"] += hub_files
-                    console.print(f"[green]✓ Deleted[/green] {skill_name} from hub ({hub_files} files)")
+                    console.print(
+                        f"[green]✓ Deleted[/green] {skill_name} from hub ({hub_files} files)"
+                    )
                 except Exception as e:
                     stats["errors"] += 1
                     console.print(f"[red]✗ Error deleting {skill_name} from hub: {e}[/red]")
@@ -118,7 +125,10 @@ class SkillsDeleter:
                 # Path containment check for agent directory
                 if not self._is_safe_path(agent_skill_path, agent_skills_path):
                     stats["errors"] += 1
-                    console.print(f"[red]✗ Security Alert: Path traversal attempt blocked for {skill_name} in {agent.name}[/red]")
+                    console.print(
+                        f"[red]✗ Security Alert: Path traversal attempt "
+                        f"blocked for {skill_name} in {agent.name}[/red]"
+                    )
                     continue
 
                 if agent_skill_path.exists():
@@ -136,11 +146,18 @@ class SkillsDeleter:
                             stats["agent_files"] += agent_files
                         except Exception as e:
                             stats["errors"] += 1
-                            console.print(f"[red]✗ Error deleting {skill_name} from {agent.name}: {e}[/red]")
+                            console.print(
+                                f"[red]✗ Error deleting {skill_name} from {agent.name}: {e}[/red]"
+                            )
                     else:
-                        console.print(f"[dim]Would delete {skill_name} from {agent.name} ({agent_files} files)[/dim]")
+                        console.print(
+                            f"[dim]Would delete {skill_name} from "
+                            f"{agent.name} ({agent_files} files)[/dim]"
+                        )
 
             if not dry_run and agent_files_total > 0:
-                console.print(f"[dim]  └─ {agent_files_total} files removed from agent directories[/dim]")
+                console.print(
+                    f"[dim]  └─ {agent_files_total} files removed from agent directories[/dim]"
+                )
 
         return stats

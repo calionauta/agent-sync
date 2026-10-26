@@ -7,7 +7,7 @@ class TestParseMultiselectInput:
     """Test parse_multiselect_input with various inputs."""
 
     def test_done_returns_none(self):
-        """"done" returns None to signal loop exit."""
+        """ "done" returns None to signal loop exit."""
         result = parse_multiselect_input("done", ["a", "b", "c"], {"a"})
         assert result is None
 
@@ -17,19 +17,19 @@ class TestParseMultiselectInput:
         assert result is None
 
     def test_all_selects_everything(self):
-        """"all" returns full set of items."""
+        """ "all" returns full set of items."""
         items = ["a", "b", "c"]
         result = parse_multiselect_input("all", items, set())
         assert result == {"a", "b", "c"}
 
     def test_all_keeps_existing_selections(self):
-        """"all" returns full set even if already partially selected."""
+        """ "all" returns full set even if already partially selected."""
         items = ["a", "b", "c"]
         result = parse_multiselect_input("all", items, {"a"})
         assert result == {"a", "b", "c"}
 
     def test_none_clears_selection(self):
-        """"none" returns empty set."""
+        """ "none" returns empty set."""
         items = ["a", "b", "c"]
         result = parse_multiselect_input("none", items, {"a", "b"})
         assert result == set()
@@ -51,9 +51,9 @@ class TestParseMultiselectInput:
         """Comma-separated numbers toggle multiple items."""
         items = ["a", "b", "c", "d"]
         result = parse_multiselect_input("1,3", items, {"b"})
-        assert "a" in result    # toggled on
-        assert "b" in result    # unchanged
-        assert "c" in result    # toggled on
+        assert "a" in result  # toggled on
+        assert "b" in result  # unchanged
+        assert "c" in result  # toggled on
         assert "d" not in result  # unchanged
         assert len(result) == 3
 
@@ -62,8 +62,8 @@ class TestParseMultiselectInput:
         items = ["a", "b", "c"]
         result = parse_multiselect_input("1,2", items, {"a", "c"})
         assert "a" not in result  # toggled off
-        assert "b" in result      # toggled on
-        assert "c" in result      # unchanged
+        assert "b" in result  # toggled on
+        assert "c" in result  # unchanged
 
     def test_invalid_number_ignored(self):
         """Numbers outside range are silently ignored."""
@@ -78,19 +78,19 @@ class TestParseMultiselectInput:
         assert result == {"a"}
 
     def test_case_insensitive_all(self):
-        """"ALL" works case-insensitively."""
+        """ "ALL" works case-insensitively."""
         items = ["a", "b"]
         result = parse_multiselect_input("ALL", items, set())
         assert result == {"a", "b"}
 
     def test_case_insensitive_none(self):
-        """"NONE" works case-insensitively."""
+        """ "NONE" works case-insensitively."""
         items = ["a", "b"]
         result = parse_multiselect_input("NONE", items, {"a", "b"})
         assert result == set()
 
     def test_case_insensitive_done(self):
-        """"DONE" works case-insensitively."""
+        """ "DONE" works case-insensitively."""
         result = parse_multiselect_input("DONE", ["a"], {"a"})
         assert result is None
 

@@ -1,14 +1,12 @@
 """Tests for the new TUI-based interactive selection system."""
 
-from unittest.mock import MagicMock
-
 from agent_sync.publish.models import (
     SelectionState,
     SourceInfo,
     SourcePickerItem,
     build_picker_items,
-    parse_number_input,
     handle_number_input_for_state,
+    parse_number_input,
 )
 
 
@@ -32,7 +30,7 @@ class TestSelectionState:
         state = SelectionState()
         state.items = {"local": ["a", "b"]}
         state.selected = {"local": set()}
-        
+
         state.toggle("local", "a")
         assert state.is_selected("local", "a")
         assert state.get_selected_count() == 1
@@ -42,7 +40,7 @@ class TestSelectionState:
         state = SelectionState()
         state.items = {"local": ["a"]}
         state.selected = {"local": {"a"}}
-        
+
         state.toggle("local", "a")
         assert not state.is_selected("local", "a")
         assert state.get_selected_count() == 0
@@ -52,7 +50,7 @@ class TestSelectionState:
         state = SelectionState()
         state.items = {"local": ["a", "b"], "ext": ["c"]}
         state.selected = {"local": set(), "ext": set()}
-        
+
         state.select_all()
         assert state.get_selected_count() == 3
 
@@ -61,7 +59,7 @@ class TestSelectionState:
         state = SelectionState()
         state.items = {"local": ["a", "b"]}
         state.selected = {"local": {"a", "b"}}
-        
+
         state.select_none()
         assert state.get_selected_count() == 0
 
@@ -70,7 +68,7 @@ class TestSelectionState:
         state = SelectionState()
         state.items = {"local": ["a", "b"], "ext": ["c"]}
         state.selected = {"local": set(), "ext": set()}
-        
+
         state.select_all_in_source("local")
         assert state.get_selected_count() == 2
         assert state.is_selected("local", "a")
@@ -82,7 +80,7 @@ class TestSelectionState:
         state = SelectionState()
         state.items = {"local": ["a", "b"]}
         state.selected = {"local": {"a", "b"}}
-        
+
         state.select_none_in_source("local")
         assert state.get_selected_count() == 0
 
@@ -91,7 +89,7 @@ class TestSelectionState:
         state = SelectionState()
         state.items = {"local": ["a", "b"], "ext": ["c"]}
         state.build_index()
-        
+
         assert state.item_index[1] == ("local", "a")
         assert state.item_index[2] == ("local", "b")
         assert state.item_index[3] == ("ext", "c")
@@ -102,10 +100,10 @@ class TestSelectionState:
         state.items = {"local": ["a", "b"]}
         state.selected = {"local": set()}
         state.build_index()
-        
+
         state.toggle_by_index(1)
         assert state.is_selected("local", "a")
-        
+
         state.toggle_by_index(1)
         assert not state.is_selected("local", "a")
 
@@ -114,7 +112,7 @@ class TestSelectionState:
         state = SelectionState()
         state.items = {"local": ["c", "a", "b"]}
         state.selected = {"local": {"c", "a"}}
-        
+
         names = state.get_selected_names()
         assert names == ["a", "c"]
 
@@ -123,7 +121,7 @@ class TestSelectionState:
         state = SelectionState()
         state.items = {"local": ["a", "b"]}
         state.selected = {"local": {"b"}}
-        
+
         result = state.get_selection_dict()
         assert result == {"local": ["b"]}
 
@@ -132,10 +130,10 @@ class TestSelectionState:
         state = SelectionState()
         state.items = {"local": ["a", "b", "c"], "ext": ["x", "y"]}
         state.build_index()
-        
+
         local_range = state.get_source_range("local")
         assert local_range == (1, 3)
-        
+
         ext_range = state.get_source_range("ext")
         assert ext_range == (4, 5)
 
@@ -144,7 +142,7 @@ class TestSelectionState:
         state = SelectionState()
         state.items = {"local": ["a", "b"], "ext": ["x", "y", "z"]}
         state.build_index()
-        
+
         ranges = state.get_all_source_ranges()
         assert ranges == {"local": (1, 2), "ext": (3, 5)}
 
@@ -161,7 +159,7 @@ class TestSourceInfo:
             items=["skill1", "skill2"],
             status="active",
         )
-        
+
         assert info.source_id == "local"
         assert info.label == "LOCAL"
         assert len(info.items) == 2
@@ -210,9 +208,9 @@ class TestHandleNumberInputForState:
         state.items = {"local": ["a", "b", "c"]}
         state.selected = {"local": set()}
         state.build_index()
-        
+
         handle_number_input_for_state(state, "local", "1,3")
-        
+
         assert state.is_selected("local", "a")
         assert not state.is_selected("local", "b")
         assert state.is_selected("local", "c")
@@ -223,9 +221,9 @@ class TestHandleNumberInputForState:
         state.items = {"local": ["a", "b", "c"]}
         state.selected = {"local": {"a", "b"}}
         state.build_index()
-        
+
         handle_number_input_for_state(state, "local", "3")
-        
+
         # a and b should be removed, only c selected
         assert not state.is_selected("local", "a")
         assert not state.is_selected("local", "b")
@@ -237,9 +235,9 @@ class TestHandleNumberInputForState:
         state.items = {"local": ["a", "b"]}
         state.selected = {"local": {"a"}}
         state.build_index()
-        
+
         handle_number_input_for_state(state, "local", "invalid")
-        
+
         # Selection unchanged
         assert state.is_selected("local", "a")
         assert not state.is_selected("local", "b")
@@ -257,7 +255,7 @@ class TestSourcePickerItem:
             selected_count=5,
             subtitle="~/.agents/skills/",
         )
-        
+
         assert item.source_id == "local"
         assert item.label == "LOCAL"
         assert item.item_count == 24
@@ -273,7 +271,7 @@ class TestSourcePickerItem:
             selected_count=0,
             is_empty=True,
         )
-        
+
         assert item.is_empty
 
 
@@ -290,9 +288,9 @@ class TestBuildPickerItems:
             "local": {"a"},
             "ext": set(),
         }
-        
+
         items = build_picker_items(sources, selection)
-        
+
         assert len(items) == 2
         assert items[0].source_id == "local"
         assert items[0].item_count == 2
@@ -308,8 +306,8 @@ class TestBuildPickerItems:
             SourceInfo(source_id="ext", label="EXTERNAL", items=["x"]),
         ]
         selection = {"local": set(), "ext": {"x"}}
-        
+
         items = build_picker_items(sources, selection)
-        
+
         assert items[0].is_empty
         assert not items[1].is_empty

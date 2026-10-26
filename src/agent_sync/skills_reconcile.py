@@ -44,7 +44,9 @@ class SkillsReconcile(SkillsDiff):
             console.print("[dim]Choose action for each skill:[/dim]\n")
             for skill in remote_only:
                 console.print(f"  [bold]{skill}[/bold]")
-                choice = Prompt.ask("Action", choices=["l", "r", "s"], default="r", show_choices=False)
+                choice = Prompt.ask(
+                    "Action", choices=["l", "r", "s"], default="r", show_choices=False
+                )
                 if choice == "l":
                     decisions[skill] = "local"
                     console.print("  [red]→ Will delete from remote[/red]")
@@ -57,7 +59,7 @@ class SkillsReconcile(SkillsDiff):
                 console.print()
 
         return decisions
-    
+
     def get_decisions_data(self) -> dict:
         """Get reconciliation data for JSON output."""
         diff_result = self.diff()
@@ -72,7 +74,7 @@ class SkillsReconcile(SkillsDiff):
             "local_count": len(self.get_local_skills()),
             "remote_count": len(self.get_remote_skills()),
         }
-    
+
     def apply_decisions(self, decisions: dict[str, str], dry_run: bool = False) -> dict[str, int]:
         """Apply reconciliation decisions.
 
@@ -85,13 +87,20 @@ class SkillsReconcile(SkillsDiff):
         """
         import shutil
 
-        stats = {"added_to_remote": 0, "downloaded_to_local": 0, "deleted_from_remote": 0, "skipped": 0}
+        stats = {
+            "added_to_remote": 0,
+            "downloaded_to_local": 0,
+            "deleted_from_remote": 0,
+            "skipped": 0,
+        }
 
         for skill_name, action in decisions.items():
             if action == "local":
                 stats["added_to_remote"] += 1
                 if not dry_run:
-                    console.print(f"  [green]✓ {skill_name}[/green] [dim](will add to remote on push)[/dim]")
+                    console.print(
+                        f"  [green]✓ {skill_name}[/green] [dim](will add to remote on push)[/dim]"
+                    )
             elif action == "remote":
                 if self.repo_dir:
                     remote_skill = self.repo_dir / "skills" / skill_name
@@ -101,10 +110,15 @@ class SkillsReconcile(SkillsDiff):
                             self.global_skills_dir.mkdir(parents=True, exist_ok=True)
                             shutil.copytree(remote_skill, local_skill, dirs_exist_ok=True)
                             stats["downloaded_to_local"] += 1
-                            console.print(f"  [green]✓ {skill_name}[/green] [dim](downloaded from remote)[/dim]")
+                            console.print(
+                                f"  [green]✓ {skill_name}[/green] "
+                                f"[dim](downloaded from remote)[/dim]"
+                            )
                     else:
                         stats["skipped"] += 1
-                        console.print(f"  [yellow]⚠ {skill_name}[/yellow] [dim](not found on remote)[/dim]")
+                        console.print(
+                            f"  [yellow]⚠ {skill_name}[/yellow] [dim](not found on remote)[/dim]"
+                        )
             elif action == "skip":
                 stats["skipped"] += 1
                 if not dry_run:
@@ -116,9 +130,14 @@ class SkillsReconcile(SkillsDiff):
         """Show reconciliation summary."""
         console.print("\n[bold]📊 Summary:[/]\n")
         if stats["added_to_remote"] > 0:
-            console.print(f"  [green]✓ {stats['added_to_remote']} skills[/green] will be added to remote (on push)")
+            console.print(
+                f"  [green]✓ {stats['added_to_remote']} "
+                f"skills[/green] will be added to remote (on push)"
+            )
         if stats["downloaded_to_local"] > 0:
-            console.print(f"  [green]✓ {stats['downloaded_to_local']} skills[/green] downloaded to local")
+            console.print(
+                f"  [green]✓ {stats['downloaded_to_local']} skills[/green] downloaded to local"
+            )
         if stats["skipped"] > 0:
             console.print(f"  [yellow]⚠ {stats['skipped']} skills[/yellow] skipped")
         console.print()

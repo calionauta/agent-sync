@@ -1,6 +1,7 @@
 """Tests for repos and publish repos commands."""
 
 from click.testing import CliRunner
+
 from agent_sync.cli import main
 
 runner = CliRunner()

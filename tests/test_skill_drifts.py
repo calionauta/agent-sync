@@ -6,12 +6,13 @@ to _same_content, _compare_skill_dirs, or _detect_skill_drifts must keep
 these passing.
 """
 
-import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
-from agent_sync.sync import SkillDrift, PullSummary, SyncManager
+import pytest
+
 from agent_sync.config import Config
+from agent_sync.sync import PullSummary, SkillDrift, SyncManager
 
 
 class TestSkillDrift:
@@ -60,8 +61,10 @@ class TestPullSummarySkillDrifts:
     def test_has_skill_drifts_true_with_drifts(self):
         """PullSummary with drifts reports true."""
         drift = SkillDrift(
-            name="test", files_changed=1,
-            local_path=Path("/a"), repo_path=Path("/b"),
+            name="test",
+            files_changed=1,
+            local_path=Path("/a"),
+            repo_path=Path("/b"),
         )
         summary = PullSummary(skill_drifts=[drift])
         assert summary.has_skill_drifts is True
@@ -69,8 +72,10 @@ class TestPullSummarySkillDrifts:
     def test_total_changes_includes_skill_drifts(self):
         """total_changes accounts for skill_drifts count."""
         drift = SkillDrift(
-            name="test", files_changed=1,
-            local_path=Path("/a"), repo_path=Path("/b"),
+            name="test",
+            files_changed=1,
+            local_path=Path("/a"),
+            repo_path=Path("/b"),
         )
         summary = PullSummary(skill_drifts=[drift], new_files=3)
         assert summary.total_changes == 4  # 1 drift + 3 new files
@@ -92,7 +97,8 @@ class TestCompareSkillDirs:
         """Directories with same files and same content = no drift."""
         local = tmp_path / "local"
         repo = tmp_path / "repo"
-        local.mkdir(); repo.mkdir()
+        local.mkdir()
+        repo.mkdir()
         (local / "SKILL.md").write_text("hello")
         (repo / "SKILL.md").write_text("hello")
 
@@ -103,7 +109,8 @@ class TestCompareSkillDirs:
         """Different file content returns file_details."""
         local = tmp_path / "local"
         repo = tmp_path / "repo"
-        local.mkdir(); repo.mkdir()
+        local.mkdir()
+        repo.mkdir()
         (local / "SKILL.md").write_text("hello")
         (repo / "SKILL.md").write_text("hello world")
 
@@ -116,7 +123,8 @@ class TestCompareSkillDirs:
         """File only in local shows as change."""
         local = tmp_path / "local"
         repo = tmp_path / "repo"
-        local.mkdir(); repo.mkdir()
+        local.mkdir()
+        repo.mkdir()
         # SKILL.md exists in both with same content (not a change)
         (local / "SKILL.md").write_text("shared")
         (repo / "SKILL.md").write_text("shared")
@@ -133,7 +141,8 @@ class TestCompareSkillDirs:
         """File only in repo shows as change."""
         local = tmp_path / "local"
         repo = tmp_path / "repo"
-        local.mkdir(); repo.mkdir()
+        local.mkdir()
+        repo.mkdir()
         (local / "SKILL.md").write_text("content")
         (repo / "SKILL.md").write_text("content")
         (repo / "helper.py").write_text("helper")
@@ -148,7 +157,8 @@ class TestCompareSkillDirs:
         """Files starting with '.' are skipped."""
         local = tmp_path / "local"
         repo = tmp_path / "repo"
-        local.mkdir(); repo.mkdir()
+        local.mkdir()
+        repo.mkdir()
         (local / "SKILL.md").write_text("same")
         (repo / "SKILL.md").write_text("same")
         (local / ".DS_Store").write_bytes(b"\x00")
@@ -161,10 +171,12 @@ class TestCompareSkillDirs:
         """Files in subdirs are compared recursively."""
         local = tmp_path / "local"
         repo = tmp_path / "repo"
-        local.mkdir(); repo.mkdir()
+        local.mkdir()
+        repo.mkdir()
         (local / "SKILL.md").write_text("same")
         (repo / "SKILL.md").write_text("same")
-        Path(local / "tools").mkdir(); Path(repo / "tools").mkdir()
+        Path(local / "tools").mkdir()
+        Path(repo / "tools").mkdir()
         (local / "tools" / "build.py").write_text("old")
         (repo / "tools" / "build.py").write_text("new version")
 
@@ -464,7 +476,7 @@ class TestApplySyncedSkillsWithDrifts:
 
         with patch("agent_sync.paths.HUB_DIR", local_home / ".agents" / "skills"):
             with patch("agent_sync.sync.console"):
-                changes = mgr._apply_synced_skills(force=True)
+                _ = mgr._apply_synced_skills(force=True)
 
         # Still same content, no unintended change
         local_skill = skills_local / "my-skill" / "SKILL.md"

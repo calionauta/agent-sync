@@ -40,17 +40,21 @@ class TestValidators:
         """Test invalidly formatted GitHub URLs."""
         assert validate_github_url("") is False
         assert validate_github_url("http://github.com/owner/repo") is False  # Must be https
-        assert validate_github_url("https://gitlab.com/owner/repo") is False # Must be github.com
-        assert validate_github_url("https://github.com/owner") is False      # Missing repo
-        assert validate_github_url("https://github.com/owner/repo/extra") is False # Too many parts
-        assert validate_github_url("https://github.com/owner/repo?query=1") is False # No query
-        assert validate_github_url("https://github.com/owner/repo#frag") is False   # No fragment
+        assert validate_github_url("https://gitlab.com/owner/repo") is False  # Must be github.com
+        assert validate_github_url("https://github.com/owner") is False  # Missing repo
+        assert validate_github_url("https://github.com/owner/repo/extra") is False  # Too many parts
+        assert validate_github_url("https://github.com/owner/repo?query=1") is False  # No query
+        assert validate_github_url("https://github.com/owner/repo#frag") is False  # No fragment
 
     def test_validate_github_url_injection_attempts(self):
         """Test URLs with argument injection attempts."""
         assert validate_github_url("https://github.com/owner/repo --upload-pack") is False
-        assert validate_github_url("https://github.com/owner/-repo") is False # Repo starts with hyphen
-        assert validate_github_url("https://github.com/-owner/repo") is False # Owner starts with hyphen
+        assert (
+            validate_github_url("https://github.com/owner/-repo") is False
+        )  # Repo starts with hyphen
+        assert (
+            validate_github_url("https://github.com/-owner/repo") is False
+        )  # Owner starts with hyphen
         assert validate_github_url("https://github.com/owner/repo;ls") is False
         assert validate_github_url("https://github.com/owner/repo\nls") is False
         assert validate_github_url("https://github.com/owner/repo' -oProxyCommand") is False

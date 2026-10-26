@@ -58,11 +58,15 @@ class TestSkillsDiff:
 
     def test_diff_no_differences(self, tmp_path):
         """Both local and remote have same skills."""
-        local = tmp_path / "local"; local.mkdir()
-        repo = tmp_path / "repo"; (repo / "skills").mkdir(parents=True)
+        local = tmp_path / "local"
+        local.mkdir()
+        repo = tmp_path / "repo"
+        (repo / "skills").mkdir(parents=True)
         for name in ["a", "b"]:
-            (local / name).mkdir(); (local / name / "SKILL.md").write_text("")
-            (repo / "skills" / name).mkdir(); (repo / "skills" / name / "SKILL.md").write_text("")
+            (local / name).mkdir()
+            (local / name / "SKILL.md").write_text("")
+            (repo / "skills" / name).mkdir()
+            (repo / "skills" / name / "SKILL.md").write_text("")
 
         diff = self.setup_diff(local, repo)
         result = diff.diff()
@@ -72,9 +76,12 @@ class TestSkillsDiff:
 
     def test_diff_local_only(self, tmp_path):
         """Skills only present locally."""
-        local = tmp_path / "local"; local.mkdir()
-        repo = tmp_path / "repo"; (repo / "skills").mkdir(parents=True)
-        (local / "local-only").mkdir(); (local / "local-only" / "SKILL.md").write_text("")
+        local = tmp_path / "local"
+        local.mkdir()
+        repo = tmp_path / "repo"
+        (repo / "skills").mkdir(parents=True)
+        (local / "local-only").mkdir()
+        (local / "local-only" / "SKILL.md").write_text("")
         diff = self.setup_diff(local, repo)
         result = diff.diff()
         assert result["local_only"] == ["local-only"]
@@ -82,9 +89,12 @@ class TestSkillsDiff:
 
     def test_diff_remote_only(self, tmp_path):
         """Skills only present remotely."""
-        local = tmp_path / "local"; local.mkdir()
-        repo = tmp_path / "repo"; (repo / "skills").mkdir(parents=True)
-        (repo / "skills" / "remote-only").mkdir(); (repo / "skills" / "remote-only" / "SKILL.md").write_text("")
+        local = tmp_path / "local"
+        local.mkdir()
+        repo = tmp_path / "repo"
+        (repo / "skills").mkdir(parents=True)
+        (repo / "skills" / "remote-only").mkdir()
+        (repo / "skills" / "remote-only" / "SKILL.md").write_text("")
         diff = self.setup_diff(local, repo)
         result = diff.diff()
         assert result["local_only"] == []
@@ -118,6 +128,7 @@ class TestSkillsReconcile:
 
     def setup_reconcile(self) -> SkillsDiff:
         from agent_sync.skills_reconcile import SkillsReconcile
+
         rec = SkillsReconcile.__new__(SkillsReconcile)
         rec.global_skills_dir = Path("/nonexistent/local")
         rec.repo_dir = Path("/nonexistent/repo")
@@ -148,11 +159,14 @@ class TestSkillsReconcile:
     def test_apply_decisions_multiple(self):
         """Multiple decisions with mixed actions."""
         rec = self.setup_reconcile()
-        stats = rec.apply_decisions({
-            "a": "local",
-            "b": "skip",
-            "c": "remote",
-        }, dry_run=True)
+        stats = rec.apply_decisions(
+            {
+                "a": "local",
+                "b": "skip",
+                "c": "remote",
+            },
+            dry_run=True,
+        )
         assert stats["added_to_remote"] == 1
         assert stats["skipped"] == 2  # remote (not found) + skip = 2
         assert stats["downloaded_to_local"] == 0

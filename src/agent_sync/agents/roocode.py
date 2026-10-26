@@ -23,5 +23,3 @@ class RooCodeAgent(BaseAgent):
     def __init__(self, name: str, data: dict[str, Any]):
         super().__init__(name, data)
         self.mode_specific = data.get("mode_specific", False)
-
-

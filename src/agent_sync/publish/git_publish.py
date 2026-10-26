@@ -127,7 +127,7 @@ def do_git_publish(
     except VendorError as e:
         console.print(f"\n[red]✗ Vendored source failed: {e}[/]")
         console.print(
-            "[dim]Fix the ref/path in vendor_sources or drop the pin; " "nothing was published.[/]"
+            "[dim]Fix the ref/path in vendor_sources or drop the pin; nothing was published.[/]"
         )
         return False
     except subprocess.CalledProcessError as e:
@@ -276,7 +276,7 @@ def publish_all(
     except VendorError as e:
         console.print(f"\n[red]✗ Vendored source failed: {e}[/]")
         console.print(
-            "[dim]Fix the ref/path in vendor_sources or drop the pin; " "nothing was published.[/]"
+            "[dim]Fix the ref/path in vendor_sources or drop the pin; nothing was published.[/]"
         )
         return False
     except subprocess.CalledProcessError as e:

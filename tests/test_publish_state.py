@@ -1,12 +1,9 @@
 """Tests for PublishStateManager."""
 
-import tempfile
-from pathlib import Path
-
 import pytest
 
-from agent_sync.publish.config import PublishState, PublishStateManager
 from agent_sync.publish.base import PublishConfig
+from agent_sync.publish.config import PublishState, PublishStateManager
 
 
 class TestPublishState:
@@ -104,7 +101,7 @@ class TestPublishStateManager:
             "agent_sync.publish.config.CONFIG_PATH",
             config_path,
         )
-        
+
         state = PublishStateManager.load()
         assert state.is_empty()
 
@@ -115,12 +112,12 @@ class TestPublishStateManager:
             "agent_sync.publish.config.CONFIG_PATH",
             config_path,
         )
-        
+
         skills = {"local": ["a", "b"], "ext": ["c"]}
         agents = {"agents": ["opencode"]}
-        
+
         PublishStateManager.save(skills, agents)
-        
+
         state = PublishStateManager.load()
         assert state.skills == skills
         assert state.agents == agents
@@ -133,13 +130,13 @@ class TestPublishStateManager:
             "agent_sync.publish.config.CONFIG_PATH",
             config_path,
         )
-        
+
         # First save
         PublishStateManager.save({"local": ["a"]}, {"agents": []})
-        
+
         # Second save
         PublishStateManager.save({"local": ["b", "c"]}, {"agents": ["pi.dev"]})
-        
+
         state = PublishStateManager.load()
         assert state.skills == {"local": ["b", "c"]}
         assert state.agents == {"agents": ["pi.dev"]}
@@ -151,13 +148,13 @@ class TestPublishStateManager:
             "agent_sync.publish.config.CONFIG_PATH",
             config_path,
         )
-        
+
         # Save first
         PublishStateManager.save({"local": ["a"]}, {"agents": []})
-        
+
         # Then clear
         PublishStateManager.clear()
-        
+
         state = PublishStateManager.load()
         assert state.is_empty()
 
@@ -168,20 +165,20 @@ class TestPublishStateManager:
             "agent_sync.publish.config.CONFIG_PATH",
             config_path,
         )
-        
+
         PublishStateManager.save(
             {"local": ["a", "b"], "ext": ["c"]},
             {"agents": ["opencode"]},
         )
-        
+
         state = PublishStateManager.load()
-        
+
         local_items = PublishStateManager.get_source_state(state, "local")
         assert local_items == {"a", "b"}
-        
+
         ext_items = PublishStateManager.get_source_state(state, "ext")
         assert ext_items == {"c"}
-        
+
         agents_items = PublishStateManager.get_source_state(state, "agents")
         assert agents_items == {"opencode"}
 
@@ -229,9 +226,7 @@ class TestPublishConfigAutoPushPrivate:
 
     def test_from_dict_explicit_false(self):
         """from_dict respects explicit False value."""
-        cfg = PublishConfig.from_dict(
-            {"published_repo": "https://x", "auto_push_private": False}
-        )
+        cfg = PublishConfig.from_dict({"published_repo": "https://x", "auto_push_private": False})
         assert cfg.auto_push_private is False
 
     def test_roundtrip_preserves_value(self):

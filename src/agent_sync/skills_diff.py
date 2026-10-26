@@ -14,9 +14,9 @@ def scan_skills_dir(skills_dir: Path) -> set[str]:
     if not skills_dir.exists():
         return set()
     return {
-        item.name for item in skills_dir.iterdir()
-        if item.is_dir() and not item.name.startswith(".")
-        and (item / "SKILL.md").exists()
+        item.name
+        for item in skills_dir.iterdir()
+        if item.is_dir() and not item.name.startswith(".") and (item / "SKILL.md").exists()
     }
 
 
@@ -32,6 +32,7 @@ class SkillsDiff:
 
         if self.config.repo_url:
             from .sync import SyncManager
+
             sync_manager = SyncManager(self.config)
             self.repo_dir = sync_manager.repo_dir
 
@@ -64,7 +65,7 @@ class SkillsDiff:
             "remote_only": sorted(list(remote - local)),
             "both": sorted(list(local & remote)),
         }
-    
+
     def get_diff_data(self) -> dict:
         """Get diff data for JSON output."""
         diff_result = self.diff()
@@ -76,7 +77,7 @@ class SkillsDiff:
             "local_count": len(self.get_local_skills()),
             "remote_count": len(self.get_remote_skills()),
         }
-    
+
     def show_diff(self) -> None:
         """Display diff in a formatted table."""
         from rich import box
@@ -92,7 +93,9 @@ class SkillsDiff:
 
         # Local only
         if diff_result["local_only"]:
-            table = Table(box=box.SIMPLE, title="[cyan]Local only[/cyan] (not on GitHub)", title_style="cyan")
+            table = Table(
+                box=box.SIMPLE, title="[cyan]Local only[/cyan] (not on GitHub)", title_style="cyan"
+            )
             table.add_column("Skill Name", style="cyan")
             for skill in diff_result["local_only"]:
                 table.add_row(f"  • {skill}")
@@ -101,7 +104,11 @@ class SkillsDiff:
 
         # Remote only
         if diff_result["remote_only"]:
-            table = Table(box=box.SIMPLE, title="[yellow]Remote only[/yellow] (not local)", title_style="yellow")
+            table = Table(
+                box=box.SIMPLE,
+                title="[yellow]Remote only[/yellow] (not local)",
+                title_style="yellow",
+            )
             table.add_column("Skill Name", style="yellow")
             for skill in diff_result["remote_only"]:
                 table.add_row(f"  • {skill}")
@@ -110,4 +117,7 @@ class SkillsDiff:
 
         # Summary
         console.print("[dim]─────────────────────────────────────────[/dim]")
-        console.print(f"[dim]Local: {len(self.get_local_skills())} skills | Remote: {len(self.get_remote_skills())} skills[/dim]\n")
+        console.print(
+            f"[dim]Local: {len(self.get_local_skills())} skills | "
+            f"Remote: {len(self.get_remote_skills())} skills[/dim]\n"
+        )

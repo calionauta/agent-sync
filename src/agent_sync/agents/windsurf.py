@@ -20,5 +20,3 @@ class WindsurfAgent(BaseAgent):
         super().__init__(name, data)
         self.copy_from = data.get("copy_from", [])
         self.copy_to = self._expand_path(data.get("copy_to", "~/.agents/skills/"))
-
-

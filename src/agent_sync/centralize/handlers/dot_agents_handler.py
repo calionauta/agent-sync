@@ -70,4 +70,6 @@ class DotAgentsHandler:
         """List all .agents/ subdirectories (skills, agents, etc.)."""
         if not self.dotagents_path.exists():
             return []
-        return [p for p in self.dotagents_path.iterdir() if p.is_dir() and not p.name.startswith(".")]
+        return [
+            p for p in self.dotagents_path.iterdir() if p.is_dir() and not p.name.startswith(".")
+        ]

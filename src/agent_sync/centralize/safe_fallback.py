@@ -127,8 +127,7 @@ class Snapshot:
             restored += 1
 
         console.print(
-            f"  [green]♻️  Restauradas {restored} skills do snapshot "
-            f"{self._backup_path.name}[/]"
+            f"  [green]♻️  Restauradas {restored} skills do snapshot {self._backup_path.name}[/]"
         )
         return restored
 
@@ -145,7 +144,11 @@ class Snapshot:
             return 0
 
         snapshots = sorted(
-            [d for d in self.snapshot_dir.iterdir() if d.is_dir() and d.name.startswith("snapshot_")],
+            [
+                d
+                for d in self.snapshot_dir.iterdir()
+                if d.is_dir() and d.name.startswith("snapshot_")
+            ],
             reverse=True,
         )
 

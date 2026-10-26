@@ -11,11 +11,9 @@ Covers:
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 from click.testing import CliRunner
 
 from agent_sync.cli import main
-
 
 runner = CliRunner()
 
@@ -69,15 +67,24 @@ class TestPostPublishSync:
         fake_pub_cfg = MagicMock()
         fake_pub_cfg.auto_push_private = True
 
-        fake_changed = [{"path": "skills/foo/SKILL.md", "status": "M", "label": "modified", "directory_count": None}]
+        fake_changed = [
+            {
+                "path": "skills/foo/SKILL.md",
+                "status": "M",
+                "label": "modified",
+                "directory_count": None,
+            }
+        ]
         fake_sm = MagicMock()
         fake_sm.push.return_value = fake_changed
         fake_sm._run_git.return_value = "abcdef1234567"
 
-        with _mock_publish_setup_returning(True), \
-             patch("agent_sync.cli.Config", return_value=fake_cfg, create=True), \
-             patch("agent_sync.cli.SyncManager", return_value=fake_sm, create=True), \
-             patch("agent_sync.cli._load_pub_config", return_value=fake_pub_cfg, create=True):
+        with (
+            _mock_publish_setup_returning(True),
+            patch("agent_sync.cli.Config", return_value=fake_cfg, create=True),
+            patch("agent_sync.cli.SyncManager", return_value=fake_sm, create=True),
+            patch("agent_sync.cli._load_pub_config", return_value=fake_pub_cfg, create=True),
+        ):
             # Patch the local-imports the function performs inside the if-block
             monkeypatch.setattr("agent_sync.config.Config", lambda: fake_cfg, raising=False)
             monkeypatch.setattr("agent_sync.sync.SyncManager", lambda c: fake_sm, raising=False)
@@ -100,10 +107,16 @@ class TestPostPublishSync:
         fake_cfg.repo_url = "https://github.com/me/private"
         fake_sm = MagicMock()
 
-        with _mock_publish_setup_returning(True), \
-             patch("agent_sync.cli.Config", return_value=fake_cfg, create=True), \
-             patch("agent_sync.cli.SyncManager", return_value=fake_sm, create=True), \
-             patch("agent_sync.cli._load_pub_config", return_value=MagicMock(auto_push_private=True), create=True):
+        with (
+            _mock_publish_setup_returning(True),
+            patch("agent_sync.cli.Config", return_value=fake_cfg, create=True),
+            patch("agent_sync.cli.SyncManager", return_value=fake_sm, create=True),
+            patch(
+                "agent_sync.cli._load_pub_config",
+                return_value=MagicMock(auto_push_private=True),
+                create=True,
+            ),
+        ):
             monkeypatch.setattr("agent_sync.config.Config", lambda: fake_cfg, raising=False)
             monkeypatch.setattr("agent_sync.sync.SyncManager", lambda c: fake_sm, raising=False)
             monkeypatch.setattr(
@@ -125,10 +138,16 @@ class TestPostPublishSync:
         fake_cfg.repo_url = ""  # Not initialized
         fake_sm = MagicMock()
 
-        with _mock_publish_setup_returning(True), \
-             patch("agent_sync.cli.Config", return_value=fake_cfg, create=True), \
-             patch("agent_sync.cli.SyncManager", return_value=fake_sm, create=True), \
-             patch("agent_sync.cli._load_pub_config", return_value=MagicMock(auto_push_private=True), create=True):
+        with (
+            _mock_publish_setup_returning(True),
+            patch("agent_sync.cli.Config", return_value=fake_cfg, create=True),
+            patch("agent_sync.cli.SyncManager", return_value=fake_sm, create=True),
+            patch(
+                "agent_sync.cli._load_pub_config",
+                return_value=MagicMock(auto_push_private=True),
+                create=True,
+            ),
+        ):
             monkeypatch.setattr("agent_sync.config.Config", lambda: fake_cfg, raising=False)
             monkeypatch.setattr("agent_sync.sync.SyncManager", lambda c: fake_sm, raising=False)
             monkeypatch.setattr(
@@ -148,10 +167,16 @@ class TestPostPublishSync:
         fake_cfg.repo_url = "https://github.com/me/private"
         fake_sm = MagicMock()
 
-        with _mock_publish_setup_returning(True), \
-             patch("agent_sync.cli.Config", return_value=fake_cfg, create=True), \
-             patch("agent_sync.cli.SyncManager", return_value=fake_sm, create=True), \
-             patch("agent_sync.cli._load_pub_config", return_value=MagicMock(auto_push_private=False), create=True):
+        with (
+            _mock_publish_setup_returning(True),
+            patch("agent_sync.cli.Config", return_value=fake_cfg, create=True),
+            patch("agent_sync.cli.SyncManager", return_value=fake_sm, create=True),
+            patch(
+                "agent_sync.cli._load_pub_config",
+                return_value=MagicMock(auto_push_private=False),
+                create=True,
+            ),
+        ):
             monkeypatch.setattr("agent_sync.config.Config", lambda: fake_cfg, raising=False)
             monkeypatch.setattr("agent_sync.sync.SyncManager", lambda c: fake_sm, raising=False)
             monkeypatch.setattr(
@@ -162,7 +187,9 @@ class TestPostPublishSync:
 
             result = runner.invoke(main, ["share", "run"])
 
-        assert not fake_sm.push.called, "SyncManager.push should NOT be called when auto_push_private=False"
+        assert (
+            not fake_sm.push.called
+        ), "SyncManager.push should NOT be called when auto_push_private=False"
         assert "Syncing to private" not in result.output
 
     def test_push_exception_does_not_abort_publish(self, monkeypatch):
@@ -173,11 +200,17 @@ class TestPostPublishSync:
         fake_sm.push.side_effect = RuntimeError("simulated network failure")
         fake_sm._run_git.side_effect = RuntimeError("never called")
 
-        with _mock_publish_setup_returning(True), \
-             patch("agent_sync.cli.Config", return_value=fake_cfg, create=True), \
-             patch("agent_sync.cli.SyncManager", return_value=fake_sm, create=True), \
-             patch("agent_sync.cli._load_pub_config", return_value=MagicMock(auto_push_private=True), create=True), \
-             patch("agent_sync.cli._sanitize_git_output", side_effect=lambda s: s, create=True):
+        with (
+            _mock_publish_setup_returning(True),
+            patch("agent_sync.cli.Config", return_value=fake_cfg, create=True),
+            patch("agent_sync.cli.SyncManager", return_value=fake_sm, create=True),
+            patch(
+                "agent_sync.cli._load_pub_config",
+                return_value=MagicMock(auto_push_private=True),
+                create=True,
+            ),
+            patch("agent_sync.cli._sanitize_git_output", side_effect=lambda s: s, create=True),
+        ):
             monkeypatch.setattr("agent_sync.config.Config", lambda: fake_cfg, raising=False)
             monkeypatch.setattr("agent_sync.sync.SyncManager", lambda c: fake_sm, raising=False)
             monkeypatch.setattr(
@@ -204,10 +237,16 @@ class TestPostPublishSync:
         fake_sm.push.return_value = []  # no changes
         fake_sm._run_git.return_value = "abc1234"
 
-        with _mock_publish_setup_returning(True), \
-             patch("agent_sync.cli.Config", return_value=fake_cfg, create=True), \
-             patch("agent_sync.cli.SyncManager", return_value=fake_sm, create=True), \
-             patch("agent_sync.cli._load_pub_config", return_value=MagicMock(auto_push_private=True), create=True):
+        with (
+            _mock_publish_setup_returning(True),
+            patch("agent_sync.cli.Config", return_value=fake_cfg, create=True),
+            patch("agent_sync.cli.SyncManager", return_value=fake_sm, create=True),
+            patch(
+                "agent_sync.cli._load_pub_config",
+                return_value=MagicMock(auto_push_private=True),
+                create=True,
+            ),
+        ):
             monkeypatch.setattr("agent_sync.config.Config", lambda: fake_cfg, raising=False)
             monkeypatch.setattr("agent_sync.sync.SyncManager", lambda c: fake_sm, raising=False)
             monkeypatch.setattr(

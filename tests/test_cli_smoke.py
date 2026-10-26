@@ -6,7 +6,6 @@ runtime issues that would break the CLI in production.
 Critical for catching bugs like missing imports or typos in function names.
 """
 
-import pytest
 import inspect
 
 
@@ -16,11 +15,12 @@ class TestCLISmoke:
     def test_import_cli_module(self):
         """Verify CLI module can be imported."""
         import agent_sync.cli
+
         assert agent_sync.cli is not None
 
     def test_import_tui_helpers(self):
         """Verify TUI helpers can be imported."""
-        from agent_sync._tui import build_footer_commands, print_footer
+        from agent_sync._tui import build_footer_commands
 
         # Test basic functionality
         cmds = build_footer_commands([("Enter", "push"), ("q", "cancel")], default_key="Enter")
@@ -32,16 +32,19 @@ class TestCLISmoke:
     def test_backup_command_exists(self):
         """Verify backup command exists and can be imported."""
         from agent_sync.cli import backup
+
         assert backup is not None
 
     def test_pull_command_exists(self):
         """Verify pull command exists."""
         from agent_sync.cli import pull
+
         assert pull is not None
 
     def test_sync_command_exists(self):
         """Verify sync command exists."""
         from agent_sync.cli import sync
+
         assert sync is not None
 
     def test_backup_command_has_all_filter_params(self):
@@ -53,8 +56,13 @@ class TestCLISmoke:
 
         # These should be in the signature
         expected = {
-            "skills_only", "configs_only", "message",
-            "skill", "agent", "exclude_skill", "exclude_agent"
+            "skills_only",
+            "configs_only",
+            "message",
+            "skill",
+            "agent",
+            "exclude_skill",
+            "exclude_agent",
         }
 
         missing = expected - params
@@ -68,9 +76,15 @@ class TestCLISmoke:
         params = set(sig.parameters.keys())
 
         expected = {
-            "force", "dry_run", "interactive",
-            "skills_only", "configs_only",
-            "skill", "agent", "exclude_skill", "exclude_agent"
+            "force",
+            "dry_run",
+            "interactive",
+            "skills_only",
+            "configs_only",
+            "skill",
+            "agent",
+            "exclude_skill",
+            "exclude_agent",
         }
 
         missing = expected - params

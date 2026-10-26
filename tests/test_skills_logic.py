@@ -28,12 +28,15 @@ def test_method_native_does_no_copy(tmp_path):
     agent_home = home / ".native-agent"
     agent_home.mkdir(parents=True)
 
-    agent = BaseAgent("native-agent", {
-        "method": "native",
-        "config_dir": str(agent_home),
-        "skills_dir_name": "skills",
-        "check": {"always": True}
-    })
+    agent = BaseAgent(
+        "native-agent",
+        {
+            "method": "native",
+            "config_dir": str(agent_home),
+            "skills_dir_name": "skills",
+            "check": {"always": True},
+        },
+    )
 
     manager = SkillsManager(global_skills_dir=global_dir)
 
@@ -52,14 +55,17 @@ def test_method_config_updating_json(tmp_path):
     config_file = agent_home / "config.json"
     config_file.write_text(json.dumps({"settings": {"paths": []}}))
 
-    agent = BaseAgent("config-agent", {
-        "method": "config",
-        "config_dir": str(agent_home),
-        "config_filename": "config.json",
-        "skills_dir_name": "skills",
-        "check": {"always": True},
-        "config_update": {"path": "settings.paths", "action": "append"}
-    })
+    agent = BaseAgent(
+        "config-agent",
+        {
+            "method": "config",
+            "config_dir": str(agent_home),
+            "config_filename": "config.json",
+            "skills_dir_name": "skills",
+            "check": {"always": True},
+            "config_update": {"path": "settings.paths", "action": "append"},
+        },
+    )
 
     manager = SkillsManager(global_skills_dir=global_dir)
 
@@ -83,12 +89,15 @@ def test_method_copy_performs_physical_copy(tmp_path):
     agent_skills_dir = agent_home / "plugins"
     agent_skills_dir.mkdir(parents=True)
 
-    agent = BaseAgent("copy-agent", {
-        "method": "copy",
-        "config_dir": str(agent_home),
-        "skills_dir_name": "plugins", # different name to test flexibility
-        "check": {"always": True}
-    })
+    agent = BaseAgent(
+        "copy-agent",
+        {
+            "method": "copy",
+            "config_dir": str(agent_home),
+            "skills_dir_name": "plugins",  # different name to test flexibility
+            "check": {"always": True},
+        },
+    )
 
     manager = SkillsManager(global_skills_dir=global_dir)
 
@@ -114,13 +123,31 @@ def test_centralize_with_conflicts(tmp_path):
     (agent_b_home / "skills" / "shared-skill").mkdir(parents=True)
     (agent_b_home / "skills" / "shared-skill" / "SKILL.md").write_text("content B")
 
-    agent_a = BaseAgent("agent-a", {"method": "copy", "config_dir": str(agent_a_home), "skills_dir_name": "skills", "check": {"always": True}})
-    agent_b = BaseAgent("agent-b", {"method": "copy", "config_dir": str(agent_b_home), "skills_dir_name": "skills", "check": {"always": True}})
+    agent_a = BaseAgent(
+        "agent-a",
+        {
+            "method": "copy",
+            "config_dir": str(agent_a_home),
+            "skills_dir_name": "skills",
+            "check": {"always": True},
+        },
+    )
+    agent_b = BaseAgent(
+        "agent-b",
+        {
+            "method": "copy",
+            "config_dir": str(agent_b_home),
+            "skills_dir_name": "skills",
+            "check": {"always": True},
+        },
+    )
 
     manager = SkillsManager(global_skills_dir=global_dir)
 
-    with patch("agent_sync.skills.get_all_agents", return_value=[agent_a, agent_b]), \
-         patch.object(manager, '_sync_from_repo', return_value=0):
+    with (
+        patch("agent_sync.skills.get_all_agents", return_value=[agent_a, agent_b]),
+        patch.object(manager, "_sync_from_repo", return_value=0),
+    ):
         stats = manager.centralize(move=True)
 
     assert stats["orphans_found"] >= 1
@@ -159,35 +186,44 @@ def test_centralize_does_not_move_extension_skills(tmp_path):
     # This simulates the extension symlink
     (skills_dir / "superpowers").symlink_to(Path("..") / "superpowers" / "skills")
 
-    agent = BaseAgent("opencode", {
-        "method": "native",  # Use native to avoid copying skills back
-        "config_dir": str(agent_home),
-        "skills_dir_name": "skills",
-        "check": {"always": True}
-    })
+    agent = BaseAgent(
+        "opencode",
+        {
+            "method": "native",  # Use native to avoid copying skills back
+            "config_dir": str(agent_home),
+            "skills_dir_name": "skills",
+            "check": {"always": True},
+        },
+    )
 
     manager = SkillsManager(global_skills_dir=global_dir)
 
-    with patch("agent_sync.skills.get_all_agents", return_value=[agent]), \
-         patch.object(manager, '_sync_from_repo', return_value=0):
+    with (
+        patch("agent_sync.skills.get_all_agents", return_value=[agent]),
+        patch.object(manager, "_sync_from_repo", return_value=0),
+    ):
         manager.centralize(dry_run=False, move=True)
 
     # Extension skill should NOT be moved to global directory
-    assert not (global_dir / "extension-skill").exists(), \
-        "Extension skills should NOT be centralized"
+    assert not (
+        global_dir / "extension-skill"
+    ).exists(), "Extension skills should NOT be centralized"
 
     # Extension skill should still exist in original location
-    assert (extension_dir / "extension-skill" / "SKILL.md").exists(), \
-        "Extension skills should remain in original location"
+    assert (
+        extension_dir / "extension-skill" / "SKILL.md"
+    ).exists(), "Extension skills should remain in original location"
 
     # Regular skill SHOULD be moved to global directory
-    assert (global_dir / "regular-skill" / "SKILL.md").exists(), \
-        "Regular skills should be centralized"
+    assert (
+        global_dir / "regular-skill" / "SKILL.md"
+    ).exists(), "Regular skills should be centralized"
 
     # Regular skill should be removed from original location (moved, not copied)
     # Note: With method=native, skills are NOT copied back to agent directory
-    assert not (skills_dir / "regular-skill").exists(), \
-        "Regular skills should be moved (not copied)"
+    assert not (
+        skills_dir / "regular-skill"
+    ).exists(), "Regular skills should be moved (not copied)"
 
 
 def test_centralize_auto_imports_orphans(tmp_path):
@@ -202,22 +238,31 @@ def test_centralize_auto_imports_orphans(tmp_path):
     (agent_home / "skills" / "orphan-skill").mkdir(parents=True)
     (agent_home / "skills" / "orphan-skill" / "SKILL.md").write_text("orphan")
 
-    agent = BaseAgent("agent-x", {"method": "copy", "config_dir": str(agent_home),
-                       "skills_dir_name": "skills", "check": {"always": True}})
+    agent = BaseAgent(
+        "agent-x",
+        {
+            "method": "copy",
+            "config_dir": str(agent_home),
+            "skills_dir_name": "skills",
+            "check": {"always": True},
+        },
+    )
     manager = SkillsManager(global_skills_dir=global_dir)
 
-    with patch("agent_sync.skills.get_all_agents", return_value=[agent]), \
-         patch.object(manager, '_sync_from_repo', return_value=0):
+    with (
+        patch("agent_sync.skills.get_all_agents", return_value=[agent]),
+        patch.object(manager, "_sync_from_repo", return_value=0),
+    ):
         stats = manager.centralize(move=True)
 
     # Orphan SHOULD be auto-imported to hub
-    assert (global_dir / "orphan-skill" / "SKILL.md").exists(), \
-        "orphan-skill should be in hub"
+    assert (global_dir / "orphan-skill" / "SKILL.md").exists(), "orphan-skill should be in hub"
     assert stats["orphans_imported"] == 1
     # Phase 5 (configure_agents) re-populates copy-method agents from hub,
     # so the skill is ALSO in the agent (copied from hub, not the orphan copy)
-    assert (agent_home / "skills" / "orphan-skill" / "SKILL.md").exists(), \
-        "configure_agents() re-populates copy agents from hub"
+    assert (
+        agent_home / "skills" / "orphan-skill" / "SKILL.md"
+    ).exists(), "configure_agents() re-populates copy agents from hub"
 
 
 def test_centralize_copy_mode_keeps_originals(tmp_path):
@@ -232,21 +277,30 @@ def test_centralize_copy_mode_keeps_originals(tmp_path):
     (agent_home / "skills" / "orphan-skill").mkdir(parents=True)
     (agent_home / "skills" / "orphan-skill" / "SKILL.md").write_text("orphan")
 
-    agent = BaseAgent("agent-y", {"method": "copy", "config_dir": str(agent_home),
-                       "skills_dir_name": "skills", "check": {"always": True}})
+    agent = BaseAgent(
+        "agent-y",
+        {
+            "method": "copy",
+            "config_dir": str(agent_home),
+            "skills_dir_name": "skills",
+            "check": {"always": True},
+        },
+    )
     manager = SkillsManager(global_skills_dir=global_dir)
 
-    with patch("agent_sync.skills.get_all_agents", return_value=[agent]), \
-         patch.object(manager, '_sync_from_repo', return_value=0):
+    with (
+        patch("agent_sync.skills.get_all_agents", return_value=[agent]),
+        patch.object(manager, "_sync_from_repo", return_value=0),
+    ):
         stats = manager.centralize(move=False)
 
     # Orphan SHOULD have been imported
-    assert (global_dir / "orphan-skill" / "SKILL.md").exists(), \
-        "--copy should import orphan-skill"
+    assert (global_dir / "orphan-skill" / "SKILL.md").exists(), "--copy should import orphan-skill"
     assert stats["orphans_imported"] == 1
     # With move=False, orphan should remain in agent
-    assert (agent_home / "skills" / "orphan-skill" / "SKILL.md").exists(), \
-        "--copy mode should keep originals"
+    assert (
+        agent_home / "skills" / "orphan-skill" / "SKILL.md"
+    ).exists(), "--copy mode should keep originals"
 
 
 def test_centralize_fresh_setup_auto_import(tmp_path):
@@ -259,17 +313,25 @@ def test_centralize_fresh_setup_auto_import(tmp_path):
     (agent_home / "skills" / "fresh-skill").mkdir(parents=True)
     (agent_home / "skills" / "fresh-skill" / "SKILL.md").write_text("fresh")
 
-    agent = BaseAgent("agent-z", {"method": "copy", "config_dir": str(agent_home),
-                       "skills_dir_name": "skills", "check": {"always": True}})
+    agent = BaseAgent(
+        "agent-z",
+        {
+            "method": "copy",
+            "config_dir": str(agent_home),
+            "skills_dir_name": "skills",
+            "check": {"always": True},
+        },
+    )
     manager = SkillsManager(global_skills_dir=global_dir)
 
-    with patch("agent_sync.skills.get_all_agents", return_value=[agent]), \
-         patch.object(manager, '_sync_from_repo', return_value=0):
+    with (
+        patch("agent_sync.skills.get_all_agents", return_value=[agent]),
+        patch.object(manager, "_sync_from_repo", return_value=0),
+    ):
         stats = manager.centralize(move=True)
 
     # Should auto-import fresh-skill
-    assert (global_dir / "fresh-skill" / "SKILL.md").exists(), \
-        "Fresh setup should auto-import"
+    assert (global_dir / "fresh-skill" / "SKILL.md").exists(), "Fresh setup should auto-import"
     assert stats["orphans_imported"] == 1
 
 
@@ -283,21 +345,31 @@ def test_centralize_dry_run_does_not_move(tmp_path):
     (agent_home / "skills" / "dry-skill").mkdir(parents=True)
     (agent_home / "skills" / "dry-skill" / "SKILL.md").write_text("dry")
 
-    agent = BaseAgent("agent-dry", {"method": "copy", "config_dir": str(agent_home),
-                       "skills_dir_name": "skills", "check": {"always": True}})
+    agent = BaseAgent(
+        "agent-dry",
+        {
+            "method": "copy",
+            "config_dir": str(agent_home),
+            "skills_dir_name": "skills",
+            "check": {"always": True},
+        },
+    )
     manager = SkillsManager(global_skills_dir=global_dir)
 
-    with patch("agent_sync.skills.get_all_agents", return_value=[agent]), \
-         patch.object(manager, '_sync_from_repo', return_value=0):
+    with (
+        patch("agent_sync.skills.get_all_agents", return_value=[agent]),
+        patch.object(manager, "_sync_from_repo", return_value=0),
+    ):
         # dry_run=True with fresh setup - should report but not move
-        stats = manager.centralize(dry_run=True, move=True)
+        _ = manager.centralize(dry_run=True, move=True)
 
     # Hub should be empty (nothing was moved)
     items = [i for i in global_dir.iterdir() if not i.name.startswith(".")]
     assert len(items) == 0, f"Dry run should not move files, found {len(items)}"
     # Orphan should still be in agent
-    assert (agent_home / "skills" / "dry-skill" / "SKILL.md").exists(), \
-        "Dry run should not delete from agent"
+    assert (
+        agent_home / "skills" / "dry-skill" / "SKILL.md"
+    ).exists(), "Dry run should not delete from agent"
 
 
 def test_compute_dir_hash(tmp_path):
@@ -338,9 +410,7 @@ def test_find_orphans_empty_hub(tmp_path):
     (agent_dir / "skills" / "my-skill").mkdir(parents=True)
     (agent_dir / "skills" / "my-skill" / "SKILL.md").write_text("test")
 
-    skills_found = {
-        "test-agent": [agent_dir / "skills" / "my-skill"]
-    }
+    skills_found = {"test-agent": [agent_dir / "skills" / "my-skill"]}
 
     orphans = SkillsManager._find_orphans(set(), skills_found)
     assert "my-skill" in orphans
@@ -416,8 +486,8 @@ def test_centralize_skips_retired_orphans(tmp_path):
     Regression guard: retired skills (deleted from git history) must never
     be re-imported, even if stale copies exist in agent directories.
     """
-    from agent_sync.skills import SkillsManager
     from agent_sync.agents import BaseAgent
+    from agent_sync.skills import SkillsManager
 
     home = tmp_path / "home"
     global_dir = home / ".agents" / "skills"
@@ -432,25 +502,33 @@ def test_centralize_skips_retired_orphans(tmp_path):
     (agent_home / "skills" / "real-orphan").mkdir(parents=True)
     (agent_home / "skills" / "real-orphan" / "SKILL.md").write_text("new orphan")
 
-    agent = BaseAgent("agent-retired", {
-        "method": "copy", "config_dir": str(agent_home),
-        "skills_dir_name": "skills", "check": {"always": True},
-    })
+    agent = BaseAgent(
+        "agent-retired",
+        {
+            "method": "copy",
+            "config_dir": str(agent_home),
+            "skills_dir_name": "skills",
+            "check": {"always": True},
+        },
+    )
     manager = SkillsManager(global_skills_dir=global_dir)
 
-    with patch("agent_sync.skills.get_all_agents", return_value=[agent]), \
-         patch.object(manager, '_sync_from_repo', return_value=0), \
-         patch.object(manager, '_get_retired_skill_names', return_value={"retired-old"}):
+    with (
+        patch("agent_sync.skills.get_all_agents", return_value=[agent]),
+        patch.object(manager, "_sync_from_repo", return_value=0),
+        patch.object(manager, "_get_retired_skill_names", return_value={"retired-old"}),
+    ):
         stats = manager.centralize(move=True)
 
     # Retired skill must NOT be imported
-    assert not (global_dir / "retired-old" / "SKILL.md").exists(), \
-        "Retired skill should NOT be imported to hub"
+    assert not (
+        global_dir / "retired-old" / "SKILL.md"
+    ).exists(), "Retired skill should NOT be imported to hub"
     # Real orphan should still be imported
-    assert (global_dir / "real-orphan" / "SKILL.md").exists(), \
-        "Real orphan should still be imported"
-    assert stats["orphans_imported"] == 1, \
-        "Only real orphan should be imported"
+    assert (
+        global_dir / "real-orphan" / "SKILL.md"
+    ).exists(), "Real orphan should still be imported"
+    assert stats["orphans_imported"] == 1, "Only real orphan should be imported"
 
 
 def test_get_retired_skill_names_from_git_history(tmp_path):
@@ -462,8 +540,8 @@ def test_get_retired_skill_names_from_git_history(tmp_path):
     from unittest.mock import patch
 
     def _git(*a):
-        subprocess.run(["git", "-C", str(repo_dir)] + list(a),
-                       capture_output=True, check=True)
+        subprocess.run(["git", "-C", str(repo_dir)] + list(a), capture_output=True, check=True)
+
     repo_dir = tmp_path / "repo"
     (repo_dir / "skills").mkdir(parents=True)
     for s in ["alive", "dead"]:
@@ -476,6 +554,7 @@ def test_get_retired_skill_names_from_git_history(tmp_path):
     _git("commit", "-m", "add both")
 
     import shutil
+
     shutil.rmtree(repo_dir / "skills" / "dead")
     _git("add", "-A")
     _git("commit", "-m", "delete dead")
@@ -487,7 +566,7 @@ def test_get_retired_skill_names_from_git_history(tmp_path):
     _git("commit", "-m", "re-add dead")
 
     manager = SkillsManager(global_skills_dir=tmp_path / "hub")
-    with patch('agent_sync.paths.REPO_DIR', repo_dir):
+    with patch("agent_sync.paths.REPO_DIR", repo_dir):
         retired = manager._get_retired_skill_names()
 
     assert "alive" not in retired, "alive was never deleted"
@@ -498,7 +577,7 @@ def test_get_retired_skill_names_from_git_history(tmp_path):
     _git("add", "-A")
     _git("commit", "-m", "delete dead again")
 
-    with patch('agent_sync.paths.REPO_DIR', repo_dir):
+    with patch("agent_sync.paths.REPO_DIR", repo_dir):
         retired = manager._get_retired_skill_names()
     assert "dead" in retired, "dead was deleted and NOT re-added"
     assert "alive" not in retired, "alive was never deleted"
@@ -506,25 +585,32 @@ def test_get_retired_skill_names_from_git_history(tmp_path):
 
 def test_centralize_lock_prevents_concurrent(tmp_path):
     """Test that centralize lock prevents a second process from running."""
-    from agent_sync.skills import SkillsManager
     from agent_sync.agents import BaseAgent
+    from agent_sync.skills import SkillsManager
 
     home = tmp_path / "home"
     global_dir = home / ".agents" / "skills"
     global_dir.mkdir(parents=True)
 
-    agent = BaseAgent("test-agent", {
-        "method": "native", "config_dir": str(home),
-        "skills_dir_name": "skills", "check": {"always": True},
-    })
+    agent = BaseAgent(
+        "test-agent",
+        {
+            "method": "native",
+            "config_dir": str(home),
+            "skills_dir_name": "skills",
+            "check": {"always": True},
+        },
+    )
     manager = SkillsManager(global_skills_dir=global_dir)
 
     lock = manager._centralize_lock_dir()
     lock.mkdir()  # Simulate another process holding the lock
 
-    with patch("agent_sync.skills.get_all_agents", return_value=[agent]), \
-         patch.object(manager, '_sync_from_repo', return_value=0), \
-         patch.object(manager, '_get_retired_skill_names', return_value=set()):
+    with (
+        patch("agent_sync.skills.get_all_agents", return_value=[agent]),
+        patch.object(manager, "_sync_from_repo", return_value=0),
+        patch.object(manager, "_get_retired_skill_names", return_value=set()),
+    ):
         stats = manager.centralize(move=True)
 
     assert stats["errors"] == 1, "Concurrent lock should cause an error"
@@ -535,8 +621,8 @@ def test_centralize_lock_prevents_concurrent(tmp_path):
 
 def test_centralize_lock_acquire_and_release(tmp_path):
     """Test that centralize acquires and releases the lock."""
-    from agent_sync.skills import SkillsManager
     from agent_sync.agents import BaseAgent
+    from agent_sync.skills import SkillsManager
 
     home = tmp_path / "home"
     global_dir = home / ".agents" / "skills"
@@ -544,18 +630,25 @@ def test_centralize_lock_acquire_and_release(tmp_path):
     (global_dir / "existing-skill").mkdir()
     (global_dir / "existing-skill" / "SKILL.md").write_text("content")
 
-    agent = BaseAgent("test-agent", {
-        "method": "native", "config_dir": str(home),
-        "skills_dir_name": "skills", "check": {"always": True},
-    })
+    agent = BaseAgent(
+        "test-agent",
+        {
+            "method": "native",
+            "config_dir": str(home),
+            "skills_dir_name": "skills",
+            "check": {"always": True},
+        },
+    )
     manager = SkillsManager(global_skills_dir=global_dir)
 
     lock = manager._centralize_lock_dir()
     assert not lock.exists(), "Lock should not exist before centralize"
 
-    with patch("agent_sync.skills.get_all_agents", return_value=[agent]), \
-         patch.object(manager, '_sync_from_repo', return_value=0), \
-         patch.object(manager, '_get_retired_skill_names', return_value=set()):
+    with (
+        patch("agent_sync.skills.get_all_agents", return_value=[agent]),
+        patch.object(manager, "_sync_from_repo", return_value=0),
+        patch.object(manager, "_get_retired_skill_names", return_value=set()),
+    ):
         stats = manager.centralize(move=True)
 
     assert stats["errors"] == 0, "No errors expected"
@@ -564,8 +657,9 @@ def test_centralize_lock_acquire_and_release(tmp_path):
 
 def test_centralize_stale_lock_is_cleared(tmp_path):
     """Test that a stale lock is removed and re-acquired."""
-    from agent_sync.skills import SkillsManager
     import time
+
+    from agent_sync.skills import SkillsManager
 
     home = tmp_path / "home"
     global_dir = home / ".agents" / "skills"
@@ -587,8 +681,8 @@ def test_centralize_stale_lock_is_cleared(tmp_path):
 
 def test_centralize_dry_run_skips_lock(tmp_path):
     """Test that dry-run does NOT acquire the lock."""
-    from agent_sync.skills import SkillsManager
     from agent_sync.agents import BaseAgent
+    from agent_sync.skills import SkillsManager
 
     home = tmp_path / "home"
     global_dir = home / ".agents" / "skills"
@@ -596,18 +690,25 @@ def test_centralize_dry_run_skips_lock(tmp_path):
     (global_dir / "some-skill").mkdir()
     (global_dir / "some-skill" / "SKILL.md").write_text("content")
 
-    agent = BaseAgent("test-agent", {
-        "method": "native", "config_dir": str(home),
-        "skills_dir_name": "skills", "check": {"always": True},
-    })
+    agent = BaseAgent(
+        "test-agent",
+        {
+            "method": "native",
+            "config_dir": str(home),
+            "skills_dir_name": "skills",
+            "check": {"always": True},
+        },
+    )
     manager = SkillsManager(global_skills_dir=global_dir)
 
     lock = manager._centralize_lock_dir()
     assert not lock.exists(), "Lock should not exist before"
 
-    with patch("agent_sync.skills.get_all_agents", return_value=[agent]), \
-         patch.object(manager, '_sync_from_repo', return_value=0), \
-         patch.object(manager, '_get_retired_skill_names', return_value=set()):
+    with (
+        patch("agent_sync.skills.get_all_agents", return_value=[agent]),
+        patch.object(manager, "_sync_from_repo", return_value=0),
+        patch.object(manager, "_get_retired_skill_names", return_value=set()),
+    ):
         stats = manager.centralize(dry_run=True, move=True)
 
     assert not lock.exists(), "Dry-run should not create a lock"

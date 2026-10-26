@@ -256,7 +256,7 @@ class TestCleanupUserSymlinks:
 
         skills_manager = SkillsManager()
 
-        with patch('agent_sync.skills.get_all_agents', return_value=[mock_agent]):
+        with patch("agent_sync.skills.get_all_agents", return_value=[mock_agent]):
             removed = skills_manager._cleanup_user_symlinks(preserve_extension_symlinks=True)
 
         assert removed == 0, "Extension symlink should not be removed"
@@ -284,7 +284,7 @@ class TestCleanupUserSymlinks:
 
         skills_manager = SkillsManager()
 
-        with patch('agent_sync.skills.get_all_agents', return_value=[mock_agent]):
+        with patch("agent_sync.skills.get_all_agents", return_value=[mock_agent]):
             removed = skills_manager._cleanup_user_symlinks(preserve_extension_symlinks=True)
 
         assert removed == 1, "User symlink should be removed"
@@ -321,7 +321,7 @@ class TestCleanupUserSymlinks:
 
         skills_manager = SkillsManager()
 
-        with patch('agent_sync.skills.get_all_agents', return_value=[mock_agent]):
+        with patch("agent_sync.skills.get_all_agents", return_value=[mock_agent]):
             removed = skills_manager._cleanup_user_symlinks(preserve_extension_symlinks=True)
 
         assert removed == 1, "Only user symlink should be removed"
@@ -343,12 +343,9 @@ class TestManifestOperations:
         manifest = {
             "version": 1,
             "extensions": {
-                "opencode-superpowers": {
-                    "agent": "opencode",
-                    "extension_dir": "superpowers"
-                }
+                "opencode-superpowers": {"agent": "opencode", "extension_dir": "superpowers"}
             },
-            "global_skills": ["skill1", "skill2"]
+            "global_skills": ["skill1", "skill2"],
         }
 
         sync_manager._save_manifest(manifest)
@@ -393,17 +390,14 @@ class TestRestoreExtensionSkills:
 
         manifest = {
             "extensions": {
-                "opencode-superpowers": {
-                    "agent": "opencode",
-                    "extension_dir": "superpowers"
-                }
+                "opencode-superpowers": {"agent": "opencode", "extension_dir": "superpowers"}
             }
         }
 
         sync_manager = SyncManager.__new__(SyncManager)
         sync_manager.repo_dir = repo_dir
 
-        with patch('agent_sync.agents.get_agent') as mock_get_agent:
+        with patch("agent_sync.agents.get_agent") as mock_get_agent:
             mock_agent = Mock()
             mock_agent.config_dir = str(config_dir)
             mock_get_agent.return_value = mock_agent
@@ -423,18 +417,13 @@ class TestRestoreExtensionSkills:
         repo_dir.mkdir()
 
         manifest = {
-            "extensions": {
-                "opencode-missing": {
-                    "agent": "opencode",
-                    "extension_dir": "missing"
-                }
-            }
+            "extensions": {"opencode-missing": {"agent": "opencode", "extension_dir": "missing"}}
         }
 
         sync_manager = SyncManager.__new__(SyncManager)
         sync_manager.repo_dir = repo_dir
 
-        with patch('agent_sync.agents.get_agent') as mock_get_agent:
+        with patch("agent_sync.agents.get_agent") as mock_get_agent:
             mock_agent = Mock()
             mock_agent.config_dir = str(tmp_path / "config" / "opencode")
             mock_get_agent.return_value = mock_agent
@@ -473,7 +462,7 @@ class TestRestoreSymlinks:
         mock_agent.config_dir = str(tmp_path / "config" / "opencode")
         mock_agent.skills_path = skills_dir
 
-        with patch('agent_sync.agents.get_all_agents', return_value=[mock_agent]):
+        with patch("agent_sync.agents.get_all_agents", return_value=[mock_agent]):
             restored = sync_manager._restore_symlinks_from_backup()
 
         assert restored == 1

@@ -12,14 +12,13 @@ import shutil
 import time
 from pathlib import Path
 
-from rich import box
 from rich.console import Console
-from rich.prompt import Prompt
-from rich.table import Table
 
-from ._tui import print_footer
 from .agents import BaseAgent, get_all_agents
-from .paths import HUB_DIR, INTERNAL_MANIFEST_FILENAME as MANIFEST_FILENAME
+from .paths import HUB_DIR
+from .paths import (  # noqa: F401  re-exported; sync.py imports it from here
+    INTERNAL_MANIFEST_FILENAME as MANIFEST_FILENAME,
+)
 
 console = Console()
 
@@ -199,7 +198,9 @@ class SkillsManager:
         for agent_name, skill_data in skills_found.items():
             if isinstance(skill_data, dict) and skill_data.get("is_extension"):
                 continue
-            skill_paths = skill_data if isinstance(skill_data, list) else skill_data.get("paths", [])
+            skill_paths = (
+                skill_data if isinstance(skill_data, list) else skill_data.get("paths", [])
+            )
 
             for skill_path in skill_paths:
                 skill_name = skill_path.name
@@ -245,8 +246,18 @@ class SkillsManager:
 
         try:
             import subprocess
+
             result = subprocess.run(
-                ["git", "log", "--all", "--diff-filter=D", "--name-only", "--format=", "--", "skills/"],
+                [
+                    "git",
+                    "log",
+                    "--all",
+                    "--diff-filter=D",
+                    "--name-only",
+                    "--format=",
+                    "--",
+                    "skills/",
+                ],
                 cwd=repo_dir,
                 capture_output=True,
                 text=True,
@@ -260,7 +271,7 @@ class SkillsManager:
                 if not line:
                     continue
                 if line.startswith("skills/"):
-                    bare = line[len("skills/"):]
+                    bare = line[len("skills/") :]
                     if "/" in bare:
                         bare = bare.split("/", 1)[0]
                     if bare and not bare.startswith("."):
@@ -279,7 +290,7 @@ class SkillsManager:
                 for line in head_result.stdout.splitlines():
                     line = line.strip()
                     if line.startswith("skills/"):
-                        bare = line[len("skills/"):].rstrip("/")
+                        bare = line[len("skills/") :].rstrip("/")
                         if bare and "/" not in bare and not bare.startswith("."):
                             present.add(bare)
                 retired -= present
@@ -296,14 +307,13 @@ class SkillsManager:
         """
         from . import paths
 
-        from . import paths
-
         repo_dir = paths.REPO_DIR
         if not (repo_dir / ".git").exists():
             return set()
 
         try:
             import subprocess
+
             result = subprocess.run(
                 ["git", "ls-tree", "--name-only", "HEAD", "skills/"],
                 cwd=repo_dir,
@@ -320,7 +330,7 @@ class SkillsManager:
         for line in result.stdout.splitlines():
             line = line.strip()
             if line.startswith("skills/"):
-                bare = line[len("skills/"):].rstrip("/")
+                bare = line[len("skills/") :].rstrip("/")
                 if bare and "/" not in bare and not bare.startswith("."):
                     head.add(bare)
 
@@ -364,14 +374,14 @@ class SkillsManager:
                     pass
         return removed
 
-
     def scan_all_agents(self) -> dict[str, list[Path]]:
         """Scan all agents for existing skills.
 
         Only directories containing SKILL.md are considered valid skills.
         Files directly in the skills directory are ignored.
         Symlinks created by users are detected for removal.
-        Extension subdirectories (e.g., ~/.config/opencode/superpowers/skills/) are scanned separately.
+        Extension subdirectories (e.g. ~/.config/opencode/superpowers/skills/) are
+        scanned separately.
 
         Returns:
             dict mapping agent name to list of skill paths
@@ -587,14 +597,14 @@ class SkillsManager:
         from . import paths
 
         lock = self._centralize_lock_dir()
-        STALE_TIMEOUT = paths.LOCK_STALE_TIMEOUT
+        stale_timeout = paths.LOCK_STALE_TIMEOUT
         try:
             os.mkdir(lock)
             return True
         except FileExistsError:
             try:
                 age = time.time() - lock.stat().st_mtime
-                if age > STALE_TIMEOUT:
+                if age > stale_timeout:
                     os.rmdir(lock)
                     os.mkdir(lock)
                     return True
@@ -686,7 +696,8 @@ class SkillsManager:
         hub_skills = set()
         if self.global_skills_dir.exists():
             hub_skills = {
-                item.name for item in self.global_skills_dir.iterdir()
+                item.name
+                for item in self.global_skills_dir.iterdir()
                 if not item.name.startswith(".")
             }
 
@@ -755,7 +766,10 @@ class SkillsManager:
                     continue
 
                 if info.get("content_differs"):
-                    console.print(f"  [yellow]⚠[/] {skill_name} [dim](content differs — used {source_agent})[/]")
+                    console.print(
+                        f"  [yellow]⚠[/] {skill_name} [dim](content "
+                        f"differs — used {source_agent})[/]"
+                    )
                     stats["diverge_warnings"] += 1
 
                 try:
@@ -780,10 +794,14 @@ class SkillsManager:
 
                     if move:
                         stats["moved"] += 1
-                        console.print(f"  [green]✓[/] {skill_name} [dim](moved from {source_agent})[/]")
+                        console.print(
+                            f"  [green]✓[/] {skill_name} [dim](moved from {source_agent})[/]"
+                        )
                     else:
                         stats["copied"] += 1
-                        console.print(f"  [green]✓[/] {skill_name} [dim](copied from {source_agent})[/]")
+                        console.print(
+                            f"  [green]✓[/] {skill_name} [dim](copied from {source_agent})[/]"
+                        )
                     stats["orphans_imported"] += 1
 
                 except Exception as e:
@@ -851,7 +869,6 @@ class SkillsManager:
 
         return stats
 
-
     def _cleanup_user_symlinks(self, preserve_extension_symlinks: bool = True) -> int:
         """
         Remove user-created symlinks from agent skill directories.
@@ -886,37 +903,41 @@ class SkillsManager:
                             # Get agent config dir for display
                             config_dir = Path(agent.config_dir).expanduser().resolve()
                             is_inside = str(resolved_target).startswith(str(config_dir))
-                            
+
                             if is_inside:
                                 # This is an extension symlink - preserve and show details
                                 ext_name = item.name
                                 ext_path = resolved_target
-                                symlinks_preserved.append({
-                                    "agent": agent.name,
-                                    "symlink": str(item),
-                                    "target": str(ext_path),
-                                    "extension": ext_name,
-                                })
-                                console.print(
-                                    f"  [dim]🔗 Preserving extension symlink: {agent.name}/{item.name}[/dim]"
+                                symlinks_preserved.append(
+                                    {
+                                        "agent": agent.name,
+                                        "symlink": str(item),
+                                        "target": str(ext_path),
+                                        "extension": ext_name,
+                                    }
                                 )
                                 console.print(
-                                    f"     [dim]└─ {item} → {ext_path}[/dim]"
+                                    f"  [dim]🔗 Preserving extension symlink: "
+                                    f"{agent.name}/{item.name}[/dim]"
                                 )
+                                console.print(f"     [dim]└─ {item} → {ext_path}[/dim]")
                             else:
                                 # Points outside config dir - remove
                                 item.unlink()
                                 symlinks_removed += 1
                                 console.print(
-                                    f"  [yellow]Removed external symlink: {agent.name}/{item.name}[/yellow]"
+                                    f"  [yellow]Removed external symlink: "
+                                    f"{agent.name}/{item.name}[/yellow]"
                                 )
                         except (OSError, ValueError):
-                            symlinks_preserved.append({
-                                "agent": agent.name,
-                                "symlink": str(item),
-                                "target": "(unresolved)",
-                                "extension": item.name,
-                            })
+                            symlinks_preserved.append(
+                                {
+                                    "agent": agent.name,
+                                    "symlink": str(item),
+                                    "target": "(unresolved)",
+                                    "extension": item.name,
+                                }
+                            )
                         continue
 
                     # User symlink - remove
@@ -935,17 +956,13 @@ class SkillsManager:
 
         if symlinks_preserved:
             console.print()
-            console.print(f"  [green]✓ Preserved {len(symlinks_preserved)} extension symlink(s):[/green]")
+            console.print(
+                f"  [green]✓ Preserved {len(symlinks_preserved)} extension symlink(s):[/green]"
+            )
             for info in symlinks_preserved:
-                console.print(
-                    f"    [dim]• {info['agent']}/{info['extension']}:[/dim]"
-                )
-                console.print(
-                    f"      [dim]  {info['symlink']}[/dim]"
-                )
-                console.print(
-                    f"      [dim]  → {info['target']}[/dim]"
-                )
+                console.print(f"    [dim]• {info['agent']}/{info['extension']}:[/dim]")
+                console.print(f"      [dim]  {info['symlink']}[/dim]")
+                console.print(f"      [dim]  → {info['target']}[/dim]")
 
         return symlinks_removed
 
@@ -965,7 +982,8 @@ class SkillsManager:
             status_icon = "✓" if result["success"] else "⚠"
             status_color = "green" if result["success"] else "yellow"
             console.print(
-                f"  [{status_color}]{status_icon}[/{status_color}] {agent.name}: {result['message']} [dim]({result['method']})[/dim]"
+                f"  [{status_color}]{status_icon}[/{status_color}] {agent.name}: "
+                f"{result['message']} [dim]({result['method']})[/dim]"
             )
 
         console.print()
@@ -980,6 +998,7 @@ class SkillsManager:
         3. Implementation (native | config | copy)
         """
         from .config import Config
+
         user_config = Config()
 
         # Determine method (priority: user override -> registry default)
@@ -987,7 +1006,6 @@ class SkillsManager:
         method = agent_conf.get("skills_method") or agent.method
 
         # NOTE: Cleanup is now managed by the centralize() pipeline,
-    
 
         # Apply the chosen method
         result = None
@@ -1009,7 +1027,11 @@ class SkillsManager:
             except Exception as e:
                 # Fallback to copy if config failed and it's not a user override
                 if agent_conf.get("skills_method"):
-                     return {"success": False, "method": "config", "message": f"Config update failed: {e}"}
+                    return {
+                        "success": False,
+                        "method": "config",
+                        "message": f"Config update failed: {e}",
+                    }
                 # Else continue to copy fallback
 
         if not result:
@@ -1034,7 +1056,9 @@ class SkillsManager:
                 result = {
                     "success": True,
                     "method": "skip",
-                    "message": f"Agent directory doesn't exist (not installed): {agent.skills_path}",
+                    "message": (
+                        f"Agent directory doesn't exist (not installed): {agent.skills_path}"
+                    ),
                 }
 
         # Save successful method to config if not already there
@@ -1051,7 +1075,9 @@ class SkillsManager:
             if agent.name == "opencode":
                 config_update = {"path": "skills.paths", "action": "append"}
             else:
-                raise ValueError(f"Agent {agent.name} has method 'config' but no config_update defined")
+                raise ValueError(
+                    f"Agent {agent.name} has method 'config' but no config_update defined"
+                )
 
         config = agent.get_config() or {}
         path = config_update.get("path", "")

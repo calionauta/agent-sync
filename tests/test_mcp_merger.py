@@ -1,7 +1,5 @@
 """Tests for MCPMerger."""
-import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+
 import json
 
 
@@ -46,11 +44,11 @@ class TestMCPMerger:
         from agent_sync.mcp_merger import MCPMerger
 
         mcp_file = tmp_path / "mcp.json"
-        mcp_file.write_text(json.dumps({
-            "mcpServers": {
-                "filesystem": {"command": "npx", "args": ["-y", "some-server"]}
-            }
-        }))
+        mcp_file.write_text(
+            json.dumps(
+                {"mcpServers": {"filesystem": {"command": "npx", "args": ["-y", "some-server"]}}}
+            )
+        )
 
         merger = MCPMerger(sources=[mcp_file])
         result = merger.merge()
@@ -62,11 +60,9 @@ class TestMCPMerger:
         from agent_sync.mcp_merger import MCPMerger
 
         mcp_file = tmp_path / "mcp.json"
-        mcp_file.write_text(json.dumps({
-            "servers": {
-                "github": {"command": "npx", "args": ["-y", "github-mcp"]}
-            }
-        }))
+        mcp_file.write_text(
+            json.dumps({"servers": {"github": {"command": "npx", "args": ["-y", "github-mcp"]}}})
+        )
 
         merger = MCPMerger(sources=[mcp_file])
         result = merger.merge()
@@ -79,14 +75,14 @@ class TestMCPMerger:
 
         # Create two MCP configs with same server
         mcp1 = tmp_path / "mcp1.json"
-        mcp1.write_text(json.dumps({
-            "mcpServers": {"duplicate": {"command": "npx", "args": ["-y", "server1"]}}
-        }))
+        mcp1.write_text(
+            json.dumps({"mcpServers": {"duplicate": {"command": "npx", "args": ["-y", "server1"]}}})
+        )
 
         mcp2 = tmp_path / "mcp2.json"
-        mcp2.write_text(json.dumps({
-            "mcpServers": {"duplicate": {"command": "npx", "args": ["-y", "server2"]}}
-        }))
+        mcp2.write_text(
+            json.dumps({"mcpServers": {"duplicate": {"command": "npx", "args": ["-y", "server2"]}}})
+        )
 
         merger = MCPMerger(sources=[mcp1, mcp2])
         result = merger.merge()
@@ -99,14 +95,12 @@ class TestMCPMerger:
         from agent_sync.mcp_merger import MCPMerger
 
         mcp1 = tmp_path / "mcp1.json"
-        mcp1.write_text(json.dumps({
-            "mcpServers": {"duplicate": {"command": "first", "args": []}}
-        }))
+        mcp1.write_text(json.dumps({"mcpServers": {"duplicate": {"command": "first", "args": []}}}))
 
         mcp2 = tmp_path / "mcp2.json"
-        mcp2.write_text(json.dumps({
-            "mcpServers": {"duplicate": {"command": "second", "args": []}}
-        }))
+        mcp2.write_text(
+            json.dumps({"mcpServers": {"duplicate": {"command": "second", "args": []}}})
+        )
 
         merger = MCPMerger(sources=[mcp1, mcp2])
         result = merger.merge()

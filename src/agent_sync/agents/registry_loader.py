@@ -45,5 +45,3 @@ def validate_registry(data: dict[str, Any]) -> None:
         if method == "config" and "config_update" not in agent_data:
             # Note: config method can be used without auto-update, but usually it's why it's chosen
             pass
-
-

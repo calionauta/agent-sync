@@ -1,6 +1,5 @@
 """Tests for ConfigExporter."""
-import pytest
-from pathlib import Path
+
 import json
 
 
@@ -83,7 +82,7 @@ class TestConfigExporter:
         result = exporter.to_json(indent=4)
 
         # Check that JSON is formatted with 4 spaces
-        lines = result.split('\n')
+        lines = result.split("\n")
         if len(lines) > 1:
             assert lines[1].startswith('    "version"')
 

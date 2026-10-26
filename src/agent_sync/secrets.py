@@ -39,6 +39,7 @@ class SecretsManager:
     def enable(self, include_mcp: bool = False) -> None:
         """Enable secrets synchronization."""
         from .config import Config
+
         config = Config()
         config.include_secrets = True
         config.include_mcp_secrets = include_mcp
@@ -46,6 +47,7 @@ class SecretsManager:
     def disable(self) -> None:
         """Disable secrets synchronization."""
         from .config import Config
+
         config = Config()
         config.include_secrets = False
         config.include_mcp_secrets = False
@@ -53,6 +55,7 @@ class SecretsManager:
     def is_enabled(self) -> bool:
         """Check if secrets sync is enabled."""
         from .config import Config
+
         config = Config()
         return config.include_secrets
 

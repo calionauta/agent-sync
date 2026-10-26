@@ -43,6 +43,11 @@ _TOKEN_PATTERNS = [
 ]
 
 
+def _short_home(path) -> str:
+    """Render a path with the home directory abbreviated to `~`."""
+    return str(path).replace(str(Path.home()), "~")
+
+
 def _sanitize_git_output(text: str) -> str:
     """Strip potential authentication tokens from git output.
 
@@ -647,9 +652,7 @@ class SyncManager:
 
         return (changes, summary)
 
-    def _prune_local_orphan_skills(
-        self, skills_exclude: list[str] | None = None
-    ) -> list[dict]:
+    def _prune_local_orphan_skills(self, skills_exclude: list[str] | None = None) -> list[dict]:
         """Remove skills from ~/.agents/skills/ that are not in privado.
 
         Inverse of `_prune_orphan_skills` (which cleans privado). Called by
@@ -742,12 +745,6 @@ class SyncManager:
                 parts = line.split(" ", 1)
                 if len(parts) >= 2:
                     unstaged_files.add(parts[1])
-
-        # Get list of files in HEAD (what's in the repo)
-        try:
-            head_files = self._run_git("ls-tree", "-r", "--name-only", "HEAD").strip().split("\n")
-        except subprocess.CalledProcessError:
-            head_files = []  # Empty repo
 
         # Check configs
         if not skills_only and not agents_only:
@@ -1122,7 +1119,8 @@ class SyncManager:
         local_orphans = self._detect_local_orphan_skills(skills_exclude=skills_exclude)
         if local_orphans:
             console.print(
-                f"[yellow]⚠️  {len(local_orphans)} local skill(s) NOT in private repo (use --prune to remove):[/yellow]"
+                f"[yellow]⚠️  {len(local_orphans)} local skill(s) NOT "
+                f"in private repo (use --prune to remove):[/yellow]"
             )
             for name in local_orphans:
                 console.print(f"  - {name}")
@@ -1142,12 +1140,11 @@ class SyncManager:
             console.print("[dim]No changes to pull.[/dim]")
 
         console.print(
-            "\n[dim]Run without --dry-run to apply changes. Add --prune to remove local orphans.[/dim]"
+            "\n[dim]Run without --dry-run to apply changes. "
+            "Add --prune to remove local orphans.[/dim]"
         )
 
-    def _detect_local_orphan_skills(
-        self, skills_exclude: list[str] | None = None
-    ) -> list[str]:
+    def _detect_local_orphan_skills(self, skills_exclude: list[str] | None = None) -> list[str]:
         """Return the list of skill names in local hub that are missing from privado.
 
         Pure read-only detection — does not touch the filesystem. Used by the
@@ -1220,10 +1217,6 @@ class SyncManager:
 
         if not conflict:
             return
-
-        from rich.console import Console
-
-        console = Console()
 
         # Get remote version to temp file
         try:
@@ -1406,9 +1399,7 @@ class SyncManager:
 
         return changed_files, orphans
 
-    def _detect_orphan_skills(
-        self, skills_exclude: list[str] | None = None
-    ) -> list[str]:
+    def _detect_orphan_skills(self, skills_exclude: list[str] | None = None) -> list[str]:
         """Read-only: return skill names in HEAD but missing from local hub.
 
         Cheaper than `_prune_orphan_skills` because it does not touch the
@@ -1551,7 +1542,7 @@ class SyncManager:
                     f"but missing from local hub.[/yellow]"
                 )
                 console.print(
-                    "  Run [cyan]agent-sync skills prune[/cyan] " "to remove them from the repo.\n"
+                    "  Run [cyan]agent-sync skills prune[/cyan] to remove them from the repo.\n"
                 )
             return []
 
@@ -1928,11 +1919,17 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                     shutil.copytree(package_path, pkg_dest, ignore=shutil.ignore_patterns(".git"))
 
         # Prune orphaned directories in pi_dir no longer in category_map
-        valid_dirs = set(category_map.values()) | {subdir for _, subdir in single_file_map.values()} | {"packages"}
+        valid_dirs = (
+            set(category_map.values())
+            | {subdir for _, subdir in single_file_map.values()}
+            | {"packages"}
+        )
         for child in list(pi_dir.iterdir()):
             if child.is_dir() and child.name not in valid_dirs:
                 shutil.rmtree(child)
-                console.print(f"  [yellow]Pruned orphaned backup: {agent.name}/{child.name}[/yellow]")
+                console.print(
+                    f"  [yellow]Pruned orphaned backup: {agent.name}/{child.name}[/yellow]"
+                )
 
     def _restore_pi_extra_paths(self, agent, synced_config_dir: Path, changes: list[str]) -> None:
         """Restore pi.dev extra paths from repo to their original locations.
@@ -2015,7 +2012,8 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
         Structure in repo:
         - agents/<agent-name>/project/ - Project-level agents (.claude/agents/, .opencode/agents/)
-        - agents/<agent-name>/global/ - Global agents (~/.claude/agents/, ~/.config/opencode/agents/)
+        - agents/<agent-name>/global/ - Global agents
+          (~/.claude/agents/, ~/.config/opencode/agents/)
         """
         from .agents import get_all_agents
 
@@ -2103,7 +2101,8 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             if has_project:
                 project_agent_count = len(list(agent.agents_path.rglob("*.md")))
                 console.print(
-                    f"  [dim]  └─ Syncing {project_agent_count} project agents for {agent.name}...[/dim]"
+                    f"  [dim]  └─ Syncing {project_agent_count} "
+                    f"project agents for {agent.name}...[/dim]"
                 )
 
                 project_agents_dir = agent_repo_dir / "project"
@@ -2139,7 +2138,8 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
             if has_global:
                 global_agent_count = len(list(agent.agents_path_global.rglob("*.md")))
                 console.print(
-                    f"  [dim]  └─ Syncing {global_agent_count} global agents for {agent.name}...[/dim]"
+                    f"  [dim]  └─ Syncing {global_agent_count} "
+                    f"global agents for {agent.name}...[/dim]"
                 )
                 global_agents_dir = agent_repo_dir / "global"
                 global_agents_dir.mkdir(parents=True, exist_ok=True)
@@ -2178,7 +2178,8 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                 project_agent_count = len(list(agent.agents_path.rglob("*.md")))
                 if project_agent_count > 0:
                     console.print(
-                        f"  [dim]  └─ Syncing {project_agent_count} project agents for {agent.name}...[/dim]"
+                        f"  [dim]  └─ Syncing {project_agent_count} "
+                        f"project agents for {agent.name}...[/dim]"
                     )
 
                 project_agents_dir = agent_repo_dir / "project"
@@ -2186,7 +2187,8 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                 project_agent_count = len(list(agent.agents_path.rglob("*.md")))
                 if project_agent_count > 0:
                     console.print(
-                        f"  [dim]  └─ Syncing {project_agent_count} project agents for {agent.name}...[/dim]"
+                        f"  [dim]  └─ Syncing {project_agent_count} "
+                        f"project agents for {agent.name}...[/dim]"
                     )
                 project_agents_dir = agent_repo_dir / "project"
                 project_agents_dir.mkdir(parents=True, exist_ok=True)
@@ -2222,7 +2224,8 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                 global_agent_count = len(list(agent.agents_path_global.rglob("*.md")))
                 if global_agent_count > 0:
                     console.print(
-                        f"  [dim]  └─ Syncing {global_agent_count} global agents for {agent.name}...[/dim]"
+                        f"  [dim]  └─ Syncing {global_agent_count} "
+                        f"global agents for {agent.name}...[/dim]"
                     )
                 global_agents_dir = agent_repo_dir / "global"
                 global_agents_dir.mkdir(parents=True, exist_ok=True)
@@ -2632,10 +2635,9 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
         # Copy all files (entire directory)
         if all_files:
-            _home = str(Path.home())
-            _short = lambda p: str(p).replace(_home, "~")
             console.print(
-                f"  [bold]Backing up all files: [cyan]{agent.name}[/cyan] from [underline]{_short(agent_config_dir)}[/underline]:[/]"
+                f"  [bold]Backing up all files: [cyan]{agent.name}[/cyan] from "
+                f"[underline]{_short_home(agent_config_dir)}[/underline]:[/]"
             )
             copied = self._copy_directory(
                 src=agent_config_dir,
@@ -2650,10 +2652,9 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
         # Copy specific paths
         if paths:
-            _home = str(Path.home())
-            _short = lambda p: str(p).replace(_home, "~")
             console.print(
-                f"  [bold]Backing up [cyan]{agent.name}[/cyan] from [underline]{_short(agent_config_dir)}[/underline]:[/]"
+                f"  [bold]Backing up [cyan]{agent.name}[/cyan] from "
+                f"[underline]{_short_home(agent_config_dir)}[/underline]:[/]"
             )
             for path_pattern in paths:
                 resolved = agent_config_dir / path_pattern.rstrip("/")
@@ -2668,11 +2669,13 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                             preserve_symlinks=True,
                         )
                         console.print(
-                            f"    [green]✓[/] {path_pattern} [dim]→ {_short(resolved)}  ({copied} file{'s' if copied != 1 else ''})[/dim]"
+                            f"    [green]✓[/] {path_pattern} [dim]→ {_short_home(resolved)} "
+                            f" ({copied} file{'s' if copied != 1 else ''})[/dim]"
                         )
                     else:
                         console.print(
-                            f"    [dim]✗[/] {path_pattern} → {_short(resolved)}  [yellow]not found[/yellow]"
+                            f"    [dim]✗[/] {path_pattern} → "
+                            f"{_short_home(resolved)}  [yellow]not found[/yellow]"
                         )
                 else:
                     # File or glob pattern — always attempt copy
@@ -2685,7 +2688,8 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                     )
                     if copied:
                         console.print(
-                            f"    [green]✓[/] {path_pattern}  ([dim]{copied} file{'s' if copied != 1 else ''}[/dim])"
+                            f"    [green]✓[/] {path_pattern}  ([dim]{copied} "
+                            f"file{'s' if copied != 1 else ''}[/dim])"
                         )
                     else:
                         console.print(f"    [dim]✗[/] {path_pattern}  [yellow]not found[/yellow]")
@@ -3088,7 +3092,8 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
             if not agent:
                 console.print(
-                    f"[yellow]Warning: Agent {agent_name} not found, skipping extension {ext_name}[/yellow]"
+                    f"[yellow]Warning: Agent {agent_name} not "
+                    f"found, skipping extension {ext_name}[/yellow]"
                 )
                 continue
 
@@ -3207,9 +3212,9 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
 
         remote_content = repo_file.read_text(encoding="utf-8")
         remote_patterns = {
-            l.strip()
-            for l in remote_content.splitlines()
-            if l.strip() and not l.strip().startswith("#")
+            line.strip()
+            for line in remote_content.splitlines()
+            if line.strip() and not line.strip().startswith("#")
         }
 
         local_path = self._get_global_gitignore_path()
@@ -3251,9 +3256,9 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                 return changes  # Identical
 
             local_patterns = {
-                l.strip()
-                for l in local_content.splitlines()
-                if l.strip() and not l.strip().startswith("#")
+                line.strip()
+                for line in local_content.splitlines()
+                if line.strip() and not line.strip().startswith("#")
             }
 
             added = remote_patterns - local_patterns
@@ -3290,7 +3295,8 @@ All skills are centralized in `~/.agents/skills/` and synced via `skills/`.
                 missing_critical = self.CRITICAL_GITIGNORE_PATTERNS - local_patterns
                 if missing_critical:
                     console.print(
-                        "\n  [bold red]⚠  Your local gitignore is missing critical security patterns:[/bold red]"
+                        "\n  [bold red]⚠  Your local gitignore is missing "
+                        "critical security patterns:[/bold red]"
                     )
                     for p in sorted(missing_critical):
                         console.print(f"    ⚠  {p}")

@@ -485,17 +485,20 @@ def format_issues_for_display(issues: list[Issue]) -> str:
         # Format based on context
         if context == "variable":
             lines.append(
-                f"  • [{color}]{issue['severity']}[/{color}] [{color}]{issue['rule']}[/{color}]: `{snippet}`"
+                f"  • [{color}]{issue['severity']}[/{color}] "
+                f"[{color}]{issue['rule']}[/{color}]: `{snippet}`"
             )
             lines.append(f"    {context_icon} Environment variable reference (safe to publish)")
         elif context == "example":
             lines.append(
-                f"  • [{color}]{issue['severity']}[/{color}] [{color}]{issue['rule']}[/{color}]: `{snippet}`"
+                f"  • [{color}]{issue['severity']}[/{color}] "
+                f"[{color}]{issue['rule']}[/{color}]: `{snippet}`"
             )
             lines.append(f"    {context_icon} Example/placeholder value (review before publish)")
         else:
             lines.append(
-                f"  • [{color}]{issue['severity']}[/{color}] [{color}]{issue['rule']}[/{color}]: `{snippet}`"
+                f"  • [{color}]{issue['severity']}[/{color}] "
+                f"[{color}]{issue['rule']}[/{color}]: `{snippet}`"
             )
             if explanation:
                 lines.append(f"    ⚠️  {explanation}")

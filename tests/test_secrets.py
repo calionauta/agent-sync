@@ -1,7 +1,5 @@
 """Tests for agent-sync secrets management."""
 
-from pathlib import Path
-
 from agent_sync.secrets import SecretsManager
 
 

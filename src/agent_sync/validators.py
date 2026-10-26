@@ -20,7 +20,7 @@ def validate_repo_name(name: str) -> bool:
     # Cannot start with a hyphen, period, or slash.
     # Optionally can have one slash in the middle.
     # First char must be alphanumeric (not . or -)
-    pattern = r'^[a-zA-Z0-9][a-zA-Z0-9._-]*(?:/[a-zA-Z0-9][a-zA-Z0-9._-]*)?\Z'
+    pattern = r"^[a-zA-Z0-9][a-zA-Z0-9._-]*(?:/[a-zA-Z0-9][a-zA-Z0-9._-]*)?\Z"
 
     if not re.match(pattern, name):
         return False
@@ -44,7 +44,7 @@ def validate_skill_name(name: str) -> bool:
     if not name:
         return False
 
-    pattern = r'^[a-zA-Z0-9][a-zA-Z0-9._-]*\Z'
+    pattern = r"^[a-zA-Z0-9][a-zA-Z0-9._-]*\Z"
     if not re.match(pattern, name):
         return False
 
@@ -71,16 +71,16 @@ def validate_github_url(url: str) -> bool:
         parsed = urlparse(url)
 
         # Scheme must be https
-        if parsed.scheme != 'https':
+        if parsed.scheme != "https":
             return False
 
         # Netloc must be github.com
-        if parsed.netloc != 'github.com':
+        if parsed.netloc != "github.com":
             return False
 
         # Path should be /owner/repo or /owner/repo.git
-        path = parsed.path.strip('/')
-        parts = path.split('/')
+        path = parsed.path.strip("/")
+        parts = path.split("/")
 
         if len(parts) != 2:
             return False
@@ -88,16 +88,16 @@ def validate_github_url(url: str) -> bool:
         owner, repo = parts
 
         # Validate owner (alphanumeric and hyphens, no leading hyphen)
-        owner_pattern = r'^[a-zA-Z0-9][a-zA-Z0-9-]*\Z'
+        owner_pattern = r"^[a-zA-Z0-9][a-zA-Z0-9-]*\Z"
         if not re.match(owner_pattern, owner):
             return False
 
         # Validate repo
-        if repo.endswith('.git'):
+        if repo.endswith(".git"):
             repo = repo[:-4]
 
         # Explicitly validate repo name without slash
-        repo_pattern = r'^[a-zA-Z0-9][a-zA-Z0-9._-]*\Z'
+        repo_pattern = r"^[a-zA-Z0-9][a-zA-Z0-9._-]*\Z"
         if not re.match(repo_pattern, repo):
             return False
 

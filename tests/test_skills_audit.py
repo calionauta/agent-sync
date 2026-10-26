@@ -9,12 +9,7 @@ import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from agent_sync.skills_audit import (
-    AuditReport,
-    SkillAuditRow,
-    SkillExplanation,
     audit_skills,
     explain_skill,
 )
@@ -23,7 +18,9 @@ from agent_sync.skills_audit import (
 def _git(cwd: Path, *args: str) -> str:
     result = subprocess.run(
         ["git", "-C", str(cwd)] + list(args),
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     return result.stdout
 
@@ -91,8 +88,10 @@ class TestAuditSkillsWithFilesystem:
         (hub / "beta").mkdir()
         (hub / "beta" / "SKILL.md").write_text("# beta\n")
 
-        with patch("agent_sync.skills_audit.HUB_DIR", hub), \
-             patch("agent_sync.skills_audit.REPO_DIR", tmp_path / "no-repo"):
+        with (
+            patch("agent_sync.skills_audit.HUB_DIR", hub),
+            patch("agent_sync.skills_audit.REPO_DIR", tmp_path / "no-repo"),
+        ):
             report = audit_skills(hub_skills=None, repo_skills=set())
         assert {r.name for r in report.rows} == {"alpha", "beta"}
         assert report.hub_count == 2
@@ -127,8 +126,10 @@ class TestExplainSkillWithGit:
         _git(repo, "add", "skills/cali-foo/extra.md")
         _git(repo, "commit", "-m", "add extra")
 
-        with patch("agent_sync.skills_audit.REPO_DIR", repo), \
-             patch("agent_sync.skills_audit.HUB_DIR", tmp_path / "no-hub"):
+        with (
+            patch("agent_sync.skills_audit.REPO_DIR", repo),
+            patch("agent_sync.skills_audit.HUB_DIR", tmp_path / "no-hub"),
+        ):
             expl = explain_skill("cali-foo", hub_skills=set(), repo_skills=set())
         assert expl.commit_count >= 2
         assert expl.first_added is not None
@@ -136,8 +137,10 @@ class TestExplainSkillWithGit:
 
     def test_explain_skill_not_in_repo(self, tmp_path):
         repo = _init_repo_with_skills(tmp_path, [])
-        with patch("agent_sync.skills_audit.REPO_DIR", repo), \
-             patch("agent_sync.skills_audit.HUB_DIR", tmp_path / "no-hub"):
+        with (
+            patch("agent_sync.skills_audit.REPO_DIR", repo),
+            patch("agent_sync.skills_audit.HUB_DIR", tmp_path / "no-hub"),
+        ):
             expl = explain_skill("cali-never", hub_skills=set(), repo_skills=set())
         assert expl.commit_count == 0
 
@@ -152,6 +155,7 @@ class TestCliAudit:
 
     def test_audit_json_output(self):
         from click.testing import CliRunner
+
         from agent_sync.cli import skills_group
 
         runner = CliRunner()
@@ -164,6 +168,7 @@ class TestCliAudit:
 
     def test_explain_skill_in_sync(self):
         from click.testing import CliRunner
+
         from agent_sync.cli import skills_group
 
         runner = CliRunner()
@@ -172,6 +177,7 @@ class TestCliAudit:
 
     def test_audit_limit_truncates_output(self):
         from click.testing import CliRunner
+
         from agent_sync.cli import skills_group
 
         runner = CliRunner()
