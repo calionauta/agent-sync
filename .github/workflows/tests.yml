@@ -29,3 +29,13 @@ jobs:
     - name: Run tests
       run: |
         pytest -o "addopts=-v" --cache-clear
+
+    # Lint was previously only enforced by the local pre-commit hook, which
+    # anyone could bypass with --no-verify, and did: the suite had drifted to
+    # 342 findings before this gate existed. Run it here so a clean tree is
+    # required to merge, not merely encouraged.
+    - name: Lint (ruff)
+      if: matrix.python-version == '3.12'
+      run: |
+        ruff check .
+        ruff format --check .
