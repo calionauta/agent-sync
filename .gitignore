@@ -23,3 +23,13 @@ temp_*.py
 debug_*.md
 pi-cache-optimizer-stats.json
 stelow.json
+
+# Test artefacts
+.coverage
+.coverage.*
+coverage.xml
+
+# Node deps. dotenvx is a global dev tool, not a build dependency of this
+# Python project; node_modules was accidentally committed once because it was
+# never ignored, and any `npm install` here is captured again.
+node_modules/
