@@ -30,9 +30,9 @@ class TestAgentTypeField:
         cli_agents = ["claude-code", "opencode", "gemini-cli", "pi.dev", "qwen-code"]
         for agent_name in cli_agents:
             if agent_name in registry:
-                assert (
-                    registry[agent_name]["type"] == "cli"
-                ), f"Agent '{agent_name}' should have type='cli'"
+                assert registry[agent_name]["type"] == "cli", (
+                    f"Agent '{agent_name}' should have type='cli'"
+                )
 
     def test_ide_agents_have_type(self):
         """Test that IDE agents (roocode, cline, cursor, windsurf) have type='ide'."""
@@ -43,9 +43,9 @@ class TestAgentTypeField:
         ide_agents = ["roocode", "cline", "cursor", "windsurf"]
         for agent_name in ide_agents:
             if agent_name in registry:
-                assert (
-                    registry[agent_name]["type"] == "ide"
-                ), f"Agent '{agent_name}' should have type='ide'"
+                assert registry[agent_name]["type"] == "ide", (
+                    f"Agent '{agent_name}' should have type='ide'"
+                )
 
 
 class TestAgentsListCommand:
@@ -63,9 +63,9 @@ class TestAgentsListCommand:
             assert "unknown" not in result.output, "Agent type should not be 'unknown'"
 
             # Should contain 'cli' or 'ide'
-            assert (
-                "cli" in result.output or "ide" in result.output
-            ), "Output should contain agent types"
+            assert "cli" in result.output or "ide" in result.output, (
+                "Output should contain agent types"
+            )
 
     def test_agents_list_table_columns(self):
         """Test that 'agents list' shows Name, Type, and Location columns."""
@@ -104,9 +104,9 @@ class TestStagingAgentCount:
         available_agents = [a for a in all_agents if a.is_available()]
 
         # At least one agent should be available (pi.dev or opencode)
-        assert (
-            len(available_agents) > 0
-        ), "Should have at least one available agent (pi.dev or opencode)"
+        assert len(available_agents) > 0, (
+            "Should have at least one available agent (pi.dev or opencode)"
+        )
 
     def test_disabled_agents_not_counted(self):
         """Test that disabled agents are not counted in staging."""
@@ -127,6 +127,6 @@ class TestStagingAgentCount:
             1 for a in get_all_agents() if config.is_agent_enabled(a.name) and a.is_available()
         )
 
-        assert (
-            all_enabled == all_enabled_after
-        ), "Disabling non-existent agent shouldn't affect count"
+        assert all_enabled == all_enabled_after, (
+            "Disabling non-existent agent shouldn't affect count"
+        )

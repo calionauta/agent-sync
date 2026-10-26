@@ -88,9 +88,9 @@ class TestPushEndToEnd:
             ["git", "log", "--oneline", "-1"], cwd=temp_repo, capture_output=True, text=True
         )
 
-        assert (
-            "test: add config" in log.stdout or len(log.stdout.strip()) > 0
-        ), "Should have created commit"
+        assert "test: add config" in log.stdout or len(log.stdout.strip()) > 0, (
+            "Should have created commit"
+        )
 
     def test_push_returns_changed_files(self, temp_repo):
         """Test that push returns list of changed files."""

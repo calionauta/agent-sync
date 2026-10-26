@@ -187,9 +187,9 @@ class TestPostPublishSync:
 
             result = runner.invoke(main, ["share", "run"])
 
-        assert (
-            not fake_sm.push.called
-        ), "SyncManager.push should NOT be called when auto_push_private=False"
+        assert not fake_sm.push.called, (
+            "SyncManager.push should NOT be called when auto_push_private=False"
+        )
         assert "Syncing to private" not in result.output
 
     def test_push_exception_does_not_abort_publish(self, monkeypatch):

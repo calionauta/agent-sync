@@ -205,25 +205,25 @@ def test_centralize_does_not_move_extension_skills(tmp_path):
         manager.centralize(dry_run=False, move=True)
 
     # Extension skill should NOT be moved to global directory
-    assert not (
-        global_dir / "extension-skill"
-    ).exists(), "Extension skills should NOT be centralized"
+    assert not (global_dir / "extension-skill").exists(), (
+        "Extension skills should NOT be centralized"
+    )
 
     # Extension skill should still exist in original location
-    assert (
-        extension_dir / "extension-skill" / "SKILL.md"
-    ).exists(), "Extension skills should remain in original location"
+    assert (extension_dir / "extension-skill" / "SKILL.md").exists(), (
+        "Extension skills should remain in original location"
+    )
 
     # Regular skill SHOULD be moved to global directory
-    assert (
-        global_dir / "regular-skill" / "SKILL.md"
-    ).exists(), "Regular skills should be centralized"
+    assert (global_dir / "regular-skill" / "SKILL.md").exists(), (
+        "Regular skills should be centralized"
+    )
 
     # Regular skill should be removed from original location (moved, not copied)
     # Note: With method=native, skills are NOT copied back to agent directory
-    assert not (
-        skills_dir / "regular-skill"
-    ).exists(), "Regular skills should be moved (not copied)"
+    assert not (skills_dir / "regular-skill").exists(), (
+        "Regular skills should be moved (not copied)"
+    )
 
 
 def test_centralize_auto_imports_orphans(tmp_path):
@@ -260,9 +260,9 @@ def test_centralize_auto_imports_orphans(tmp_path):
     assert stats["orphans_imported"] == 1
     # Phase 5 (configure_agents) re-populates copy-method agents from hub,
     # so the skill is ALSO in the agent (copied from hub, not the orphan copy)
-    assert (
-        agent_home / "skills" / "orphan-skill" / "SKILL.md"
-    ).exists(), "configure_agents() re-populates copy agents from hub"
+    assert (agent_home / "skills" / "orphan-skill" / "SKILL.md").exists(), (
+        "configure_agents() re-populates copy agents from hub"
+    )
 
 
 def test_centralize_copy_mode_keeps_originals(tmp_path):
@@ -298,9 +298,9 @@ def test_centralize_copy_mode_keeps_originals(tmp_path):
     assert (global_dir / "orphan-skill" / "SKILL.md").exists(), "--copy should import orphan-skill"
     assert stats["orphans_imported"] == 1
     # With move=False, orphan should remain in agent
-    assert (
-        agent_home / "skills" / "orphan-skill" / "SKILL.md"
-    ).exists(), "--copy mode should keep originals"
+    assert (agent_home / "skills" / "orphan-skill" / "SKILL.md").exists(), (
+        "--copy mode should keep originals"
+    )
 
 
 def test_centralize_fresh_setup_auto_import(tmp_path):
@@ -367,9 +367,9 @@ def test_centralize_dry_run_does_not_move(tmp_path):
     items = [i for i in global_dir.iterdir() if not i.name.startswith(".")]
     assert len(items) == 0, f"Dry run should not move files, found {len(items)}"
     # Orphan should still be in agent
-    assert (
-        agent_home / "skills" / "dry-skill" / "SKILL.md"
-    ).exists(), "Dry run should not delete from agent"
+    assert (agent_home / "skills" / "dry-skill" / "SKILL.md").exists(), (
+        "Dry run should not delete from agent"
+    )
 
 
 def test_compute_dir_hash(tmp_path):
@@ -521,13 +521,13 @@ def test_centralize_skips_retired_orphans(tmp_path):
         stats = manager.centralize(move=True)
 
     # Retired skill must NOT be imported
-    assert not (
-        global_dir / "retired-old" / "SKILL.md"
-    ).exists(), "Retired skill should NOT be imported to hub"
+    assert not (global_dir / "retired-old" / "SKILL.md").exists(), (
+        "Retired skill should NOT be imported to hub"
+    )
     # Real orphan should still be imported
-    assert (
-        global_dir / "real-orphan" / "SKILL.md"
-    ).exists(), "Real orphan should still be imported"
+    assert (global_dir / "real-orphan" / "SKILL.md").exists(), (
+        "Real orphan should still be imported"
+    )
     assert stats["orphans_imported"] == 1, "Only real orphan should be imported"
 
 

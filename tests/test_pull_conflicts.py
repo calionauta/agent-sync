@@ -331,9 +331,9 @@ class TestLinkRepoSafety:
         source = inspect.getsource(manager._clone_to_repo)
 
         # Check that TemporaryDirectory is used
-        assert (
-            "TemporaryDirectory" in source
-        ), "_clone_to_repo should use tempfile.TemporaryDirectory"
+        assert "TemporaryDirectory" in source, (
+            "_clone_to_repo should use tempfile.TemporaryDirectory"
+        )
 
 
 class TestInteractiveConflictResolution:

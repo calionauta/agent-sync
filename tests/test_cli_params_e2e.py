@@ -35,9 +35,9 @@ class TestCLIPushFilters:
         # Should NOT have TypeError (wrong param names)
         assert "TypeError" not in result.output, f"TypeError in output: {result.output}"
         # Should NOT have Traceback
-        assert (
-            "Traceback" not in result.output or result.exit_code == 0
-        ), f"Traceback in output: {result.output}"
+        assert "Traceback" not in result.output or result.exit_code == 0, (
+            f"Traceback in output: {result.output}"
+        )
 
     def test_push_with_all_filters_no_errors(self):
         """push with all filter combinations should work."""

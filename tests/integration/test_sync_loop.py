@@ -239,9 +239,9 @@ def test_05_explicit_prune_removes_orphan(tmp_path):
         # The orphan should have been staged for deletion
         assert orphans == ["cali-ghost"] or orphans == []  # empty after prune
         deletes = [f for f in changed_files if f.get("status") == "D"]
-        assert any(
-            "cali-ghost" in f["path"] for f in deletes
-        ), f"Expected cali-ghost in deletes, got: {deletes}"
+        assert any("cali-ghost" in f["path"] for f in deletes), (
+            f"Expected cali-ghost in deletes, got: {deletes}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -300,9 +300,9 @@ def test_07_file_in_skills_dir_not_phantom_orphan(tmp_path):
         sm = _make_sync_manager(hub, repo, bare)
         orphans = sm._detect_orphan_skills()
 
-    assert (
-        "RETIRED.md" not in orphans
-    ), f"RETIRED.md (a file) should not appear as orphan, got: {orphans}"
+    assert "RETIRED.md" not in orphans, (
+        f"RETIRED.md (a file) should not appear as orphan, got: {orphans}"
+    )
 
 
 # ---------------------------------------------------------------------------

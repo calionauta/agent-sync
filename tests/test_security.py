@@ -173,7 +173,7 @@ def test_run_git_sanitizes_stderr_on_failure(tmp_path):
             sm._run_git("remote", "update")
             assert False, "Should have raised CalledProcessError"
         except subprocess.CalledProcessError as e:
-            assert (
-                "ghp_SECRET_TOKEN" not in e.stderr
-            ), "Token leaked through CalledProcessError.stderr!"
+            assert "ghp_SECRET_TOKEN" not in e.stderr, (
+                "Token leaked through CalledProcessError.stderr!"
+            )
             assert "***" in e.stderr, "Sanitization marker missing — stderr was not sanitized"
