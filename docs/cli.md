@@ -145,6 +145,37 @@ Examples:
   agent-sync share remove https://github.com/user/repo
   agent-sync share run
 
+### Vendored (pinned) skills
+
+Third-party skills can be published without keeping a hand-made copy in the
+hub. Declare the upstream repo and the ref to pin in `publish.yaml`:
+
+```yaml
+vendor_sources:
+  - name: last30days
+    url: https://github.com/mvanhorn/last30days-skill
+    ref: v3.30.0              # tag, branch, or commit
+    path: skills/last30days   # optional; auto-detected when omitted
+    status: active
+```
+
+On `share run`, each vendored skill is shallow-cloned at exactly that ref and
+copied to `skills/local/<name>/`, so it stays installable with
+`npx skills add <published-repo>`. A `vendor.lock.yaml` at the root of the
+published repo records the repo, ref, and **resolved commit SHA** — bumping a
+skill is an explicit edit to `ref`, and the lock shows what actually shipped.
+
+Vendored skills use the source id `vendor/<repo>` (never `local`), so a stale
+copy in the hub can never overwrite the pin.
+
+If a ref or path cannot be resolved, the publish **fails and ships nothing**
+— it never silently falls back to an older copy.
+
+```bash
+agent-sync share run --list-vendor        # show pins and their refs
+agent-sync share run --vendor-ref last30days v3.31.0   # bump a pin
+```
+
 
 
 **Subcommands:**

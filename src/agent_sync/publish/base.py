@@ -1,10 +1,13 @@
-from __future__ import annotations
-
 """Base types for skill sources."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+
+# vendored.py is a leaf module (imports only .cache), so this is not a cycle.
+from .vendored import VendorSource
 
 
 class SourceStatus(Enum):
@@ -138,6 +141,9 @@ class PublishConfig:
             full local state to the private repo (config.repo_url) after
             publishing the curated subset to the public repo. Disable with
             `agent-sync publish --no-private` or set this field to False.
+        vendor_sources: Third-party skills pinned to an upstream ref. Their
+            content is cloned at that ref and published to
+            `skills/local/<name>/`; repo+ref+commit land in vendor.lock.yaml.
     """
 
     published_repo: str
@@ -146,6 +152,7 @@ class PublishConfig:
     cache_dir: Path = Path.home() / ".cache" / "agent-sync" / "repos"
     cache_ttl_hours: int = 24
     auto_push_private: bool = True
+    vendor_sources: list[VendorSource] = field(default_factory=list)
 
     def get_skills_for_source(self, source_id: str) -> list[str]:
         """Get selected skills for a source."""
@@ -182,6 +189,7 @@ class PublishConfig:
             "cache_dir": str(self.cache_dir),
             "cache_ttl_hours": self.cache_ttl_hours,
             "auto_push_private": self.auto_push_private,
+            "vendor_sources": [s.to_dict() for s in self.vendor_sources],
         }
 
     @classmethod
@@ -200,4 +208,5 @@ class PublishConfig:
             cache_dir=cache_dir,
             cache_ttl_hours=data.get("cache_ttl_hours", 24),
             auto_push_private=data.get("auto_push_private", True),
+            vendor_sources=[VendorSource.from_dict(s) for s in data.get("vendor_sources", [])],
         )

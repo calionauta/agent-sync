@@ -1285,9 +1285,10 @@ def audit_skills(as_json: bool, limit: int | None, filter: str | None):
     - in_hub_only: new skill, will be pushed on next push
     - in_repo_only: orphan in the repo (run `push --prune` or `skills prune`)
     """
-    from .skills_audit import audit_skills as build_audit
-    from .config import Config
     import fnmatch as _fnmatch
+
+    from .config import Config
+    from .skills_audit import audit_skills as build_audit
 
     report = build_audit()
 
@@ -1315,8 +1316,7 @@ def audit_skills(as_json: bool, limit: int | None, filter: str | None):
                             "status": r.status,
                         }
                         for r in report.rows
-                        if not _skip(r.name)
-                        and (not filter or filter.lower() in r.name.lower())
+                        if not _skip(r.name) and (not filter or filter.lower() in r.name.lower())
                     ][:limit],
                 },
                 indent=2,
@@ -1557,6 +1557,19 @@ def centralize_skills(copy: bool, push: bool, dry_run: bool):
 @click.option("--add-source", "add_source_url", help="Add external skill source")
 @click.option("--remove-source", "remove_source_url", help="Remove external skill source")
 @click.option("--list-sources", "list_sources_flag", is_flag=True, help="List skill sources")
+@click.option(
+    "--list-vendor",
+    "list_vendor_flag",
+    is_flag=True,
+    help="List vendored (pinned) skill sources and their pinned refs",
+)
+@click.option(
+    "--vendor-ref",
+    nargs=2,
+    multiple=True,
+    metavar="NAME REF",
+    help="Pin a vendored skill to a new upstream ref (repeatable)",
+)
 @click.option("--clear-cache", is_flag=True, help="Clear skill cache")
 @click.option("--reset-selection", is_flag=True, help="Reset saved selection")
 @click.option(
@@ -1570,6 +1583,8 @@ def share_run(
     add_source_url: str | None,
     remove_source_url: str | None,
     list_sources_flag: bool,
+    list_vendor_flag: bool,
+    vendor_ref: tuple[tuple[str, str], ...],
     clear_cache: bool,
     reset_selection: bool,
     no_private: bool,
@@ -1581,6 +1596,8 @@ def share_run(
         add_source_url=add_source_url,
         remove_source_url=remove_source_url,
         list_sources_flag=list_sources_flag,
+        list_vendor_flag=list_vendor_flag,
+        vendor_ref=vendor_ref,
         clear_cache=clear_cache,
         reset_selection=reset_selection,
         no_private=no_private,
@@ -1593,6 +1610,8 @@ def _internal_share_flow(
     add_source_url=None,
     remove_source_url=None,
     list_sources_flag=False,
+    list_vendor_flag=False,
+    vendor_ref=(),
     clear_cache=False,
     reset_selection=False,
     no_private=False,
@@ -1647,6 +1666,48 @@ def _internal_share_flow(
 
         console.print(f"\n[dim]Published repo: {get_published_repo() or 'Not set'}[/dim]\n")
         return
+
+    # Handle vendored (pinned) sources
+    if list_vendor_flag or vendor_ref:
+        from .publish.config import load_config as _load_cfg
+        from .publish.config import save_config as _save_cfg
+
+        cfg = _load_cfg()
+        if vendor_ref:
+            for name, ref in vendor_ref:
+                target = next((v for v in cfg.vendor_sources if v.name == name), None)
+                if target is None:
+                    known = ", ".join(v.name for v in cfg.vendor_sources) or "none"
+                    console.print(
+                        f"[red]✗ Unknown vendored skill: {name}[/red] "
+                        f"[dim](known: {known})[/dim]"
+                    )
+                    raise click.Abort()
+                if target.ref != ref:
+                    console.print(f"[green]✓ {name}: {target.ref} → {ref}[/green]")
+                    target.ref = ref
+            _save_cfg(cfg)
+
+        if list_vendor_flag or vendor_ref:
+            if not cfg.vendor_sources:
+                console.print("\n[dim]No vendored sources configured.[/dim]")
+                console.print(
+                    "[dim]Add `vendor_sources:` to publish.yaml " "(name + url + ref).[/dim]\n"
+                )
+            else:
+                console.print("\n[bold]📌 Vendored (pinned) skills[/]\n")
+                for v in cfg.vendor_sources:
+                    state = "" if v.status == "active" else f" [yellow]({v.status})[/]"
+                    console.print(f"  • [bold]{v.name}[/] @ [cyan]{v.ref}[/]{state}")
+                    console.print(f"    [dim]{v.url}[/]")
+                    if v.path:
+                        console.print(f"    [dim]path: {v.path}[/]")
+                console.print(
+                    "\n[dim]Bump: agent-sync share run --vendor-ref NAME REF[/dim]"
+                    "\n[dim]Publish: agent-sync share run (writes vendor.lock.yaml)[/dim]\n"
+                )
+            if not list_sources_flag and not clear_cache and not reset_selection:
+                return
 
     # Handle clear cache
     if clear_cache:
