@@ -20,7 +20,7 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass, field
 
-from .paths import GIT_TIMEOUT, HUB_DIR, REPO_DIR
+from .paths import GIT_TIMEOUT, HUB_DIR, REPO_DIR, is_skill_dir
 
 # ---------------------------------------------------------------------------
 # Audit
@@ -70,15 +70,17 @@ class AuditReport:
 def _list_hub_skills() -> set[str]:
     if not HUB_DIR.exists():
         return set()
-    return {d.name for d in HUB_DIR.iterdir() if d.is_dir() and not d.name.startswith(".")}
+    return {d.name for d in HUB_DIR.iterdir() if is_skill_dir(d)}
 
 
 def _list_repo_skills() -> set[str]:
     if not (REPO_DIR / ".git").exists():
         return set()
     try:
+        # Recursive listing so only directories that actually carry a
+        # SKILL.md count as skills — same definition as the hub side.
         result = subprocess.run(
-            ["git", "ls-tree", "-d", "--name-only", "HEAD", "skills/"],
+            ["git", "ls-tree", "-r", "--name-only", "HEAD", "skills/"],
             cwd=REPO_DIR,
             capture_output=True,
             text=True,
@@ -90,11 +92,12 @@ def _list_repo_skills() -> set[str]:
         return set()
     out: set[str] = set()
     for line in result.stdout.splitlines():
-        line = line.strip()
-        if line.startswith("skills/"):
-            bare = line[len("skills/") :].rstrip("/")
-            if bare and "/" not in bare and not bare.startswith("."):
-                out.add(bare)
+        parts = line.strip().split("/")
+        # skills/<name>/SKILL.md — exactly one directory level, no deeper.
+        if len(parts) == 3 and parts[0] == "skills" and parts[2] == "SKILL.md":
+            name = parts[1]
+            if name and not name.startswith("."):
+                out.add(name)
     return out
 
 

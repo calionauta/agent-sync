@@ -22,6 +22,8 @@ Initialize agent-sync in the current directory.
 ### `agent-sync backup`
 Backup all configs, skills, and agents to the private repository.
 
+Also available as `agent-sync push` (alias).
+
 This sends everything (configs, skills, agents) to the private GitHub repo
 as a full backup. Configs may contain API keys and secrets, so this is
 NOT published to public repos.
@@ -33,6 +35,7 @@ Examples:
   agent-sync backup --skill dogfood     # Specific skill
   agent-sync backup --dry-run           # Preview
   agent-sync backup --prune             # Remove remote orphans too
+  agent-sync backup --yes               # No prompt (scripts/CI)
 
 
 **Options:**
@@ -46,6 +49,7 @@ Examples:
 - `--exclude-agent <STRING> [default: Sentinel.UNSET] — Agent to exclude (can repeat)`
 - `--prune — Remove orphan skills from the remote repo (in HEAD but not in local hub). Default: kept additively.`
 - `--strict — Exit with code 2 if orphan skills were detected (for CI/scripts).`
+- `--yes, -y — Skip the confirmation prompt and push immediately (for scripts/CI).`
 
 ---
 
@@ -86,11 +90,22 @@ Show sync status.
 ---
 
 ### `agent-sync diff`
-Show differences between local and remote.
+Show differences between the local setup and the private repository.
+
+Previews exactly what `agent-sync backup` would push: the repo working tree
+is staged the same way backup stages it, but nothing is committed and
+nothing is pushed.
+
+Examples:
+  agent-sync diff                  # Everything
+  agent-sync diff --skills         # Skills only
+  agent-sync diff --configs        # Configs only
+  agent-sync diff --exit-code      # CI gate: exit 1 if anything differs
 
 **Options:**
 - `--skills — Show skills diff`
 - `--configs — Show configs diff`
+- `--exit-code — Exit with code 1 when there are differences (like 'git diff --exit-code').`
 
 ---
 

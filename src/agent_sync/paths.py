@@ -55,5 +55,28 @@ REPO_MANIFEST: Path = REPO_DIR / INTERNAL_MANIFEST_FILENAME
 #: Default timeout for `git` subprocess calls.
 GIT_TIMEOUT: int = 10
 
+
+# --- Skill definition ------------------------------------------------------
+
+
+def is_skill_dir(path: Path) -> bool:
+    """Return True if `path` is a skill directory.
+
+    A directory is a skill only when it carries a `SKILL.md` manifest.
+    Plain directories are NOT skills: they cannot be backed up (git does
+    not track empty directories), so treating them as skills made them
+    appear forever as "new (will push)" in `agent-sync skills audit`.
+
+    This is the single definition used by every lister in the codebase;
+    do not re-implement the `SKILL.md` check inline.
+    """
+    if path.name.startswith("."):
+        return False
+    try:
+        return path.is_dir() and (path / "SKILL.md").is_file()
+    except OSError:
+        return False
+
+
 #: How long the centralize lock is valid before it's considered stale.
 LOCK_STALE_TIMEOUT: int = 600  # 10 minutes

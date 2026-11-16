@@ -4,6 +4,88 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+### 🐛 Fixes
+
+#### `agent-sync diff` was a stub that printed empty headers
+
+`diff` was advertised in the top-level help under "Sync & Backup" but its
+body was `console.print("Skills Diff:")` followed by a `# Show skills diff`
+comment. It had no implementation and no test — it never reported anything.
+It now runs the same staging step as `backup` and renders the real
+`+ / · / -` summary (nothing is committed or pushed), honours
+`--skills` / `--configs` on the *output* (not just the staging), and adds
+`--exit-code` for CI (`git diff --exit-code` semantics). The rendering was
+extracted into `group_changed_files()` / `_render_change_groups()` so
+`backup` and `diff` share one code path (`src/agent_sync/cli.py`).
+
+#### `agent-sync push` was printed as a fix, but the command did not exist
+
+The orphan warning, the setup wizard, `sync.py` and `AGENTS.md` all point at
+`agent-sync push` / `agent-sync push --prune`, yet `backup` is the only
+registered command — every one of those pointers produced
+`Error: No such command 'push'`. `push` is now a real alias of `backup`
+(`main.add_command(backup, name="push")`), so the existing instructions and
+docs are correct again. The smoke tests that invoked `push` were passing
+vacuously (a missing command also prints no `TypeError`), which is how this
+survived.
+
+#### `skills audit` header contradicted its own table
+
+The header printed `report.hub_count` / `report.repo_count`, computed before
+`skills_exclude` filtering, while the table rendered the filtered rows. On a
+real hub that read "116 in hub, 79 in repo" above 81 rows. Counts are now
+derived from the rendered rows, the number hidden by `skills_exclude` is
+shown explicitly, and `--json` reports the same numbers plus `hidden_count`.
+
+#### Two different definitions of "skill" (phantom "new (will push)" rows)
+
+`skills_audit._list_hub_skills()` accepted any directory; `sync.py` required
+a `SKILL.md`. Directories without `SKILL.md` can never be pushed (git does
+not track empty directories), so they sat in the audit forever as
+`new (will push)`. Added `paths.is_skill_dir()` as the single definition and
+used it in the audit (hub **and** repo side, the latter derived from
+`git ls-tree -r` so nested `references/SKILL.md` does not register), in
+`status`, in the `skills list` TUI, and in the "Syncing N skills" count.
+
+#### `python -m agent_sync.cli` was missing the `backup` command
+
+The `BACKUP COMMAND` block sat *after* the `if __name__ == "__main__"` guard,
+so running the module directly executed `main()` before `backup` was
+registered: `python -m agent_sync.cli backup --help` →
+`Error: No such command 'backup'`. The guard is now at the end of the file.
+
+### ✨ Features
+
+#### `backup --yes` for non-interactive pushes
+
+`pull` had `--force` and `skills prune` had `--yes`; `backup` had no way to
+skip its `[Enter] push / [q] quit` prompt, which forced callers to pipe a
+newline into it (`printf '\n' | agent-sync backup ...`). Added `--yes` / `-y`
+to `backup` (and therefore to `push`).
+
+### 💄 Docs
+
+- Full help now lists the real `skills` subcommands
+  (`list | audit | explain | prune | centralize`) instead of
+  `list | centralize`, and marks `backup` as `(alias: push)`.
+- `share add` / `share remove` docstrings no longer teach
+  `agent-sync publish add` (removed command).
+
+### 🧪 Tests
+
+- 608 passing (585 → 608).
+- `tests/test_cli_diff.py` (new, 13 tests): reporting, scope filtering,
+  `--exit-code`, no-commit guarantee, uninitialized repo.
+- `tests/test_skills_audit.py`: `SKILL.md` required on both hub and repo
+  sides (incl. nested `references/SKILL.md`), plus header/JSON count
+  agreement with rendered rows.
+- `tests/test_cli_smoke_flags.py`: `backup --yes` acceptance and `push`
+  alias registration.
+
+---
+
 ## [0.43.1-alpha] - 2026-06-22
 
 ### 🐛 Fixes

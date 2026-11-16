@@ -276,3 +276,44 @@ class TestSkillsPruneFlags:
         assert "No such option: --yes" not in result.output
         assert "No such option: -y" not in result.output
         assert "TypeError" not in result.output
+
+
+# =============================================================================
+# BACKUP non-interactive flags + `push` alias
+# =============================================================================
+
+
+class TestBackupFlags:
+    """`backup` must be scriptable — no mandatory interactive prompt."""
+
+    def test_backup_yes_accepted(self):
+        """--yes/-y must be offered (help only: never run a real backup)."""
+        result = runner.invoke(main, ["backup", "--help"])
+        assert result.exit_code == 0
+        assert "--yes" in result.output
+        assert "-y" in result.output
+
+    def test_backup_yes_present_in_command_params(self):
+        cmd = main.commands["backup"]
+        flags = {opt for p in cmd.params for opt in p.opts}
+        assert "--yes" in flags
+        assert "-y" in flags
+
+
+class TestPushAlias:
+    """`push` was referenced by warnings/wizard/AGENTS.md but did not exist.
+
+    Regression: `agent-sync push --prune` raised "No such command 'push'"
+    even though the CLI itself printed that instruction.
+    """
+
+    def test_push_is_registered(self):
+        assert "push" in main.commands
+
+    def test_push_is_the_backup_command(self):
+        assert main.commands["push"] is main.commands["backup"]
+
+    def test_push_help_works(self):
+        result = runner.invoke(main, ["push", "--help"])
+        assert result.exit_code == 0
+        assert "No such command 'push'" not in result.output

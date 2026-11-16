@@ -1296,9 +1296,7 @@ class SyncManager:
 
         global_skills_dir = paths.HUB_DIR
         skills_count = (
-            len(
-                [d for d in global_skills_dir.iterdir() if d.is_dir() and (d / "SKILL.md").exists()]
-            )
+            sum(1 for d in global_skills_dir.iterdir() if paths.is_skill_dir(d))
             if global_skills_dir.exists()
             else 0
         )

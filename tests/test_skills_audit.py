@@ -7,7 +7,7 @@ Explain: lifecycle of a single skill (where it is + git history).
 import json
 import subprocess
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from agent_sync.skills_audit import (
     audit_skills,
@@ -185,3 +185,133 @@ class TestCliAudit:
         if result.exit_code == 0 and result.stdout.strip():
             data = json.loads(result.stdout)
             assert len(data["rows"]) <= 5
+
+
+# ---------------------------------------------------------------------------
+# SKILL.md is what makes a directory a skill
+# ---------------------------------------------------------------------------
+
+
+class TestSkillDefinitionRequiresSkillMd:
+    """A bare directory is not a skill.
+
+    Directories without SKILL.md cannot be pushed (git does not track empty
+    directories), so treating them as skills made them show up forever as
+    "new (will push)" in the audit.
+    """
+
+    def test_hub_dir_without_skill_md_is_ignored(self, tmp_path):
+        hub = tmp_path / "skills"
+        hub.mkdir()
+        (hub / "real").mkdir()
+        (hub / "real" / "SKILL.md").write_text("# real\n")
+        (hub / "phantom").mkdir()  # empty: git can never commit this
+
+        with (
+            patch("agent_sync.skills_audit.HUB_DIR", hub),
+            patch("agent_sync.skills_audit.REPO_DIR", tmp_path / "no-repo"),
+        ):
+            report = audit_skills()
+
+        assert {r.name for r in report.rows} == {"real"}
+        assert report.hub_count == 1
+
+    def test_repo_skill_without_skill_md_is_ignored(self, tmp_path):
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _git(repo, "init", "-b", "main")
+        _git(repo, "config", "user.email", "test@test.local")
+        _git(repo, "config", "user.name", "Test")
+        _commit_file(repo, "skills/real/SKILL.md", "# real\n", "add real")
+        _commit_file(repo, "skills/phantom/other.md", "orphan file\n", "add phantom")
+
+        with patch("agent_sync.skills_audit.REPO_DIR", repo):
+            report = audit_skills(hub_skills=set())
+
+        assert {r.name for r in report.rows} == {"real"}
+
+    def test_nested_skill_md_does_not_create_skill(self, tmp_path):
+        """skills/foo/references/SKILL.md must not register 'references'."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _git(repo, "init", "-b", "main")
+        _git(repo, "config", "user.email", "test@test.local")
+        _git(repo, "config", "user.name", "Test")
+        _commit_file(repo, "skills/foo/SKILL.md", "# foo\n", "add foo")
+        _commit_file(repo, "skills/foo/references/SKILL.md", "# nested\n", "add nested")
+
+        with patch("agent_sync.skills_audit.REPO_DIR", repo):
+            report = audit_skills(hub_skills=set())
+
+        assert {r.name for r in report.rows} == {"foo"}
+
+
+# ---------------------------------------------------------------------------
+# Audit header must agree with the rows it renders
+# ---------------------------------------------------------------------------
+
+
+class TestAuditHeaderCounts:
+    """The header counts only skills the table actually shows.
+
+    Regression: report.hub_count/repo_count counted skills hidden by
+    `skills_exclude`, so the header said "116 in hub" while the table had
+    81 rows.
+    """
+
+    @staticmethod
+    def _report():
+        from agent_sync.skills_audit import AuditReport, SkillAuditRow
+
+        rows = []
+        for name, hub, repo in [
+            ("alpha", True, True),
+            ("beta", True, False),
+            ("gamma", False, True),
+            ("stelow-hidden", True, True),
+            ("stelow-also-hidden", True, True),
+        ]:
+            row = SkillAuditRow(name=name, in_hub=hub, in_repo=repo)
+            row.status = row.compute_status()
+            rows.append(row)
+        return AuditReport(rows=rows, hub_count=5, repo_count=4)
+
+    def test_header_matches_visible_rows(self):
+        from click.testing import CliRunner
+
+        from agent_sync.cli import skills_group
+
+        fake_cfg = MagicMock()
+        fake_cfg.skills_exclude = ["stelow-*"]
+
+        with (
+            patch("agent_sync.skills_audit.audit_skills", return_value=self._report()),
+            patch("agent_sync.cli.Config", return_value=fake_cfg),
+        ):
+            result = CliRunner().invoke(skills_group, ["audit"])
+
+        assert result.exit_code == 0
+        assert "2 in hub" in result.output
+        assert "2 in repo" in result.output
+        assert "2 hidden by skills_exclude" in result.output
+        assert "stelow-hidden" not in result.output
+
+    def test_json_counts_match_visible_rows(self):
+        from click.testing import CliRunner
+
+        from agent_sync.cli import skills_group
+
+        fake_cfg = MagicMock()
+        fake_cfg.skills_exclude = ["stelow-*"]
+
+        with (
+            patch("agent_sync.skills_audit.audit_skills", return_value=self._report()),
+            patch("agent_sync.cli.Config", return_value=fake_cfg),
+        ):
+            result = CliRunner().invoke(skills_group, ["audit", "--json"])
+
+        data = json.loads(result.output)
+        assert data["hub_count"] == 2
+        assert data["repo_count"] == 2
+        assert data["hidden_count"] == 2
+        assert [r["name"] for r in data["rows"]] == ["alpha", "beta", "gamma"]

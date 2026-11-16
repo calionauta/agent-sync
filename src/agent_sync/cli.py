@@ -15,7 +15,7 @@ from ._tui import build_footer_commands, print_footer
 from .agents import load_registry
 from .config import Config
 from .mcp_merger import MCPMerger
-from .paths import HUB_DIR
+from .paths import HUB_DIR, is_skill_dir
 from .publish import (
     add_source,
     remove_source,
@@ -71,7 +71,11 @@ def print_full_help(ctx, param, value):
             elif cmd == "config":
                 console.print("  [cyan]config[/cyan]            show | repo | edit | reset")
             elif cmd == "skills":
-                console.print("  [cyan]skills[/cyan]           list | centralize")
+                console.print(
+                    "  [cyan]skills[/cyan]           list | audit | explain | prune | centralize"
+                )
+            elif cmd == "backup":
+                console.print("  [cyan]backup[/cyan]            (alias: [cyan]push[/cyan])")
             elif cmd == "secrets":
                 console.print("  [cyan]secrets[/cyan]          list | edit | enable | disable")
             elif cmd == "agents":
@@ -196,53 +200,13 @@ def sync(force: bool, skills_only: bool, configs_only: bool, agents_only: bool):
 
 
 # =============================================================================
-# INTERNAL BACKUP FLOW
+# CHANGES RENDERING (shared by backup and diff)
 # =============================================================================
 
 
-def _internal_backup_flow(
-    dry_run: bool = False,
-    message=None,
-    skills_only: bool = False,
-    configs_only: bool = False,
-    skill=None,
-    agent=None,
-    exclude_skill=None,
-    exclude_agent=None,
-    prune: bool = False,
-    strict: bool = False,
-):
-    """Execute backup/push flow. Called by both push and backup commands."""
-    from ._tui import print_footer
-
-    config = Config()
-
-    if not config.repo_url:
-        console.print("[red]\u2717 Not initialized. Run 'agent-sync init' first.[/red]")
-        return
-
-    sync_manager = SyncManager(config)
-
-    commit_msg = message or "chore: sync config updates"
-
-    changed_files, orphans = sync_manager._push_stage_and_get_changes(
-        message=commit_msg,
-        skills_filter=list(skill) if skill else None,
-        agents_filter=list(agent) if agent else None,
-        skills_exclude=list(exclude_skill) if exclude_skill else None,
-        agents_exclude=list(exclude_agent) if exclude_agent else None,
-        skills_only=skills_only,
-        configs_only=configs_only,
-        prune=prune,
-    )
-
-    if not changed_files:
-        if orphans:
-            _warn_about_orphans(orphans)
-        console.print("\n[yellow]Nothing to push (no changes since last sync).[/yellow]\n")
-        return
-
-    groups = {"skills": [], "configs": [], "agents": [], "other": []}
+def group_changed_files(changed_files: list[dict]) -> dict[str, list[dict]]:
+    """Bucket staged change entries by top-level category."""
+    groups: dict[str, list[dict]] = {"skills": [], "configs": [], "agents": [], "other": []}
     for f in changed_files:
         path = f["path"]
         if path.startswith("skills/"):
@@ -253,11 +217,14 @@ def _internal_backup_flow(
             groups["agents"].append(f)
         else:
             groups["other"].append(f)
+    return groups
 
-    console.print(
-        f"\n[bold]\U0001f4e4 Changes to be pushed to "
-        f"[cyan]{config.repo_url.split('/')[-1]}[/cyan]:[/]"
-    )
+
+def _render_change_groups(groups: dict[str, list[dict]], target: str) -> None:
+    """Print the +/-/· summary of what differs, grouped by category."""
+    repo_name = target.split("/")[-1]
+
+    console.print(f"\n[bold]\U0001f4e4 Changes to be pushed to [cyan]{repo_name}[/cyan]:[/]")
 
     def status_label(f):
         s = f["status"]
@@ -299,8 +266,59 @@ def _internal_backup_flow(
         for f in sorted(groups["other"], key=sort_key):
             console.print(f"    {status_label(f)} {f['path']}")
 
-    total = len(changed_files)
+    total = sum(len(v) for v in groups.values())
     console.print(f"\n[dim]{total} item(s)[/dim]\n")
+
+
+# =============================================================================
+# INTERNAL BACKUP FLOW
+# =============================================================================
+
+
+def _internal_backup_flow(
+    dry_run: bool = False,
+    message=None,
+    skills_only: bool = False,
+    configs_only: bool = False,
+    skill=None,
+    agent=None,
+    exclude_skill=None,
+    exclude_agent=None,
+    prune: bool = False,
+    strict: bool = False,
+    yes: bool = False,
+):
+    """Execute backup/push flow. Called by both push and backup commands."""
+    from ._tui import print_footer
+
+    config = Config()
+
+    if not config.repo_url:
+        console.print("[red]\u2717 Not initialized. Run 'agent-sync init' first.[/red]")
+        return
+
+    sync_manager = SyncManager(config)
+
+    commit_msg = message or "chore: sync config updates"
+
+    changed_files, orphans = sync_manager._push_stage_and_get_changes(
+        message=commit_msg,
+        skills_filter=list(skill) if skill else None,
+        agents_filter=list(agent) if agent else None,
+        skills_exclude=list(exclude_skill) if exclude_skill else None,
+        agents_exclude=list(exclude_agent) if exclude_agent else None,
+        skills_only=skills_only,
+        configs_only=configs_only,
+        prune=prune,
+    )
+
+    if not changed_files:
+        if orphans:
+            _warn_about_orphans(orphans)
+        console.print("\n[yellow]Nothing to push (no changes since last sync).[/yellow]\n")
+        return
+
+    _render_change_groups(group_changed_files(changed_files), target=config.repo_url)
 
     if orphans and not prune:
         _warn_about_orphans(orphans)
@@ -309,13 +327,16 @@ def _internal_backup_flow(
         console.print("[dim]Dry run \u2014 no changes made.[/dim]\n")
         return
 
-    footer_cmds = build_footer_commands([("Enter", "push"), ("q", "cancel")], default_key="Enter")
-    print_footer(footer_cmds)
-    choice = Prompt.ask(r"[Enter] push (default), [q] quit: ")
-    if choice.lower() in ("q", "quit"):
-        console.print("\n[yellow]Cancelled \u2014 changes not pushed.[/yellow]\n")
-        sync_manager._run_git("reset", "HEAD", "--")
-        return
+    if not yes:
+        footer_cmds = build_footer_commands(
+            [("Enter", "push"), ("q", "cancel")], default_key="Enter"
+        )
+        print_footer(footer_cmds)
+        choice = Prompt.ask(r"[Enter] push (default), [q] quit: ")
+        if choice.lower() in ("q", "quit"):
+            console.print("\n[yellow]Cancelled \u2014 changes not pushed.[/yellow]\n")
+            sync_manager._run_git("reset", "HEAD", "--")
+            return
 
     console.print(f"\n  [dim]\U0001f4dd Committing to {config.repo_url.split('/')[-1]}...[/dim]")
     try:
@@ -939,7 +960,7 @@ def share_add(url: str):
     """Add a publish repository.
 
     Examples:
-      agent-sync publish add https://github.com/user/repo
+      agent-sync share add https://github.com/user/repo
     """
     _publish_repos_add(url)
 
@@ -956,7 +977,7 @@ def share_remove(url: str):
     """Remove a publish repository.
 
     Examples:
-      agent-sync publish remove https://github.com/user/repo
+      agent-sync share remove https://github.com/user/repo
     """
     from .publish.config import remove_source
 
@@ -986,9 +1007,7 @@ def list_skills():
         console.print("[yellow]No skills directory found.[/yellow]")
         return
 
-    skills = sorted(
-        [d.name for d in skills_dir.iterdir() if d.is_dir() and not d.name.startswith(".")]
-    )
+    skills = sorted(d.name for d in skills_dir.iterdir() if is_skill_dir(d))
 
     if not skills:
         console.print("[yellow]No skills in hub.[/yellow]")
@@ -1306,15 +1325,30 @@ def audit_skills(as_json: bool, limit: int | None, filter: str | None):
     def _skip(name: str) -> bool:
         return any(_fnmatch.fnmatch(name, p) for p in _excl)
 
+    # Everything the user can actually act on. The header counts come from
+    # this list — never from report.hub_count/repo_count, which include
+    # skills hidden by skills_exclude and therefore contradict the table.
+    domain_rows = [r for r in report.rows if not _skip(r.name)]
+    hub_count = sum(1 for r in domain_rows if r.in_hub)
+    repo_count = sum(1 for r in domain_rows if r.in_repo)
+    hidden_count = len(report.rows) - len(domain_rows)
+
+    def _summary() -> dict[str, int]:
+        out: dict[str, int] = {}
+        for row in domain_rows:
+            out[row.status] = out.get(row.status, 0) + 1
+        return out
+
     if as_json:
         import json as _json
 
         console.print(
             _json.dumps(
                 {
-                    "hub_count": report.hub_count,
-                    "repo_count": report.repo_count,
-                    "summary": report.summary_counts(),
+                    "hub_count": hub_count,
+                    "repo_count": repo_count,
+                    "hidden_count": hidden_count,
+                    "summary": _summary(),
                     "rows": [
                         {
                             "name": r.name,
@@ -1322,8 +1356,8 @@ def audit_skills(as_json: bool, limit: int | None, filter: str | None):
                             "in_repo": r.in_repo,
                             "status": r.status,
                         }
-                        for r in report.rows
-                        if not _skip(r.name) and (not filter or filter.lower() in r.name.lower())
+                        for r in domain_rows
+                        if not filter or filter.lower() in r.name.lower()
                     ][:limit],
                 },
                 indent=2,
@@ -1331,15 +1365,15 @@ def audit_skills(as_json: bool, limit: int | None, filter: str | None):
         )
         return
 
-    report.summary_counts()
+    hidden_note = f" [dim]({hidden_count} hidden by skills_exclude)[/dim]" if hidden_count else ""
     console.print(
         f"\n[bold]Skills audit[/bold] — "
-        f"[green]{report.hub_count}[/green] in hub, "
-        f"[green]{report.repo_count}[/green] in repo\n"
+        f"[green]{hub_count}[/green] in hub, "
+        f"[green]{repo_count}[/green] in repo{hidden_note}\n"
     )
 
     # Apply `--filter` (substring match) and `--limit` before rendering
-    filtered_rows = [r for r in report.rows if not _skip(r.name)]
+    filtered_rows = list(domain_rows)
     if filter:
         filtered_rows = [r for r in filtered_rows if filter.lower() in r.name.lower()]
     if limit is not None:
@@ -1807,24 +1841,58 @@ def _internal_share_flow(
 @main.command()
 @click.option("--skills", is_flag=True, help="Show skills diff")
 @click.option("--configs", is_flag=True, help="Show configs diff")
-def diff(skills: bool, configs: bool):
-    """Show differences between local and remote."""
+@click.option(
+    "--exit-code",
+    is_flag=True,
+    help="Exit with code 1 when there are differences (like 'git diff --exit-code').",
+)
+def diff(skills: bool, configs: bool, exit_code: bool):
+    """Show differences between the local setup and the private repository.
+
+    Previews exactly what 'agent-sync backup' would push: the repo working
+    tree is staged the same way backup stages it, but nothing is committed
+    and nothing is pushed.
+
+    Examples:
+      agent-sync diff                  # Everything
+      agent-sync diff --skills         # Skills only
+      agent-sync diff --configs        # Configs only
+      agent-sync diff --exit-code      # CI gate: exit 1 if anything differs
+    """
     config = Config()
 
     if not config.repo_url:
-        console.print("[red]✗ Not initialized.[/red]")
+        console.print("[red]\u2717 Not initialized.[/red]")
         return
 
     do_skills = skills or (not configs)
     do_configs = configs or (not skills)
 
-    if do_skills:
-        console.print("\n[cyan]Skills Diff:[/cyan]")
-        # Show skills diff
+    sync_manager = SyncManager(config)
+    changed_files, orphans = sync_manager._push_stage_and_get_changes(
+        skills_only=do_skills and not do_configs,
+        configs_only=do_configs and not do_skills,
+    )
 
-    if do_configs:
-        console.print("\n[cyan]Configs Diff:[/cyan]")
-        # Show configs diff
+    # The staging step reports everything dirty in the repo working tree,
+    # including leftovers from other runs. Honour --skills / --configs so the
+    # report (and --exit-code) reflects only what the user asked about.
+    visible = [
+        f for f in changed_files if (do_skills if f["path"].startswith("skills/") else do_configs)
+    ]
+
+    if visible:
+        _render_change_groups(group_changed_files(visible), target=config.repo_url)
+    else:
+        console.print(
+            "\n[green]\u2713 Nothing to push[/green] \u2014 local setup matches the repo.\n"
+        )
+
+    if orphans:
+        _warn_about_orphans(orphans)
+
+    if exit_code and visible:
+        raise SystemExit(1)
 
 
 # =============================================================================
@@ -1852,9 +1920,7 @@ def status():
 
     skills_dir = HUB_DIR
     if skills_dir.exists():
-        skill_count = len(
-            [d for d in skills_dir.iterdir() if d.is_dir() and not d.name.startswith(".")]
-        )
+        skill_count = sum(1 for d in skills_dir.iterdir() if is_skill_dir(d))
         console.print(f"\n[cyan]Skills: {skill_count}[/cyan]")
 
 
@@ -2144,10 +2210,6 @@ def mcp(dry_run: bool, force: bool, conflicts: bool, source: tuple[str, ...], ou
         )
 
 
-if __name__ == "__main__":
-    main()
-
-
 # =============================================================================
 # BACKUP COMMAND
 # =============================================================================
@@ -2175,6 +2237,12 @@ if __name__ == "__main__":
     is_flag=True,
     help="Exit with code 2 if orphan skills were detected (for CI/scripts).",
 )
+@click.option(
+    "--yes",
+    "-y",
+    is_flag=True,
+    help="Skip the confirmation prompt and push immediately (for scripts/CI).",
+)
 def backup(
     dry_run,
     message,
@@ -2186,6 +2254,7 @@ def backup(
     exclude_agent,
     prune,
     strict,
+    yes,
 ):
     """Backup all configs, skills, and agents to the private repository.
 
@@ -2200,6 +2269,7 @@ def backup(
       agent-sync backup --skill dogfood     # Specific skill
       agent-sync backup --dry-run           # Preview
       agent-sync backup --prune             # Remove remote orphans too
+      agent-sync backup --yes               # No prompt (scripts/CI)
     """
     _internal_backup_flow(
         dry_run=dry_run,
@@ -2212,4 +2282,16 @@ def backup(
         exclude_agent=exclude_agent,
         prune=prune,
         strict=strict,
+        yes=yes,
     )
+
+
+# `push` is the historical name of this flow and is still referenced by the
+# orphan warnings, the setup wizard, and AGENTS.md. Register it as a real
+# alias instead of leaving those pointers dangling on a command that does
+# not exist.
+main.add_command(backup, name="push")
+
+
+if __name__ == "__main__":
+    main()
