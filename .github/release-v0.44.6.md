@@ -59,10 +59,14 @@
 
 ### Installation
 ```bash
-pipx upgrade agent-sync
+# CLI, pinned to this release (the PyPI `agent-sync` is an unrelated project)
+pipx install --force "git+https://github.com/calionauta/agent-sync.git@v0.44.6-alpha"
 # or
-pip install --upgrade agent-sync
+uv tool install --force "git+https://github.com/calionauta/agent-sync.git@v0.44.6-alpha"
 ```
+
+> Do **not** run `pip install agent-sync` / `pipx upgrade agent-sync`: that
+> distribution name on PyPI belongs to another project.
 
 ### Changelog
 608 tests passing (was 585). `ruff check` and `ruff format --check` clean on

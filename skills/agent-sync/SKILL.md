@@ -13,9 +13,9 @@ Centralize and synchronize your AI agent configurations and skills across multip
 
 ```bash
 # Install CLI first (required)
-pipx install agent-sync
+pipx install "git+https://github.com/calionauta/agent-sync.git"
 # or
-pip install agent-sync
+uv tool install "git+https://github.com/calionauta/agent-sync.git"
 
 # Then install this skill (for AI agents)
 npx skills add calionauta/agent-sync -g
@@ -101,9 +101,9 @@ npx skills add calionauta/agent-sync -g
 
 ### Alternative
 ```bash
-pipx install agent-sync
+pipx install "git+https://github.com/calionauta/agent-sync.git"
 # or
-pip install agent-sync
+uv tool install "git+https://github.com/calionauta/agent-sync.git"
 ```
 
 ### Verify
@@ -117,7 +117,7 @@ agent-sync --version
 ### New Machine Setup
 ```bash
 # 1. Install
-pipx install agent-sync
+pipx install "git+https://github.com/calionauta/agent-sync.git"
 
 # 2. Link to your repo
 agent-sync link https://github.com/username/agent-sync-configs.git

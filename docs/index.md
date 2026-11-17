@@ -24,8 +24,8 @@ agent-sync solves the fragmentation of the AI agent ecosystem by providing a uni
 ## Quick Start
 
 ```bash
-# Install
-pipx install agent-sync
+# Install (from this repository — the PyPI `agent-sync` is another project)
+pipx install "git+https://github.com/calionauta/agent-sync.git"
 
 # First machine - create repo
 agent-sync init

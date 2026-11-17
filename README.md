@@ -46,12 +46,16 @@
 
 ### Install CLI
 ```bash
-# Recommended (isolated install)
-pipx install agent-sync
+# Recommended (isolated install, from this repository)
+pipx install "git+https://github.com/calionauta/agent-sync.git"
 
-# Or via pip
-pip install agent-sync
+# Or with uv
+uv tool install "git+https://github.com/calionauta/agent-sync.git"
 ```
+
+> **Not on PyPI.** The `agent-sync` distribution on PyPI is an unrelated
+> project. `pip install agent-sync` installs that tool, not this one — always
+> install from this repository.
 
 ### First Machine — Create Repo
 ```bash
