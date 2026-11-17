@@ -60,17 +60,21 @@ class TestInstallKind:
         with patch("importlib.metadata.distribution", return_value=_dist_with(VCS)):
             assert _install_kind()[0] == "vcs"
 
-    def test_plain_index_install_has_no_direct_url(self):
+    def test_packaged_install_has_no_source(self):
         with patch("importlib.metadata.distribution", return_value=_dist_with(None, raw_text=None)):
-            assert _install_kind()[0] == "pypi"
+            assert _install_kind()[0] == "installed"
 
     def test_missing_metadata_does_not_raise(self):
         with patch("importlib.metadata.distribution", side_effect=Exception("nope")):
-            assert _install_kind() == ("unknown", {})
+            assert _install_kind() == ("installed", {})
 
     def test_malformed_direct_url_does_not_raise(self):
         with patch("importlib.metadata.distribution", return_value=_dist_with(None, "{oops")):
-            assert _install_kind()[0] == "unknown"
+            assert _install_kind()[0] == "installed"
+
+    def test_non_object_direct_url_does_not_raise(self):
+        with patch("importlib.metadata.distribution", return_value=_dist_with(None, "null")):
+            assert _install_kind()[0] == "installed"
 
 
 class TestDescribeInstall:
@@ -84,8 +88,9 @@ class TestDescribeInstall:
         text = _describe_install("vcs", VCS)
         assert "v0.44.6-alpha" in text
 
-    def test_unknown(self):
-        assert "unknown" in _describe_install("unknown", {})
+    def test_packaged_install_says_it_reinstalls(self):
+        text = _describe_install("installed", {})
+        assert "reinstall from the repository" in text
 
 
 class TestUpdateCommand:
@@ -99,9 +104,16 @@ class TestUpdateCommand:
             'pipx install --force "git+https://github.com/calionauta/agent-sync.git@v0.44.7-alpha"'
         )
 
-    def test_unknown_kind_points_at_the_releases_page(self):
-        cmd = _update_command("unknown", {}, None)
-        assert "github.com/calionauta/agent-sync/releases/latest" in cmd
+    def test_packaged_kind_reinstalls_from_the_repository(self):
+        cmd = _update_command("installed", {}, "v0.44.7-alpha")
+        assert cmd == (
+            'pipx install --force "git+https://github.com/calionauta/agent-sync.git@v0.44.7-alpha"'
+        )
+
+    def test_no_index_reference_anywhere(self):
+        """There is no package-index release: no `pipx upgrade` path exists."""
+        for kind in ("editable", "vcs", "installed"):
+            assert "pipx upgrade" not in _update_command(kind, VCS, "v0.44.7-alpha")
 
 
 class TestLatestReleaseTag:
@@ -188,6 +200,16 @@ class TestUpdateCLI:
         result, run = self._invoke([], kind="vcs", detail=VCS)
         run.assert_not_called()
         assert "pipx install --force" in result.output
+
+    def test_packaged_install_reinstalls_via_pipx(self):
+        result, run = self._invoke([], kind="installed", detail={})
+        run.return_value.returncode = 0
+        run.assert_called_once()
+        argv = run.call_args.args[0]
+        assert argv[:3] == ["pipx", "install", "--force"]
+        assert "git+https://github.com/calionauta/agent-sync.git" in argv[3]
+        assert argv[3].endswith("@v0.44.6-alpha")
+        assert result.exit_code == 0
 
     def test_version_shows_install_source(self):
         with patch("agent_sync.cli._install_kind", return_value=("editable", EDITABLE)):

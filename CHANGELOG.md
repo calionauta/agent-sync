@@ -6,6 +6,47 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### 🐛 Fixes
+
+#### `agent-sync update` no longer knows about a package index
+
+`update` always ran `pipx upgrade agent-sync`. Since there is no package-index
+release — and the `agent-sync` distribution that exists on PyPI is an unrelated
+project — that either did nothing or upgraded the wrong tool while printing
+`✓ Updated from 0.44.6a0 → 1.2.0`.
+
+It now reads `direct_url.json` and classifies the install as `editable`, `vcs`
+or `installed`, then:
+
+- `editable` / `vcs` — never mutated; prints the exact command instead
+  (`git pull --ff-only && uv pip install -e .`, or
+  `pipx install --force "git+<url>@<tag>"`).
+- `installed` — reinstalls from `git+https://github.com/calionauta/agent-sync.git@<tag>`.
+
+`--check` compares the installed version against the latest GitHub release via
+`packaging.version`, so `v0.44.6-alpha` and `0.44.6a0` compare equal. A network
+failure is reported, not raised. `agent-sync version` now prints where the
+running copy came from.
+
+No `pypi`/`archive`/`unknown` branches remain: there is one upgrade path per
+install kind, and no `pipx upgrade agent-sync` anywhere in `src/`.
+
+#### Docs installed the wrong package
+
+`pipx install agent-sync` / `pip install agent-sync` appeared in the README,
+quickstart, docs index, the `agent-sync` skill and the release template — all
+of them installing the unrelated PyPI project. Every snippet now installs
+`git+https://github.com/calionauta/agent-sync.git`, and the collision is
+stated explicitly. The published v0.44.6-alpha release notes were corrected
+in place.
+
+#### CI reported version `0.1.dev1`
+
+Both workflows checked out with `fetch-depth: 1` and no tags, so `hatch-vcs`
+had nothing to derive a version from. Fixed with `fetch-depth: 0`, and the
+`update` tests now pin `agent_sync.__version__` so they do not depend on the
+checkout depth.
+
 ### 🛠 Tooling
 
 #### `scripts/cli-link.sh` / `make doctor` — the `agent-sync` command can no longer vanish
