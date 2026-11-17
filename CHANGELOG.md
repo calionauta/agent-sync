@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [Unreleased]
+## [0.44.6-alpha] - 2026-11-17
 
 ### 🐛 Fixes
 
@@ -83,6 +83,15 @@ to `backup` (and therefore to `push`).
   agreement with rendered rows.
 - `tests/test_cli_smoke_flags.py`: `backup --yes` acceptance and `push`
   alias registration.
+- Fixed a CI-only failure (run 43958718430): the new audit-header tests
+  patched `agent_sync.cli.Config`, but `audit` imports `Config` locally
+  from `.config`, so the patch was ignored and the tests read the real
+  user config. They passed locally only because that config happens to set
+  `skills_exclude: [stelow*, degustia*, kata*]`; with no config (CI) all
+  rows rendered and the assertions failed. Now patched at
+  `agent_sync.config.Config`, and the whole suite passes with a virgin
+  `HOME` (`HOME=$(mktemp -d) pytest tests/ -q` → 608 passed), which is the
+  cheap way to reproduce CI locally.
 
 ---
 
