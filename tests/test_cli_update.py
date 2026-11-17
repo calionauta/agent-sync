@@ -149,6 +149,10 @@ class TestUpdateCLI:
         response.json.return_value = {"tag_name": tag}
 
         with (
+            # Version comes from hatch-vcs, which reports 0.1.devN on a shallow
+            # clone (CI checks out with fetch-depth: 1 and no tags). Pin it so
+            # the comparison under test does not depend on the checkout depth.
+            patch("agent_sync.__version__", "0.44.6a0"),
             patch("agent_sync.cli._install_kind", return_value=(kind, detail)),
             patch(
                 "agent_sync.cli._latest_release_tag",

@@ -14,8 +14,14 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
+    # fetch-depth: 0 — hatch-vcs derives the version from git tags. On a
+    # shallow clone (the default) there are no tags, so __version__ becomes
+    # 0.1.devN and anything comparing versions (e.g. `agent-sync update
+    # --check`) behaves differently than it does on a developer machine.
     - uses: actions/checkout@v4
-    
+      with:
+        fetch-depth: 0
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
