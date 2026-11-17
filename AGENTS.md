@@ -25,20 +25,30 @@ This project uses `hatch-vcs` for dynamic versioning based on Git Tags.
 
 ## 🛠️ Dev Workflow
 
-**Verify editable install before testing.** A system-installed `agent-sync` at `/opt/homebrew/bin/agent-sync` will silently use a stale package, not your source edits:
+**Verify the CLI points at your checkout before testing.** `make doctor`
+(→ `scripts/cli-link.sh --check`) proves it in one shot:
 
 ```bash
-which agent-sync && head -1 $(which agent-sync)
-# Expected: /Users/cali/Development/sync-agents-configs/.venv/bin/agent-sync
-# Sympt: /opt/homebrew/bin/agent-sync  → tests pass against OLD code, not yours
+make doctor
+# ✓ agent-sync is wired to this checkout (0.44.6a0)
 ```
 
-If the wrong binary is active, override it:
+It checks the three failure modes: the `~/.local/bin/agent-sync` link exists
+and points at `.venv/bin/agent-sync`, `command -v agent-sync` resolves to that
+link, and the installed metadata matches the newest git tag. Repair with
+`make cli-link` (idempotent — creates or fixes the link).
 
-```bash
-mv /opt/homebrew/bin/agent-sync /opt/homebrew/bin/agent-sync.system.bak
-ln -sf "$(pwd)/.venv/bin/agent-sync" /opt/homebrew/bin/agent-sync
-```
+The link lives in `~/.local/bin` **on purpose**: it is first on PATH and
+belongs to no interpreter. Never link into `/opt/homebrew/bin` — that is the
+console-scripts directory of the Homebrew python, and `pip uninstall
+agent-sync` there deletes scripts **by name**, taking the link with it. That
+is not hypothetical: removing a stale 0.42.0a0 copy made the CLI vanish from
+PATH while the editable install was untouched.
+
+For the same reason, before trusting a hand-run `pytest`, prefer the venv
+python (`.venv/bin/python -m pytest`, which is what the pre-commit hook uses):
+`/opt/homebrew/bin/python3` resolves to a system-installed `agent_sync`, if one
+exists, not to your source edits.
 
 Bootstrap from scratch with `uv venv .venv --python 3.14 && source .venv/bin/activate && uv pip install -e ".[dev]"`.
 
