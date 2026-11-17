@@ -1932,19 +1932,59 @@ def status():
 @main.command()
 @click.option("--check", is_flag=True, help="Check for updates only")
 def update(check: bool):
-    """Update agent-sync to the latest version.
+    """Update agent-sync to the latest released tag.
 
-    Shows before/after version to confirm the upgrade worked.
+    agent-sync is distributed from its GitHub tags (see README): the
+    `agent-sync` distribution on PyPI belongs to an unrelated project, so
+    `pip install agent-sync` would install the wrong tool.
+
+    This command reads how *this* copy was installed and never mutates a
+    source checkout behind your back: editable and git installs get the exact
+    command to run instead.
     """
     from . import __version__ as current_version
 
+    kind, detail = _install_kind()
+
     console.print(f"\n[cyan]Current version: {current_version}[/cyan]")
+    console.print(f"[dim]Installed as: {_describe_install(kind, detail)}[/dim]\n")
+
+    latest_tag, error = _latest_release_tag()
+
+    if error:
+        console.print(f"[yellow]⚠ Could not check GitHub for the latest release: {error}[/yellow]")
+        if check:
+            return
+    elif latest_tag:
+        current_v = _safe_version(current_version)
+        latest_v = _safe_version(latest_tag)
+        if current_v and latest_v and current_v >= latest_v:
+            console.print(f"[green]✓ Up to date[/green] (latest release: {latest_tag})")
+        elif latest_v:
+            console.print(f"[yellow]↑ Newer release available: {latest_tag}[/yellow]")
+        else:
+            console.print(f"[dim]Latest release: {latest_tag}[/dim]")
 
     if check:
-        console.print("[yellow]Check mode - use without --check to upgrade[/yellow]\n")
+        command = _update_command(kind, detail, latest_tag)
+        if command:
+            console.print(f"\n[dim]To upgrade:[/dim]\n  [cyan]{command}[/cyan]")
+        console.print()
         return
 
-    console.print("[cyan]Upgrading...[/cyan]\n")
+    # Editable checkouts and git installs are never upgraded automatically:
+    # pipx knows nothing about them, and reinstalling would fight the checkout.
+    if kind in ("editable", "vcs"):
+        command = _update_command(kind, detail, latest_tag)
+        console.print(
+            "[yellow]⚠ This copy tracks a source checkout, so it is not upgraded here.[/yellow]"
+        )
+        if command:
+            console.print(f"\n[dim]Run:[/dim]\n  [cyan]{command}[/cyan]")
+        console.print()
+        return
+
+    console.print("[cyan]Upgrading via pipx...[/cyan]\n")
 
     try:
         result = subprocess.run(
@@ -1955,7 +1995,6 @@ def update(check: bool):
         )
 
         if result.returncode == 0:
-            # Get new version after upgrade
             try:
                 from importlib.metadata import version
 
@@ -1969,10 +2008,130 @@ def update(check: bool):
             console.print("[yellow]⚠ Update failed[/yellow]")
             if result.stderr:
                 console.print(result.stderr)
+            console.print(
+                "\n[dim]If this copy came from the repository, reinstall it from the "
+                "tag instead:[/dim]\n"
+                "  [cyan]pipx install --force "
+                '"git+https://github.com/calionauta/agent-sync.git@latest"[/cyan]\n'
+            )
+    except FileNotFoundError:
+        console.print("[red]✗ pipx not found[/red]")
+        console.print(
+            "[dim]Install from the repository instead:[/dim]\n"
+            '  [cyan]pipx install "git+https://github.com/calionauta/agent-sync.git"[/cyan]\n'
+        )
     except subprocess.TimeoutExpired:
         console.print("[red]✗ Update timed out (took >5 minutes)[/red]")
     except Exception as e:
         console.print(f"[red]✗ Error: {e}[/red]")
+
+
+# =============================================================================
+# UPDATE HELPERS
+# =============================================================================
+
+RELEASES_API = "https://api.github.com/repos/calionauta/agent-sync/releases/latest"
+RELEASES_URL = "https://github.com/calionauta/agent-sync/releases/latest"
+
+
+def _install_kind() -> tuple[str, dict]:
+    """Classify how this copy was installed.
+
+    Returns (kind, detail) with kind one of:
+      editable — a source checkout (dev install, e.g. `uv pip install -e .`)
+      vcs      — `pipx install git+...`
+      archive  — installed from a wheel/direct URL
+      pypi     — plain index install (no direct_url.json)
+      unknown  — metadata unavailable
+    """
+    import json as _json
+    from importlib.metadata import distribution
+
+    try:
+        dist = distribution("agent-sync")
+        raw = dist.read_text("direct_url.json")
+    except Exception:
+        return "unknown", {}
+
+    if not raw:
+        return "pypi", {}
+
+    try:
+        data = _json.loads(raw)
+    except ValueError:
+        return "unknown", {}
+
+    if not isinstance(data, dict):
+        return "unknown", {}
+
+    if data.get("dir_info", {}).get("editable"):
+        return "editable", data
+    if data.get("vcs_info"):
+        return "vcs", data
+    return "archive", data
+
+
+def _describe_install(kind: str, detail: dict) -> str:
+    if kind == "editable":
+        url = (detail.get("url") or "local").replace("file://", "")
+        return f"editable source checkout ({url})"
+    if kind == "vcs":
+        info = detail.get("vcs_info", {})
+        rev = info.get("requested_revision") or (info.get("commit_id") or "")[:7]
+        url = detail.get("url", "?")
+        return f"git install of {url}@{rev}" if rev else f"git install of {url}"
+    if kind == "archive":
+        return f"direct install from {detail.get('url', '?')}"
+    if kind == "pypi":
+        return "package index (pip/pipx)"
+    return "unknown (metadata unavailable)"
+
+
+def _safe_version(value: str):
+    """Parse a version or tag ('v0.44.6-alpha') into a comparable Version."""
+    from packaging.version import InvalidVersion, Version
+
+    if not value:
+        return None
+    try:
+        return Version(value.strip().lstrip("v"))
+    except InvalidVersion:
+        return None
+
+
+def _latest_release_tag() -> tuple[str | None, str | None]:
+    """Return (tag, error). Never raises: update must stay usable offline."""
+    import requests
+
+    try:
+        response = requests.get(
+            RELEASES_API,
+            timeout=8,
+            headers={"Accept": "application/vnd.github+json"},
+        )
+        response.raise_for_status()
+        tag = response.json().get("tag_name")
+        if not tag:
+            return None, "no tag in GitHub response"
+        return tag, None
+    except Exception as exc:  # network, HTTP, JSON — all non-fatal here
+        return None, str(exc).splitlines()[0] if str(exc) else exc.__class__.__name__
+
+
+def _update_command(kind: str, detail: dict, latest_tag: str | None) -> str | None:
+    """Exact shell command to upgrade this copy, or None if not applicable."""
+    if kind == "editable":
+        return "git pull --ff-only && uv pip install -e ."
+
+    if kind == "vcs":
+        url = detail.get("url", "https://github.com/calionauta/agent-sync.git")
+        ref = latest_tag or "main"
+        return f'pipx install --force "git+{url}@{ref}"'
+
+    if kind == "pypi":
+        return "pipx upgrade agent-sync" if latest_tag else None
+
+    return f"pipx install --force {RELEASES_URL}"
 
 
 # =============================================================================
@@ -1983,10 +2142,13 @@ def update(check: bool):
 @main.command()
 def version():
     """Show version information."""
+    kind, detail = _install_kind()
+
     console.print(f"\n[cyan]agent-sync {__version__}[/cyan]\n")
     console.print("  Config: ~/.config/agent-sync/")
     console.print("  Skills: ~/.agents/skills/")
     console.print("  Cache: ~/.cache/agent-sync/")
+    console.print(f"  Install: {_describe_install(kind, detail)}")
 
 
 # =============================================================================
