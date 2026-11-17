@@ -286,7 +286,10 @@ class TestAuditHeaderCounts:
 
         with (
             patch("agent_sync.skills_audit.audit_skills", return_value=self._report()),
-            patch("agent_sync.cli.Config", return_value=fake_cfg),
+            # `audit` imports Config locally (from .config import Config), so
+            # patching the cli module attribute would be ignored — and the
+            # test would silently depend on the real user config.
+            patch("agent_sync.config.Config", return_value=fake_cfg),
         ):
             result = CliRunner().invoke(skills_group, ["audit"])
 
@@ -306,7 +309,10 @@ class TestAuditHeaderCounts:
 
         with (
             patch("agent_sync.skills_audit.audit_skills", return_value=self._report()),
-            patch("agent_sync.cli.Config", return_value=fake_cfg),
+            # `audit` imports Config locally (from .config import Config), so
+            # patching the cli module attribute would be ignored — and the
+            # test would silently depend on the real user config.
+            patch("agent_sync.config.Config", return_value=fake_cfg),
         ):
             result = CliRunner().invoke(skills_group, ["audit", "--json"])
 
