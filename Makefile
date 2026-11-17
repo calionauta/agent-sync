@@ -1,4 +1,4 @@
-.PHONY: install dev test lint format clean help
+.PHONY: install dev test lint format clean help cli-link doctor
 
 # Default target
 all: install
@@ -59,6 +59,14 @@ publish: build
 run:
 	python -m agent_sync.cli --help
 
+# Wire the `agent-sync` command to this checkout (~/.local/bin, pip-safe)
+cli-link:
+	./scripts/cli-link.sh
+
+# Verify the CLI on PATH is this checkout and the metadata matches the tag
+doctor:
+	./scripts/cli-link.sh --check
+
 # Help
 help:
 	@echo "agent-sync Development"
@@ -74,4 +82,6 @@ help:
 	@echo "  build       - Build distribution packages"
 	@echo "  publish     - Upload to PyPI"
 	@echo "  run         - Run CLI locally"
+	@echo "  cli-link    - Wire/repair the agent-sync command on PATH"
+	@echo "  doctor      - Verify the CLI on PATH points at this checkout"
 	@echo ""

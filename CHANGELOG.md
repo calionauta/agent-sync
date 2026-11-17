@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+### 🛠 Tooling
+
+#### `scripts/cli-link.sh` / `make doctor` — the `agent-sync` command can no longer vanish
+
+The PATH entry used to be a symlink inside `/opt/homebrew/bin`, which is the
+console-scripts directory of the Homebrew python. `pip uninstall agent-sync`
+(run against that python to remove a stale 0.42.0a0 copy) deletes every script
+whose name matches — including our symlink — so cleaning up someone else's
+install silently took the CLI off PATH (`agent-sync: command not found`).
+
+The link now lives in `~/.local/bin`, which is first on PATH and owned by no
+python interpreter, so pip uninstalls elsewhere cannot reach it.
+
+- `scripts/cli-link.sh` — idempotent install/repair, then verifies the shell
+  actually resolves `agent-sync` to this checkout and that the installed
+  metadata matches the newest tag.
+- `scripts/cli-link.sh --check` (`make doctor`) — verify only, exit 1 with an
+  actionable message. Also warns about a second copy inside a system python
+  (the landmine) and about the legacy `/opt/homebrew/bin` link.
+- `make cli-link` — repair.
+
+---
+
 ## [0.44.6-alpha] - 2026-11-17
 
 ### 🐛 Fixes
