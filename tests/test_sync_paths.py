@@ -383,3 +383,21 @@ class TestExcludePatternMatching:
 
         assert sync._should_exclude("state.json", [""]) is False
         assert sync._should_exclude("anything", [""]) is False
+
+    def test_timestamped_bak_files_are_excluded(self):
+        """`*.bak` does not match `hooks.yaml.bak-20260821`.
+
+        The live backup carried `configs/pi.dev/hook/hooks.yaml.bak-*` for
+        months because fnmatch('hooks.yaml.bak-20260821', '*.bak') is False:
+        the timestamp puts a suffix after `.bak`. Transient backups must be
+        excluded by suffix-agnostic pattern, or every `cp foo foo.bak-<date>`
+        silently becomes a tracked file leaking through the backup repo.
+        """
+        sync = SyncManager.__new__(SyncManager)
+
+        assert sync._should_exclude("hooks.yaml.bak-20260821", None) is True
+        assert sync._should_exclude("configs/pi.dev/hook/hooks.yaml.bak-20260821", None) is True
+        assert sync._should_exclude("hooks.yaml.bak-20261029-1305-engram-sync", None) is True
+        assert sync._should_exclude("notes.txt.bak", None) is True
+        # A real file whose name merely starts with "bak" must survive.
+        assert sync._should_exclude("backup-plan.md", None) is False

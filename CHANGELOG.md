@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+### 🐛 Fixes
+
+#### Timestamped `.bak` copies no longer reach the backup repo
+
+The exclude list carried `*.bak`, which does not match `foo.bak-20260821`:
+`fnmatch` requires the name to *end* at `.bak`, and the timestamp puts a
+suffix after it. So every `cp config.yaml config.yaml.bak-<date>` became a
+tracked file, and the private backup carried
+`configs/pi.dev/hook/hooks.yaml.bak-*` for months without anyone noticing.
+
+- `*.bak-*` joined `EXCLUDE_PATTERNS`.
+- The `.gitignore` template written into the backup repo has the same line, so
+  a fresh backup starts clean.
+
+Regression test: `test_timestamped_bak_files_are_excluded` asserts
+`hooks.yaml.bak-20260821` is excluded while `backup-plan.md` survives.
+
+---
+
 ## [0.44.7-alpha] - 2026-11-17
 
 ### 🐛 Fixes

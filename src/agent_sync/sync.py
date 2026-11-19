@@ -186,6 +186,7 @@ class SyncManager:
         # User can exclude specific state.json via sync.exclude if needed.
         # Transient files
         "*.bak",
+        "*.bak-*",
         "pi-cache-optimizer-stats.json",
         "*.log",
         "*.log.*",
@@ -1666,6 +1667,7 @@ bun.lock
 
 # Transient files
 *.bak
+*.bak-*
 *.log
 *.log.*
 
